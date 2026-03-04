@@ -27,7 +27,7 @@ export interface ParsedKnowledgeItem {
 }
 
 export function parseKnowledgeProcessingResponse(json: string): ParsedKnowledgeItem {
-  const clean = json.trim().replace(/^```json\n?/, '').replace(/\n?```$/, '')
+  const clean = json.trim().replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
   const parsed = JSON.parse(clean)
   return {
     title: String(parsed.title || 'Untitled'),
