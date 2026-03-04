@@ -1,10 +1,13 @@
 // src/app/layout.tsx
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
   title: 'Kinetic',
   description: 'AI co-pilot for your consulting practice',
+}
+
+export const viewport: Viewport = {
   themeColor: '#0a0a0a',
 }
 

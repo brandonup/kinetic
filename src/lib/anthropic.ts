@@ -1,11 +1,15 @@
 // src/lib/anthropic.ts
 import Anthropic from '@anthropic-ai/sdk'
 
-if (!process.env.ANTHROPIC_API_KEY) throw new Error('Missing ANTHROPIC_API_KEY')
-
-export const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
+// Lazy singleton — env check deferred to first call so Next.js build doesn't throw at module eval
+let _client: Anthropic | null = null
+function getClient(): Anthropic {
+  if (!_client) {
+    if (!process.env.ANTHROPIC_API_KEY) throw new Error('Missing ANTHROPIC_API_KEY')
+    _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  }
+  return _client
+}
 
 /**
  * Make a single-turn LLM call. Always pass the INTELLIGENCE_LAYER_PROMPT as part of systemPrompt.
@@ -23,7 +27,7 @@ export async function callLLM({
   model?: string
   maxTokens?: number
 }): Promise<string> {
-  const message = await anthropic.messages.create({
+  const message = await getClient().messages.create({
     model,
     max_tokens: maxTokens,
     system: systemPrompt,

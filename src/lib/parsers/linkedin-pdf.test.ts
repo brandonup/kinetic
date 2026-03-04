@@ -2,8 +2,8 @@
 import { describe, it, expect, vi } from 'vitest'
 import { parseLinkedInPDF } from './linkedin-pdf'
 
-// Mock pdf-parse and anthropic
-vi.mock('pdf-parse', () => ({
+// Mock the pdf-adapter wrapper so the real CJS bundle never loads in jsdom
+vi.mock('./pdf-adapter', () => ({
   default: vi.fn().mockResolvedValue({
     text: 'Jane Smith\nVP Engineering at Acme Corp\nPortland, Oregon\njane@acme.com',
   }),

@@ -1,4 +1,5 @@
 // src/app/api/contacts/[id]/route.ts
+export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { createEmbedding, contactEmbeddingText } from '@/lib/embeddings'

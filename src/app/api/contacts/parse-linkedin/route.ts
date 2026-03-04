@@ -1,4 +1,5 @@
 // src/app/api/contacts/parse-linkedin/route.ts
+export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { parseLinkedInPDF } from '@/lib/parsers/linkedin-pdf'
 

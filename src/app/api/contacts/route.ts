@@ -1,4 +1,5 @@
 // src/app/api/contacts/route.ts
+export const dynamic = 'force-dynamic'
 import { NextRequest, NextResponse } from 'next/server'
 import { supabase } from '@/lib/supabase'
 import { callLLM } from '@/lib/anthropic'

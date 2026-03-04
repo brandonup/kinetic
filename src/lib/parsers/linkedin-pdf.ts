@@ -1,5 +1,5 @@
 // src/lib/parsers/linkedin-pdf.ts
-import pdf from 'pdf-parse'
+import pdfParse from './pdf-adapter'
 import { callLLM } from '../anthropic'
 import { buildSystemPrompt } from '../intelligence-layer'
 
@@ -21,7 +21,7 @@ export interface LinkedInExtract {
 export async function parseLinkedInPDF(buffer: Buffer): Promise<LinkedInExtract> {
   let rawText = ''
   try {
-    const parsed = await pdf(buffer)
+    const parsed = await pdfParse(buffer)
     rawText = parsed.text
   } catch {
     throw new Error('Could not read PDF — ensure this is a valid LinkedIn export')
