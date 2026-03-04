@@ -48,6 +48,8 @@ export default function RootLayout({
               <NavLink href="/follow-ups" label="Follow-ups" />
               <NavLink href="/knowledge" label="Knowledge" />
               <NavLink href="/clients" label="Clients" />
+              <NavLink href="/chat" label="Chat" />
+              <NavLink href="/review" label="Weekly Review" />
             </div>
           </nav>
 
