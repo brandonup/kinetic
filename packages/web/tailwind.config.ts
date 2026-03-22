@@ -1,6 +1,8 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  // "class" strategy required by shadcn/ui. Kinetic is always-dark: <html class="dark"> is
+  // hardcoded in app/layout.tsx — there is no light theme and no toggle.
   darkMode: ["class"],
   content: [
     "./app/**/*.{ts,tsx}",

@@ -61,7 +61,7 @@ export async function apiFetch(
     }
   }
 
-  const url = `${resolveApiBaseUrl()}${endpoint}`;
+  const url = `${API_BASE_URL}${endpoint}`;
   return fetch(url, { ...fetchOptions, headers: requestHeaders });
 }
 

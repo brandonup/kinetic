@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
-import { API_BASE_URL } from "@/lib/api";
 
 const NAV_ITEMS = [
   { label: "Users", href: "/admin/users", activePrefix: "/admin/users" },
@@ -43,26 +42,15 @@ export default function AdminLayout({
           return;
         }
 
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-        const response = await fetch(`${API_BASE_URL}/api/v1/admin/users`, {
-          headers: { Authorization: `Bearer ${session.access_token}` },
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-
-        if (!mounted) return;
-
-        if (response.status === 403) {
-          router.push("/projects");
-          return;
-        }
-
-        if (response.ok) {
-          setIsAdmin(true);
-        } else {
-          router.push("/projects");
+        // Use JWT claim for admin check — no round-trip to a data endpoint.
+        // app_metadata.role is set server-side and cannot be spoofed by the client.
+        const role = session.user.app_metadata?.role;
+        if (mounted) {
+          if (role === "admin") {
+            setIsAdmin(true);
+          } else {
+            router.push("/projects");
+          }
         }
       } catch {
         if (!mounted) return;
@@ -81,7 +69,7 @@ export default function AdminLayout({
       mounted = false;
       clearTimeout(safetyTimeout);
     };
-  }, [router, loading]);
+  }, [router]); // removed `loading` — including it caused the effect to double-fire
 
   if (loading) {
     return (

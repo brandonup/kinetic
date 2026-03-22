@@ -1,5 +1,4 @@
 import { NextRequest } from "next/server";
-import { cookies } from "next/headers";
 
 export const runtime = "edge";
 export const dynamic = "force-dynamic";
@@ -10,19 +9,11 @@ const API_BASE_URL =
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
 
-  // Extract access token from query param (EventSource cannot send headers)
+  // Extract access token: query param takes precedence (EventSource cannot send headers),
+  // fallback to cookie set by Supabase auth-helpers middleware.
   const accessToken = searchParams.get("access_token");
-  const cookieTokenFromReq = (req as any)?.cookies?.get?.(
-    "sb-access-token"
-  )?.value as string | undefined;
-  let cookieTokenFromNextHeaders: string | undefined;
-  try {
-    cookieTokenFromNextHeaders = cookies().get("sb-access-token")?.value;
-  } catch {
-    cookieTokenFromNextHeaders = undefined;
-  }
-  const effectiveToken =
-    accessToken || cookieTokenFromReq || cookieTokenFromNextHeaders;
+  const cookieToken = req.cookies.get("sb-access-token")?.value;
+  const effectiveToken = accessToken || cookieToken;
 
   // Forward to Kinetic FastAPI chat stream endpoint
   const backendParams = new URLSearchParams(searchParams);
