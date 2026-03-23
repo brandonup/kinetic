@@ -99,7 +99,7 @@ Context-rich AI workspace SaaS for knowledge workers. Eliminates cold-start by m
 | 2026-03-22 | DB schema spec written. 21 tables. See `docs/db-schema-spec.md`. |
 | 2026-03-22 | ADR-001 written. Stack locked. See `docs/adr-001-infrastructure-choices.md`. |
 | 2026-03-22 | ADR-002 written. RAG retrieval pipeline architecture documented. Zero-LLM MVP path, MMR config rationale, RAG_MAX_TOKENS formula, V1 enhancement enablement order. See `docs/adr-002-rag-retrieval-pipeline.md`. |
-| 2026-03-22 | ADR-003 written. AgentDefinition/AgentInstance architecture: two-table split, auto-creation, immediate propagation, JSONB overrides, framework trigger embeddings, bcrypt MCP tokens, generate-instructions flow, bulk upload merge. See `docs/adr-003-agents-architecture.md`. |
+| 2026-03-22 | ADR-005 written. AgentDefinition/AgentInstance architecture: two-table split, auto-creation, immediate propagation, JSONB overrides, framework trigger embeddings, bcrypt MCP tokens, generate-instructions flow, bulk upload merge. See `docs/adr-005-agents-framework-selection.md`. |
 | 2026-03-22 | Conversation title generation uses BYOK key (user's default model). If no key configured, title stays null — renders as "New conversation". No platform key used. |
 
 **Decisions deferred to post-MVP (still in V1 roadmap):**
@@ -137,7 +137,7 @@ _All prior open questions resolved. New open questions tracked in `docs/prd.md` 
 | DB Schema Spec | `docs/db-schema-spec.md` | Draft (new 2026-03-22) |
 | ADR-001: Infrastructure | `docs/adr-001-infrastructure-choices.md` | Proposed (new 2026-03-22) |
 | ADR-002: RAG Retrieval Pipeline | `docs/adr-002-rag-retrieval-pipeline.md` | Proposed (new 2026-03-22) |
-| ADR-003: Agents Architecture | `docs/adr-003-agents-architecture.md` | Proposed (new 2026-03-22) |
+| ADR-005: Agents Architecture | `docs/adr-005-agents-framework-selection.md` | Proposed (new 2026-03-22) |
 | Build Order | `docs/build-order.md` | Draft (2026-03-21) |
 | Sprint 1 Plan | `docs/plans/2026-03-21-sprint1-foundation.md` | Active (new 2026-03-22) |
 
