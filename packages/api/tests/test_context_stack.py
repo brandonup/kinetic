@@ -1,7 +1,9 @@
 """
-Tests for Context Stack Assembly — KIN-275 / KIN-296.
+Tests for Context Stack Assembly — KIN-275 / KIN-291 / KIN-296 / KIN-297.
 
-Scaffolded by Jìan (KIN-296). Activated by KIN-279 once Big Head ships KIN-275.
+Scaffolded by Jìan (KIN-296 Sprint 3, KIN-297 Sprint 4).
+- Sprint 3 stubs (KIN-275): Activated by KIN-279 once Big Head ships KIN-275.
+- Sprint 4 agent layer stubs (KIN-291): Activated by KIN-293 once Big Head ships KIN-291.
 
 Spec refs:
   - docs/specs/kin-257-projects-conversations-spec.md §2.5 (scoping rules)
@@ -161,4 +163,87 @@ class TestContextStackIntegration:
     @pytest.mark.skip(reason=SKIP_REASON)
     def test_null_project_instructions_layer_3_excluded(self, auth_client):
         """If project.instructions is null, L3 is omitted entirely (not injected as empty)."""
+        ...
+
+
+# ---------------------------------------------------------------------------
+# Sprint 4 — Agent layers (L5–L7 + L9)  KIN-291
+# ---------------------------------------------------------------------------
+
+SKIP_AGENT_LAYERS = "Blocked — waiting for KIN-291 (Big Head agent context layers, Sprint 4)"
+
+
+class TestAgentLayerPresence:
+    @pytest.mark.skip(reason=SKIP_AGENT_LAYERS)
+    def test_l5_agent_system_prompt_injected_when_agent_active(self):
+        """Layer 5 (agent instructions) present in context when active_agent_id is set."""
+        ...
+
+    @pytest.mark.skip(reason=SKIP_AGENT_LAYERS)
+    def test_l5_absent_when_no_agent(self):
+        """Layer 5 must not appear when active_agent_id is null."""
+        ...
+
+    @pytest.mark.skip(reason=SKIP_AGENT_LAYERS)
+    def test_l6_agent_active_memory_injected_when_agent_active(self):
+        """Layer 6 (agent instance active memory) injected when agent is active and memory non-empty."""
+        ...
+
+    @pytest.mark.skip(reason=SKIP_AGENT_LAYERS)
+    def test_l6_absent_when_active_memory_null(self):
+        """Layer 6 omitted entirely when AgentInstance.active_memory is null."""
+        ...
+
+    @pytest.mark.skip(reason=SKIP_AGENT_LAYERS)
+    def test_l7_framework_injected_on_strong_match(self):
+        """Layer 7 (matched framework) present when framework selection pipeline returns a winner."""
+        ...
+
+    @pytest.mark.skip(reason=SKIP_AGENT_LAYERS)
+    def test_l7_absent_when_no_framework_match(self):
+        """Layer 7 absent when framework selection pipeline returns no winner."""
+        ...
+
+    @pytest.mark.skip(reason=SKIP_AGENT_LAYERS)
+    def test_l9_agent_kb_rag_injected_when_agent_has_kb(self):
+        """Layer 9 (agent KB RAG) injected when agent has a KB and similarity threshold met."""
+        ...
+
+    @pytest.mark.skip(reason=SKIP_AGENT_LAYERS)
+    def test_l9_absent_when_agent_has_no_kb(self):
+        """Layer 9 absent when AgentDefinition has no knowledge_base_id."""
+        ...
+
+    @pytest.mark.skip(reason=SKIP_AGENT_LAYERS)
+    def test_agent_layers_absent_in_company_conversation_without_agent(self):
+        """L5–L7+L9 must not appear for company-level conversations with no agent active."""
+        ...
+
+
+class TestAgentLayerOrdering:
+    @pytest.mark.skip(reason=SKIP_AGENT_LAYERS)
+    def test_full_project_conversation_layer_order_with_agent(self):
+        """Full order: L1, L2, L3, L4, L5, L6, L7, history, L8, L9 (per spec §2.5)."""
+        ...
+
+    @pytest.mark.skip(reason=SKIP_AGENT_LAYERS)
+    def test_full_company_conversation_layer_order_with_agent(self):
+        """Company-level: L1, L2, L5, L6, L7, history, L9 — no L3/L4/L8."""
+        ...
+
+
+class TestAgentLayerSwitchBehavior:
+    @pytest.mark.skip(reason=SKIP_AGENT_LAYERS)
+    def test_switching_agent_replaces_l5_l6_l7_l9(self):
+        """After switching agents, new agent's layers replace previous agent's layers immediately."""
+        ...
+
+    @pytest.mark.skip(reason=SKIP_AGENT_LAYERS)
+    def test_deactivating_agent_removes_all_agent_layers(self):
+        """After active_agent_id set to null, L5–L7+L9 must not appear in context."""
+        ...
+
+    @pytest.mark.skip(reason=SKIP_AGENT_LAYERS)
+    def test_each_agents_instance_memory_independent(self):
+        """Switching from agent A to agent B: L6 uses agent B's instance memory, not A's."""
         ...
