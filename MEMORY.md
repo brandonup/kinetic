@@ -22,6 +22,8 @@ Living decisions log. Append-only. Entries are dated and attributed.
 | `docs/specs/active-memory-spec.md` | Active Memory spec — triple-trigger, token caps, CRUD API | Jared | Active |
 | `docs/specs/mcp-spec.md` | MCP server spec — auth, scoping, rate limiting, token UI | Jared | Active |
 | `docs/feature-linked-upload.md` | Linked Upload feature doc (all three surfaces) | Jared | Active |
+| `docs/specs/framework-library-spec.md` | Framework Library spec — browse, edit, delete, JSON upload merge | Jared | Active |
+| `docs/specs/linked-upload-spec.md` | Linked Upload spec — all three surfaces (User Profile, Company, Agent) | Jared | Active |
 
 ---
 
