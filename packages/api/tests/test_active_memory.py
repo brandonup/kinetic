@@ -155,6 +155,23 @@ class TestCreateActiveMemoryEntry:
 
 class TestTokenCapEnforcement:
     @pytest.mark.skip(reason=SKIP_REASON)
+    def test_write_that_exactly_hits_cap_succeeds(self, auth_client):
+        """An entry that brings total to exactly cap_tokens should succeed (inclusive upper bound)."""
+        company = make_company(auth_client)
+        project = make_project(auth_client, company["id"])
+        # Pre-fill to 996 tokens (3984 chars)
+        auth_client.post(
+            "/api/v1/active-memory",
+            json={"content": "A" * 3984, "project_id": project["id"]},
+        )
+        # Add 4 tokens exactly = 16 chars → total = 1000 (should succeed)
+        resp = auth_client.post(
+            "/api/v1/active-memory",
+            json={"content": "A" * 16, "project_id": project["id"]},
+        )
+        assert resp.status_code == 201
+
+    @pytest.mark.skip(reason=SKIP_REASON)
     def test_project_cap_1000_tokens_enforced(self, auth_client):
         """Writing an entry that would push total past 1,000 tokens returns 422."""
         company = make_company(auth_client)
@@ -336,6 +353,11 @@ class TestProposalReview:
         ...
 
     @pytest.mark.skip(reason=SKIP_REASON)
+    def test_partial_approval_when_later_proposals_would_exceed_cap(self, auth_client):
+        """When accepting proposal N would overflow cap: N-1 entries written, N returns skipped_cap_exceeded."""
+        ...
+
+    @pytest.mark.skip(reason=SKIP_REASON)
     def test_review_response_includes_token_usage(self, auth_client):
         """Review response includes token_usage.current_tokens and cap_tokens."""
         ...
@@ -359,6 +381,21 @@ class TestWriteTriggers:
     @pytest.mark.skip(reason=SKIP_REASON)
     def test_trigger_3_periodic_at_every_10th_message(self, auth_client):
         """Proposals generated and queued at message count = 10, 20, 30..."""
+        ...
+
+    @pytest.mark.skip(reason=SKIP_REASON)
+    def test_trigger_3_does_not_fire_on_11th_message(self, auth_client):
+        """11th message does NOT trigger — only exact multiples of 10."""
+        ...
+
+    @pytest.mark.skip(reason=SKIP_REASON)
+    def test_trigger_3_no_duplicate_job_if_pending_proposals_exist(self, auth_client):
+        """If pending proposals already exist for the conversation, no duplicate job dispatched."""
+        ...
+
+    @pytest.mark.skip(reason=SKIP_REASON)
+    def test_trigger_2_conversation_end_endpoint(self, auth_client):
+        """POST /conversations/{id}/end fires the conversation-end proposal job."""
         ...
 
     @pytest.mark.skip(reason=SKIP_REASON)

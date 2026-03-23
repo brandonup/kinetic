@@ -107,6 +107,16 @@ class TestUserProfileUpload:
         ...
 
     @pytest.mark.skip(reason=SKIP_REASON)
+    def test_extraction_failure_file_not_persisted(self, auth_client):
+        """If LLM call fails mid-extraction, no file artifact remains in storage."""
+        ...
+
+    @pytest.mark.skip(reason=SKIP_REASON)
+    def test_llm_failure_returns_error_no_partial_write(self, auth_client):
+        """Mock LLM error → structured error response; profile fields unchanged."""
+        ...
+
+    @pytest.mark.skip(reason=SKIP_REASON)
     def test_pdf_format_accepted(self, auth_client):
         ...
 
@@ -247,6 +257,21 @@ class TestAgentProfileUpload:
         """Extraction result returned for user review — AgentDefinition fields not updated until user saves."""
         ...
 
+    @pytest.mark.skip(reason=SKIP_REASON)
+    def test_agent_extraction_uses_different_prompt_than_user_profile(self, auth_client):
+        """Agent instructions generation uses a different prompt ID than user bio generation."""
+        ...
+
+    @pytest.mark.skip(reason=SKIP_REASON)
+    def test_extraction_failure_file_not_persisted(self, auth_client):
+        """If LLM call fails on agent surface, no file artifact remains in storage."""
+        ...
+
+    @pytest.mark.skip(reason=SKIP_REASON)
+    def test_llm_failure_returns_error_no_partial_write(self, auth_client):
+        """Mock LLM error → structured error response; AgentDefinition fields unchanged."""
+        ...
+
 
 # ---------------------------------------------------------------------------
 # Common / cross-surface rules
@@ -292,3 +317,18 @@ class TestLinkedUploadCommon:
             files={"file": ("empty.pdf", io.BytesIO(b""), "application/pdf")},
         )
         assert resp.status_code in (400, 422)
+
+    @pytest.mark.skip(reason=SKIP_REASON)
+    def test_user_edits_before_saving_stores_edited_version(self, auth_client):
+        """If user modifies the extracted content before saving, the saved version reflects the edit."""
+        ...
+
+    @pytest.mark.skip(reason=SKIP_REASON)
+    def test_save_writes_to_correct_profile_fields_not_kb(self, auth_client):
+        """Save updates profile fields (name, bio, description, instructions). KB is untouched."""
+        ...
+
+    @pytest.mark.skip(reason=SKIP_REASON)
+    def test_save_does_not_modify_other_users_profiles(self, auth_client, other_client):
+        """Profile save is scoped to the authenticated user — cannot overwrite another user's profile."""
+        ...
