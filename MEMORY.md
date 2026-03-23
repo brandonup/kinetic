@@ -147,6 +147,7 @@ _All prior open questions resolved. New open questions tracked in `docs/prd.md` 
 | MCP Server Spec | `docs/specs/mcp-spec.md` | Active |
 | Framework Library Spec | `docs/specs/framework-library-spec.md` | Active (2026-03-23) |
 | Linked Upload Spec | `docs/specs/linked-upload-spec.md` | Active (2026-03-23) |
+| Admin RAG Debug Spec | `docs/specs/admin-rag-debug-spec.md` | Approved (2026-03-23) |
 
 ---
 
