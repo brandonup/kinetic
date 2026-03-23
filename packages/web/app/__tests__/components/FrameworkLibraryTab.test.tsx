@@ -11,7 +11,7 @@
  * for interactions. No real HTTP calls.
  */
 
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -45,6 +45,7 @@ function makeFramework(overrides: Partial<{
   confidence: "high" | "medium";
   when_to_apply: string[];
   origin: "extracted" | "manual";
+  example_application: string | null;
 }> = {}) {
   return {
     id: "fw-1",
@@ -91,6 +92,37 @@ function mockFetchError() {
   });
 }
 
+function mockFetchFramework(fw: ReturnType<typeof makeFramework>) {
+  return Promise.resolve({
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve(fw),
+  });
+}
+
+function mockFetchUploadSummary(summary: {
+  added: number;
+  updated: number;
+  retained: number;
+  failed: Array<{ framework_id: string; error: string }>;
+}) {
+  return Promise.resolve({
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve(summary),
+  });
+}
+
+/**
+ * Simulate a file upload on the hidden file input.
+ * userEvent.upload skips display:none elements; fireEvent.change bypasses that check.
+ */
+function uploadFile(file: File) {
+  const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+  Object.defineProperty(fileInput, "files", { value: [file], configurable: true });
+  fireEvent.change(fileInput);
+}
+
 // ---------------------------------------------------------------------------
 // KIN-319: Browse + filter + delete tests (fully implemented)
 // ---------------------------------------------------------------------------
@@ -117,7 +149,8 @@ describe("FrameworkLibraryTab — KIN-319", () => {
       await waitFor(() => {
         expect(screen.getByText(/No frameworks yet/i)).toBeInTheDocument();
       });
-      expect(screen.getByRole("button", { name: /Upload JSON/i })).toBeInTheDocument();
+      // Controls bar + empty state both render an "Upload JSON" button when isOwner=true
+      expect(screen.getAllByRole("button", { name: /Upload JSON/i }).length).toBeGreaterThan(0);
       expect(screen.getByRole("button", { name: /Add manually/i })).toBeInTheDocument();
     });
 
@@ -306,66 +339,381 @@ describe("FrameworkLibraryTab — KIN-319", () => {
 });
 
 // ---------------------------------------------------------------------------
-// KIN-320: Edit form + add manually + JSON upload — STUBS
-// Activate when FrameworkEditForm and FrameworkUploadModal components are built.
+// KIN-320: Edit form + add manually + JSON upload
 // ---------------------------------------------------------------------------
 
-describe("FrameworkLibraryTab — KIN-320 stubs (edit, add, upload)", () => {
+describe("FrameworkLibraryTab — KIN-320 (edit, add, upload)", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
   describe("edit form", () => {
-    it.skip("all fields render with existing values populated", () => {
-      // KIN-320 — activate when FrameworkEditForm component exists
+    it("all fields render with existing values populated", async () => {
+      const fw = makeFramework({
+        name: "First Principles Thinking",
+        category: "reasoning",
+        confidence: "medium",
+        when_to_apply: ["when facing a novel problem"],
+        example_application: "Use when reframing difficult decisions",
+      });
+      mockApiFetch.mockImplementation(() => mockFetchFrameworks([fw]));
+
+      render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
+
+      await waitFor(() => screen.getByText("First Principles Thinking"));
+      await userEvent.click(screen.getByRole("button", { name: /^Edit$/i }));
+
+      // Modal heading
+      expect(screen.getByRole("heading", { name: /Edit "First Principles Thinking"/i })).toBeInTheDocument();
+      // Name input populated
+      expect(screen.getByDisplayValue("First Principles Thinking")).toBeInTheDocument();
+      // Trigger phrase input populated
+      expect(screen.getByDisplayValue("when facing a novel problem")).toBeInTheDocument();
+      // Category input populated
+      expect(screen.getByDisplayValue("reasoning")).toBeInTheDocument();
+      // Example application populated
+      expect(screen.getByDisplayValue("Use when reframing difficult decisions")).toBeInTheDocument();
+      // Confidence select shows "medium"
+      expect(screen.getByRole("combobox")).toHaveValue("medium");
     });
 
-    it.skip("save with changed name calls PATCH with updated name", () => {
-      // KIN-320 — PATCH /api/v1/agents/:agentId/frameworks/:id
+    it("save with changed name calls PATCH /frameworks/:id with updated name", async () => {
+      const fw = makeFramework({ id: "fw-edit", name: "Original Name" });
+      const updated = { ...fw, name: "Updated Name" };
+
+      mockApiFetch
+        .mockImplementationOnce(() => mockFetchFrameworks([fw]))
+        .mockImplementationOnce(() => mockFetchFramework(updated));
+
+      render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
+
+      await waitFor(() => screen.getByText("Original Name"));
+      await userEvent.click(screen.getByRole("button", { name: /^Edit$/i }));
+
+      const nameInput = screen.getByDisplayValue("Original Name");
+      await userEvent.clear(nameInput);
+      await userEvent.type(nameInput, "Updated Name");
+
+      await userEvent.click(screen.getByRole("button", { name: /^Save changes$/i }));
+
+      await waitFor(() => {
+        const patchCall = mockApiFetch.mock.calls.find(
+          ([url, opts]: [string, RequestInit]) =>
+            url.includes("fw-edit") && opts?.method === "PATCH"
+        );
+        expect(patchCall).toBeDefined();
+        const body = JSON.parse(patchCall![1].body as string);
+        expect(body.name).toBe("Updated Name");
+      });
     });
 
-    it.skip("save with changed when_to_apply calls PATCH and shows embedding regeneration note", () => {
-      // KIN-320 — changing when_to_apply triggers re-embedding; UI should indicate this
+    it("changing when_to_apply shows embedding regeneration note and sends PATCH", async () => {
+      const fw = makeFramework({
+        id: "fw-trigger",
+        name: "First Principles Thinking",
+        when_to_apply: ["original trigger"],
+      });
+      const updated = { ...fw, when_to_apply: ["modified trigger"] };
+
+      mockApiFetch
+        .mockImplementationOnce(() => mockFetchFrameworks([fw]))
+        .mockImplementationOnce(() => mockFetchFramework(updated));
+
+      render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
+
+      await waitFor(() => screen.getByText("First Principles Thinking"));
+      await userEvent.click(screen.getByRole("button", { name: /^Edit$/i }));
+
+      // Change the trigger phrase
+      const triggerInput = screen.getByDisplayValue("original trigger");
+      await userEvent.clear(triggerInput);
+      await userEvent.type(triggerInput, "modified trigger");
+
+      // Embedding note appears immediately on change
+      expect(
+        screen.getByText(/Trigger embeddings will be updated in the background/i)
+      ).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole("button", { name: /^Save changes$/i }));
+
+      await waitFor(() => {
+        const patchCall = mockApiFetch.mock.calls.find(
+          ([url, opts]: [string, RequestInit]) =>
+            url.includes("fw-trigger") && opts?.method === "PATCH"
+        );
+        expect(patchCall).toBeDefined();
+        const body = JSON.parse(patchCall![1].body as string);
+        expect(body.when_to_apply).toEqual(["modified trigger"]);
+      });
     });
 
-    it.skip("confidence stored as decimal: input '75' → API receives 0.75", () => {
-      // KIN-320 — confidence display is percentage string but stored as decimal
+    it("confidence select reflects current value and sends PATCH when changed", async () => {
+      const fw = makeFramework({ id: "fw-conf", confidence: "medium" });
+      const updated = { ...fw, confidence: "high" as const };
+
+      mockApiFetch
+        .mockImplementationOnce(() => mockFetchFrameworks([fw]))
+        .mockImplementationOnce(() => mockFetchFramework(updated));
+
+      render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
+
+      await waitFor(() => screen.getByText("First Principles Thinking"));
+      await userEvent.click(screen.getByRole("button", { name: /^Edit$/i }));
+
+      const select = screen.getByRole("combobox");
+      expect(select).toHaveValue("medium");
+
+      await userEvent.selectOptions(select, "high");
+      await userEvent.click(screen.getByRole("button", { name: /^Save changes$/i }));
+
+      await waitFor(() => {
+        const patchCall = mockApiFetch.mock.calls.find(
+          ([url, opts]: [string, RequestInit]) =>
+            url.includes("fw-conf") && opts?.method === "PATCH"
+        );
+        expect(patchCall).toBeDefined();
+        const body = JSON.parse(patchCall![1].body as string);
+        expect(body.confidence).toBe("high");
+      });
     });
 
-    it.skip("save with no changes makes no PATCH request", () => {
-      // KIN-320 — optimistic no-op if nothing changed
+    it("save with no changes makes no PATCH request and closes form", async () => {
+      const fw = makeFramework({ id: "fw-noop" });
+      mockApiFetch.mockImplementation(() => mockFetchFrameworks([fw]));
+
+      render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
+
+      await waitFor(() => screen.getByText("First Principles Thinking"));
+      await userEvent.click(screen.getByRole("button", { name: /^Edit$/i }));
+
+      // Click Save immediately without changing anything
+      await userEvent.click(screen.getByRole("button", { name: /^Save changes$/i }));
+
+      // Form closed
+      await waitFor(() => {
+        expect(
+          screen.queryByRole("heading", { name: /Edit "First Principles Thinking"/i })
+        ).not.toBeInTheDocument();
+      });
+
+      // No PATCH call
+      const patchCall = mockApiFetch.mock.calls.find(
+        ([, opts]: [string, RequestInit]) => opts?.method === "PATCH"
+      );
+      expect(patchCall).toBeUndefined();
     });
   });
 
   describe("add manually", () => {
-    it.skip("empty form is shown when Add manually is clicked", () => {
-      // KIN-320 — activate when add-framework flow exists
+    it("empty form is shown when Add manually is clicked in empty state", async () => {
+      mockApiFetch.mockImplementation(() => mockFetchFrameworks([]));
+
+      render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
+
+      await waitFor(() => screen.getByText(/No frameworks yet/i));
+      await userEvent.click(screen.getByRole("button", { name: /^Add manually$/i }));
+
+      // Modal heading (h2 inside the modal)
+      expect(screen.getByRole("heading", { name: "Add framework" })).toBeInTheDocument();
+
+      // Name field is empty
+      const nameInput = screen.getByPlaceholderText(/Coordination Tax Diagnostic/i);
+      expect(nameInput).toHaveValue("");
     });
 
-    it.skip("required field validation: name and when_to_apply must be non-empty", () => {
-      // KIN-320 — POST should not fire with blank required fields
+    it("Save button is disabled when name is empty, enabled after typing", async () => {
+      mockApiFetch.mockImplementation(() => mockFetchFrameworks([]));
+
+      render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
+
+      await waitFor(() => screen.getByText(/No frameworks yet/i));
+      await userEvent.click(screen.getByRole("button", { name: /^Add manually$/i }));
+
+      // Two "Add framework" buttons exist: modal save (index 0, rendered first in JSX) and
+      // controls bar open-form button (index 1). The modal save button is disabled when name is blank.
+      const addButtons = screen.getAllByRole("button", { name: /^Add framework$/i });
+      const saveButton = addButtons[0]; // modal renders before controls bar in JSX
+      expect(saveButton).toBeDisabled();
+
+      // Type a name — save button becomes enabled
+      await userEvent.type(screen.getByPlaceholderText(/Coordination Tax Diagnostic/i), "New FW");
+      expect(saveButton).not.toBeDisabled();
     });
 
-    it.skip("successful create shows new framework row in table", () => {
-      // KIN-320 — POST /api/v1/agents/:agentId/frameworks → re-fetch
+    it("successful create appends new framework row to table", async () => {
+      const newFw = makeFramework({ id: "fw-new", name: "New Framework" });
+
+      mockApiFetch
+        .mockImplementationOnce(() => mockFetchFrameworks([]))
+        .mockImplementationOnce(() => mockFetchFramework(newFw));
+
+      render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
+
+      await waitFor(() => screen.getByText(/No frameworks yet/i));
+      await userEvent.click(screen.getByRole("button", { name: /^Add manually$/i }));
+
+      await userEvent.type(
+        screen.getByPlaceholderText(/Coordination Tax Diagnostic/i),
+        "New Framework"
+      );
+      await userEvent.type(
+        screen.getByPlaceholderText(/When facing a complex problem/i),
+        "when starting fresh"
+      );
+
+      // Modal save button is index 0 (modal renders before controls bar in JSX)
+      const saveButton = screen.getAllByRole("button", { name: /^Add framework$/i })[0];
+      await userEvent.click(saveButton);
+
+      await waitFor(() => {
+        expect(screen.getByText("New Framework")).toBeInTheDocument();
+      });
+
+      const postCall = mockApiFetch.mock.calls.find(
+        ([url, opts]: [string, RequestInit]) =>
+          url.includes("/frameworks") && opts?.method === "POST"
+      );
+      expect(postCall).toBeDefined();
     });
   });
 
   describe("JSON upload", () => {
-    it.skip("non-JSON file is rejected before upload", () => {
-      // KIN-320 — client-side file type guard before POST
+    it("invalid JSON file is rejected: summary modal does not appear and POST not called", async () => {
+      mockApiFetch.mockImplementation(() => mockFetchFrameworks([]));
+
+      render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
+
+      await waitFor(() => screen.getByText(/No frameworks yet/i));
+
+      uploadFile(new File(["not valid json {{"], "bad.json", { type: "application/json" }));
+      // Allow async handleUpload to settle
+      await new Promise((r) => setTimeout(r, 50));
+
+      // Upload summary modal should NOT appear
+      expect(screen.queryByText(/Import Summary/i)).not.toBeInTheDocument();
+
+      // No upload POST was made
+      const uploadCall = mockApiFetch.mock.calls.find(
+        ([url, opts]: [string, RequestInit]) =>
+          typeof url === "string" && url.includes("upload") && opts?.method === "POST"
+      );
+      expect(uploadCall).toBeUndefined();
     });
 
-    it.skip("valid JSON upload shows summary modal with correct counts", () => {
-      // KIN-320 — { added, updated, retained, failed } shown in modal
+    it("valid JSON upload shows summary modal with correct counts", async () => {
+      const summary = { added: 3, updated: 2, retained: 5, failed: [] };
+
+      mockApiFetch
+        .mockImplementationOnce(() => mockFetchFrameworks([]))
+        .mockImplementationOnce(() => mockFetchUploadSummary(summary))
+        .mockImplementation(() => mockFetchFrameworks([])); // re-fetch
+
+      render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
+
+      await waitFor(() => screen.getByText(/No frameworks yet/i));
+
+      uploadFile(
+        new File(
+          [JSON.stringify([{ name: "FW 1", when_to_apply: ["trigger"] }])],
+          "import.json",
+          { type: "application/json" }
+        )
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText("Import Summary")).toBeInTheDocument();
+      });
+      expect(screen.getByText("3 frameworks added")).toBeInTheDocument();
+      expect(screen.getByText("2 frameworks updated")).toBeInTheDocument();
+      expect(screen.getByText("5 frameworks retained")).toBeInTheDocument();
     });
 
-    it.skip("partial import with errors shows error list with framework ID and message", () => {
-      // KIN-320 — failed frameworks listed in modal
+    it("partial import with errors shows error list with framework ID and message", async () => {
+      const summary = {
+        added: 1,
+        updated: 0,
+        retained: 0,
+        failed: [{ framework_id: "fw-xyz", error: "when_to_apply is required" }],
+      };
+
+      mockApiFetch
+        .mockImplementationOnce(() => mockFetchFrameworks([]))
+        .mockImplementationOnce(() => mockFetchUploadSummary(summary))
+        .mockImplementation(() => mockFetchFrameworks([]));
+
+      render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
+
+      await waitFor(() => screen.getByText(/No frameworks yet/i));
+
+      uploadFile(
+        new File(
+          [JSON.stringify([{ name: "FW" }])],
+          "import.json",
+          { type: "application/json" }
+        )
+      );
+
+      await waitFor(() => screen.getByText("Import Summary"));
+
+      expect(screen.getByText("1 failed")).toBeInTheDocument();
+      expect(screen.getByText(/fw-xyz: when_to_apply is required/i)).toBeInTheDocument();
     });
 
-    it.skip("'OK' closes modal and refreshes the framework table", () => {
-      // KIN-320 — modal dismiss triggers re-fetch
+    it("'OK' closes modal and refreshes the framework table", async () => {
+      const summary = { added: 1, updated: 0, retained: 0, failed: [] };
+      const uploaded = makeFramework({ id: "fw-uploaded", name: "Uploaded Framework" });
+
+      mockApiFetch
+        .mockImplementationOnce(() => mockFetchFrameworks([]))
+        .mockImplementationOnce(() => mockFetchUploadSummary(summary))
+        .mockImplementation(() => mockFetchFrameworks([uploaded])); // re-fetch returns new row
+
+      render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
+
+      await waitFor(() => screen.getByText(/No frameworks yet/i));
+
+      uploadFile(
+        new File(
+          [JSON.stringify([{ name: "FW" }])],
+          "import.json",
+          { type: "application/json" }
+        )
+      );
+
+      await waitFor(() => screen.getByText("Import Summary"));
+
+      await userEvent.click(screen.getByRole("button", { name: /^OK$/i }));
+
+      // Modal dismissed
+      expect(screen.queryByText("Import Summary")).not.toBeInTheDocument();
+
+      // Refreshed table shows the uploaded framework
+      await waitFor(() => {
+        expect(screen.getByText("Uploaded Framework")).toBeInTheDocument();
+      });
     });
 
-    it.skip("modal is informational only — import is already applied, no second confirm", () => {
-      // KIN-320 — modal has no Cancel/Undo; data is already written
+    it("upload modal is informational only — shows OK, no Cancel or Undo", async () => {
+      const summary = { added: 2, updated: 0, retained: 0, failed: [] };
+
+      mockApiFetch
+        .mockImplementationOnce(() => mockFetchFrameworks([]))
+        .mockImplementationOnce(() => mockFetchUploadSummary(summary))
+        .mockImplementation(() => mockFetchFrameworks([]));
+
+      render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
+
+      await waitFor(() => screen.getByText(/No frameworks yet/i));
+
+      uploadFile(
+        new File([JSON.stringify([])], "import.json", { type: "application/json" })
+      );
+
+      await waitFor(() => screen.getByText("Import Summary"));
+
+      expect(screen.getByRole("button", { name: /^OK$/i })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /cancel/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /undo/i })).not.toBeInTheDocument();
     });
   });
 });
