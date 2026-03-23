@@ -101,6 +101,7 @@ Context-rich AI workspace SaaS for knowledge workers. Eliminates cold-start by m
 | 2026-03-22 | ADR-002 written. RAG retrieval pipeline architecture documented. Zero-LLM MVP path, MMR config rationale, RAG_MAX_TOKENS formula, V1 enhancement enablement order. See `docs/adr-002-rag-retrieval-pipeline.md`. |
 | 2026-03-22 | ADR-003 written. AgentDefinition/AgentInstance architecture: two-table split, auto-creation, immediate propagation, JSONB overrides, framework trigger embeddings, bcrypt MCP tokens, generate-instructions flow, bulk upload merge. See `docs/adr-003-agents-architecture.md`. |
 | 2026-03-22 | Conversation title generation uses BYOK key (user's default model). If no key configured, title stays null — renders as "New conversation". No platform key used. |
+| 2026-03-23 | Linked upload extraction endpoints (`/api/{company,agent}/{id}/upload-document`) do NOT validate ownership of the path param. Intentional: endpoint is compute-only (no DB write, no read of protected data). Ownership is validated by the save PATCH endpoint. Sprint 4 agent save endpoint must enforce ownership check. |
 
 **Decisions deferred to post-MVP (still in V1 roadmap):**
 
