@@ -140,6 +140,9 @@ _All prior open questions resolved. New open questions tracked in `docs/prd.md` 
 | ADR-003: Agents Architecture | `docs/adr-003-agents-architecture.md` | Proposed (new 2026-03-22) |
 | Build Order | `docs/build-order.md` | Draft (2026-03-21) |
 | Sprint 1 Plan | `docs/plans/2026-03-21-sprint1-foundation.md` | Active (new 2026-03-22) |
+| Projects + Conversations Spec | `docs/specs/kin-257-projects-conversations-spec.md` | Draft (new 2026-03-22) |
+| Agents Spec | `docs/specs/agents.md` | Draft (new 2026-03-22) |
+| MCP Server Spec | `docs/specs/mcp-spec.md` | Draft (new 2026-03-22) |
 
 ---
 
@@ -153,30 +156,15 @@ _Note: "Agent" is acceptable shorthand for AgentDefinition in casual use._
 
 ---
 
-## Implementation Status (as of 2026-03-22)
+## Implementation Status (as of 2026-03-23)
 
-Sprint 1 + Sprint 2 complete. Codebase lives at `/Users/brandonupchuch/son_of_anton/projects/kinetic/packages/`. 131 API tests passing, TypeScript clean.
+Sprint 1 + Sprint 2 implementations complete (pending Brandon git commits). Sprint 3 underway (KIN-273 SSE proxy, KIN-274 model selector In Progress). Sprint 4 tickets are all in Todo.
 
-**Shipped (packages/api):** auth deps, core errors, supabase client, log-scrub middleware, encryption service, profile routes, companies routes, projects routes, admin_models routes, admin_users routes. 131 tests, 6 skipped.
+**Test scaffolding shipped (packages/api/tests/):** Sprints 3–5 fully scaffolded — skipped stubs for conversations, context stack, generation, compression (KIN-296), agents + framework selection + agent layers (KIN-297), active memory + linked upload (KIN-298). Activates KIN-278, KIN-292, KIN-293 as implementations land.
 
-**Shipped (packages/web):** AppSidebar (with company switcher), profile page, companies page, projects page, admin/models page, admin/users page. All TypeScript clean.
+**Sprint 3 — Active (due 2026-04-04):** KIN-272–277 (Dinesh + Big Head). KIN-278 (Jìan CRUD coverage) blocked by KIN-261–265.
 
-**Pending commits from Brandon** (sandbox blocks git): KIN-261, KIN-262, KIN-263, KIN-264, KIN-265 changes are written but not committed.
-
-**Sprint 4 — Backlog (KIN-284 to KIN-293, due 2026-04-11):**
-
-| Ticket | Owner | Title |
-|---|---|---|
-| KIN-284 | Gilfoyle | ADR: AgentDef/Instance architecture + framework selection pipeline |
-| KIN-285 | Gilfoyle | Code review: Sprint 3 generation engine |
-| KIN-286 | Jared | MCP spec |
-| KIN-287 | Dinesh | AgentDefinition CRUD |
-| KIN-288 | Dinesh | AgentInstance — auto-create on first invocation |
-| KIN-289 | Big Head | Framework selection pipeline |
-| KIN-290 | Big Head | Context stack — Agent layers (5–7 + 9) |
-| KIN-291 | Dinesh | Agent invocation UI |
-| KIN-292 | Jìan | Conversation + generation engine tests |
-| KIN-293 | Jìan | Agent CRUD + invocation tests |
+**Sprint 4 — Backlog (due 2026-04-11):** KIN-284 Gilfoyle ADR, KIN-285 Gilfoyle code review, KIN-287 Dinesh AgentDef CRUD, KIN-288 Dinesh AgentInstance, KIN-289 Dinesh agent invocation UI, KIN-290 Big Head framework selection pipeline, KIN-291 Big Head agent layers (5–7+9), KIN-292 Jìan conv+gen tests, KIN-293 Jìan agent tests.
 
 ---
 
