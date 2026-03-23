@@ -2,7 +2,7 @@
 
 **Owner:** Jared
 **Sprint:** 5 (implementation)
-**Status:** Draft
+**Status:** Approved
 **Tickets:** KIN-281
 
 ---
@@ -108,7 +108,7 @@ If a field cannot be determined, return null for that field.
 ```
 
 **Post-processing:**
-- `bio` truncated to 500 characters if longer
+- `bio` truncated to 1000 characters if longer (matches `users.bio` DB constraint)
 - `name` truncated to 100 characters
 
 ### 5.2 Company
