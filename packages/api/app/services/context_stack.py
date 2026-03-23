@@ -1,21 +1,22 @@
 """
-Context stack assembly service — KIN-275.
+Context stack assembly service — KIN-275, KIN-290.
 
 Assembles the 9-layer prompt context for a conversation.
 
-Sprint 3 activates Layers 1–4 + 8 (L4 and L8 are stubs at MVP).
-Layers 5–7 + 9 (agent layers) are stubs — wired in Sprint 4.
+Sprint 3 activates Layers 1–3 + 8 (L8 is a stub pending KIN-258).
+Sprint 4 activates L5 (agent system prompt), L7 (framework), L9 (agent KB RAG).
+L4 (project active memory) and L6 (agent active memory) remain stubs for Sprint 5.
 
 Layer map:
   L1  — User bio            (users.bio)
   L2  — Company description (companies.description)
   L3  — Project instructions (projects.instructions, null for company convs)
   L4  — Project Active Memory    [STUB Sprint 5]
-  L5  — Agent system prompt      [STUB Sprint 4]
+  L5  — Agent system prompt      [ACTIVE Sprint 4, when agent active]
   L6  — Agent Active Memory      [STUB Sprint 5]
-  L7  — Matched framework        [STUB Sprint 4]
+  L7  — Matched framework        [ACTIVE Sprint 4, when agent active + framework selected]
   L8  — Project KB RAG           [STUB KIN-258]
-  L9  — Agent KB RAG             [STUB Sprint 4]
+  L9  — Agent KB RAG             [ACTIVE Sprint 4, when agent active + agent has KB]
 
 Conversation history sits between assembled layers and the current user message.
 If a conversation_summaries row exists, inject summary + N verbatim recent messages.
@@ -24,7 +25,7 @@ If no summary, inject all messages up to compression threshold.
 Spec ref: docs/prd.md §10 (Context Stack)
           docs/specs/kin-257-projects-conversations-spec.md §2.5
 Schema ref: docs/db-schema-spec.md
-ADR ref: docs/adr-003-agents-architecture.md
+ADR ref: docs/adr-003-agents-architecture.md, docs/adr-005-agents-framework-selection.md
 """
 
 from __future__ import annotations
@@ -33,6 +34,7 @@ import asyncio
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
+from app.services import framework_selection as fw_selection_service
 from app.services import rag as rag_service
 
 # Number of verbatim messages to keep when a summary exists.
@@ -125,6 +127,35 @@ async def _fetch_project_instructions(
     if result.data:
         return result.data.get("instructions") or ""
     return ""
+
+
+async def _fetch_agent_definition(supabase: Any, agent_definition_id: str) -> dict:
+    """Fetch the AgentDefinition row for L5 (system prompt) and knowledge_base_id."""
+    result = await _run(
+        lambda: supabase.table("agent_definitions")
+        .select("id, instructions, knowledge_base_id")
+        .eq("id", agent_definition_id)
+        .maybe_single()
+        .execute()
+    )
+    return result.data or {}
+
+
+async def _fetch_agent_instance(
+    supabase: Any, agent_definition_id: str, user_id: str
+) -> dict:
+    """Fetch the AgentInstance for framework overrides (Step 2 of framework pipeline)."""
+    result = await _run(
+        lambda: supabase.table("agent_instances")
+        .select("framework_overrides")
+        .eq("agent_definition_id", agent_definition_id)
+        .eq("user_id", user_id)
+        .maybe_single()
+        .execute()
+    )
+    if result.data:
+        return result.data
+    return {"framework_overrides": {"pinned": [], "excluded": []}}
 
 
 async def _fetch_knowledge_base_id(
@@ -277,6 +308,18 @@ async def assemble(
         else None
     )
 
+    # Agent layer tasks (L5, L7, L9) — only when an agent is active
+    agent_def_task = (
+        asyncio.create_task(_fetch_agent_definition(supabase, active_agent_id))
+        if active_agent_id
+        else None
+    )
+    agent_instance_task = (
+        asyncio.create_task(_fetch_agent_instance(supabase, active_agent_id, user_id))
+        if active_agent_id
+        else None
+    )
+
     # Await all
     l1_bio = await bio_task
     l2_company = await company_task
@@ -292,19 +335,55 @@ async def assemble(
     l8_rag = rag_service.format_chunks_for_prompt(rag_chunks)
 
     # ---------------------------------------------------------------------------
+    # Agent layers (L5, L7, L9) — activated when active_agent_id is set
+    # ---------------------------------------------------------------------------
+
+    l5_agent_instructions = ""
+    l7_framework = ""
+    l9_agent_rag = ""
+
+    if active_agent_id and agent_def_task and agent_instance_task:
+        agent_def = await agent_def_task
+        agent_instance = await agent_instance_task
+
+        # L5 — Agent system prompt
+        l5_agent_instructions = agent_def.get("instructions") or ""
+
+        # L7 — Framework selection pipeline
+        # Build enriched query (last 2 user messages + current) per ADR-005 §1
+        recent_user_msgs = [m["content"] for m in messages if m["role"] == "user"][-2:]
+        enriched_query = "\n\n".join(recent_user_msgs + ([query] if query else []))
+
+        framework_overrides = agent_instance.get("framework_overrides") or {}
+        selected_framework = await fw_selection_service.select_framework(
+            supabase,
+            active_agent_id,
+            enriched_query,
+            framework_overrides,
+        )
+        if selected_framework:
+            l7_framework = fw_selection_service.format_framework_for_prompt(selected_framework)
+
+        # L9 — Agent KB RAG
+        agent_kb_id = agent_def.get("knowledge_base_id")
+        if agent_kb_id and query:
+            agent_rag_chunks = await rag_service.retrieve(agent_kb_id, query, supabase)
+            l9_agent_rag = rag_service.format_chunks_for_prompt(agent_rag_chunks)
+
+    # ---------------------------------------------------------------------------
     # Assemble system prompt from all layers
     # ---------------------------------------------------------------------------
 
     sections = [
         _section("User Profile", l1_bio),
         _section("Company Context", l2_company),
-        _section("Project Context", l3_project),          # L3: active for project convs
-        _section("Active Memory", ""),                     # L4: TODO Sprint 5
-        _section("Agent Instructions", ""),                # L5: TODO Sprint 4
-        _section("Agent Memory", ""),                      # L6: TODO Sprint 5
-        _section("Framework", ""),                         # L7: TODO Sprint 4
-        _section("Knowledge Base", l8_rag),                # L8: stub (KIN-258)
-        _section("Agent Knowledge Base", ""),              # L9: TODO Sprint 4
+        _section("Project Context", l3_project),              # L3: active for project convs
+        _section("Active Memory", ""),                         # L4: TODO Sprint 5
+        _section("Agent Instructions", l5_agent_instructions), # L5: active when agent set
+        _section("Agent Memory", ""),                          # L6: TODO Sprint 5
+        _section("Framework", l7_framework),                   # L7: active when agent + fw selected
+        _section("Knowledge Base", l8_rag),                    # L8: stub (KIN-258)
+        _section("Agent Knowledge Base", l9_agent_rag),        # L9: active when agent has KB
     ]
 
     system_prompt = "\n".join(s for s in sections if s)

@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { ChatThread } from "@/components/ChatThread";
 import { ChatInput } from "@/components/ChatInput";
-import { getConversation } from "@/lib/api";
+import { AgentSelector } from "@/components/AgentSelector";
+import { getConversation, updateConversation } from "@/lib/api";
 import { createStreamEventSource } from "@/lib/api";
 import { supabase } from "@/lib/supabaseClient";
 import type { ConversationWithMessages, Message } from "@/lib/types/models";
@@ -19,6 +20,8 @@ export default function ConversationPage() {
   const [streaming, setStreaming] = useState(false);
   const [enabledProviders, setEnabledProviders] = useState<string[]>([]);
   const [defaultModelId, setDefaultModelId] = useState<string | null>(null);
+  const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -26,6 +29,7 @@ export default function ConversationPage() {
       .then((conv) => {
         setConversation(conv);
         setMessages(conv.messages);
+        setActiveAgentId(conv.active_agent_id ?? null);
       })
       .catch(() => {});
   }, [id]);
@@ -34,6 +38,8 @@ export default function ConversationPage() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) return;
+      setUserId(session.user.id);
+
       fetch("/api/v1/profile/api-keys", {
         headers: { Authorization: `Bearer ${session.access_token}` },
       })
@@ -53,6 +59,29 @@ export default function ConversationPage() {
         .catch(() => {});
     });
   }, []);
+
+  const handleActivateAgent = useCallback(
+    async (agentId: string) => {
+      if (!id) return;
+      try {
+        await updateConversation(id, { active_agent_id: agentId });
+        setActiveAgentId(agentId);
+      } catch {
+        // silent — agent selector will not reflect change
+      }
+    },
+    [id]
+  );
+
+  const handleDeactivateAgent = useCallback(async () => {
+    if (!id) return;
+    try {
+      await updateConversation(id, { active_agent_id: null });
+      setActiveAgentId(null);
+    } catch {
+      // silent
+    }
+  }, [id]);
 
   const handleSend = useCallback(
     async (content: string, modelId: string | null) => {
@@ -139,10 +168,16 @@ export default function ConversationPage() {
   return (
     <div className="flex flex-col h-screen">
       {/* Header */}
-      <div className="border-b border-border px-6 py-3 shrink-0">
+      <div className="border-b border-border px-6 py-3 shrink-0 flex items-center justify-between gap-4">
         <h1 className="text-sm font-medium text-foreground truncate">
           {title}
         </h1>
+        <AgentSelector
+          activeAgentId={activeAgentId}
+          userId={userId}
+          onActivate={handleActivateAgent}
+          onDeactivate={handleDeactivateAgent}
+        />
       </div>
 
       {/* Thread */}

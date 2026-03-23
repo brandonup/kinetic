@@ -219,14 +219,17 @@ class TestSendMessage:
                 json={"content": "Hello!"},
             )
 
-        # Parse SSE events
-        events = [
-            line[6:] for line in res.text.splitlines()
-            if line.startswith("data: ")
-        ]
-        parsed = [json.loads(e) for e in events if e]
+        # Parse named SSE events: look for event: done lines
+        lines = res.text.splitlines()
+        event_types = [line[7:] for line in lines if line.startswith("event: ")]
+        assert "done" in event_types, "Expected 'done' named SSE event in stream"
 
-        assert any(e.get("done") for e in parsed), "Expected 'done' event in stream"
+        # Also verify done data payload has generation_id
+        data_lines = [line[6:] for line in lines if line.startswith("data: ")]
+        parsed = [json.loads(e) for e in data_lines if e]
+        done_events = [e for e in parsed if e.get("event") == "done"]
+        assert done_events, "Expected done event in parsed data"
+        assert "generation_id" in done_events[0]
 
     def test_sse_stream_contains_delta_events(self, client):
         sb = _make_supabase()
@@ -244,13 +247,11 @@ class TestSendMessage:
                 json={"content": "Hello!"},
             )
 
-        events = [
-            line[6:] for line in res.text.splitlines()
-            if line.startswith("data: ")
-        ]
-        parsed = [json.loads(e) for e in events if e]
-        delta_events = [e for e in parsed if "delta" in e]
+        lines = res.text.splitlines()
+        data_lines = [line[6:] for line in lines if line.startswith("data: ")]
+        parsed = [json.loads(e) for e in data_lines if e]
+        delta_events = [e for e in parsed if e.get("event") == "delta"]
 
         assert len(delta_events) >= 1
-        combined = "".join(e["delta"] for e in delta_events)
+        combined = "".join(e["data"]["text"] for e in delta_events)
         assert "Hello" in combined or "world" in combined

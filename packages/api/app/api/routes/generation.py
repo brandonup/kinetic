@@ -18,7 +18,7 @@ import datetime
 import json
 import logging
 from typing import Any, AsyncGenerator, Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 from fastapi.responses import StreamingResponse
@@ -173,6 +173,7 @@ async def _insert_message(
     *,
     model: Optional[str] = None,
     agent_definition_id: Optional[str] = None,
+    message_id: Optional[str] = None,
 ) -> dict:
     row: dict = {
         "conversation_id": conv_id,
@@ -182,6 +183,8 @@ async def _insert_message(
         "model": model,
         "agent_definition_id": agent_definition_id,
     }
+    if message_id:
+        row["id"] = message_id
     result = await _run(
         lambda: supabase.table("messages").insert(row).execute()
     )
@@ -314,11 +317,33 @@ async def _stream_response(
     Core async generator that:
     1. Assembles context (fetched here, after user msg is persisted)
     2. Calls LiteLLM with stream=True
-    3. Yields SSE deltas
+    3. Yields named SSE events (delta / done / error)
     4. On completion: persists assistant message + triggers background jobs
+
+    SSE format per StreamEvent type in packages/web/lib/types/models.ts:
+      event: delta
+      data: {"event":"delta","event_id":N,"generation_id":"<uuid>","conversation_id":"<id>","data":{"text":"..."}}
+
+      event: done
+      data: {"event":"done","event_id":N,"generation_id":"<uuid>","conversation_id":"<id>","data":{}}
     """
     full_response: list[str] = []
     model_string = _litellm_model_string(model_row)
+    # Pre-assign the assistant message UUID so it's available in delta events
+    generation_id = str(uuid4())
+    event_id = 0
+
+    def _sse(event_type: str, data: dict) -> str:
+        nonlocal event_id
+        payload = {
+            "event": event_type,
+            "event_id": event_id,
+            "generation_id": generation_id,
+            "conversation_id": conv_id,
+            "data": data,
+        }
+        event_id += 1
+        return f"event: {event_type}\ndata: {json.dumps(payload)}\n\n"
 
     try:
         # Assemble context stack (L1-L9 per KIN-275)
@@ -342,12 +367,12 @@ async def _stream_response(
             delta = chunk.choices[0].delta.content or ""
             if delta:
                 full_response.append(delta)
-                yield f"data: {json.dumps({'delta': delta})}\n\n"
+                yield _sse("delta", {"text": delta})
 
     except Exception as exc:
         provider_msg = str(exc)
         logger.error("LLM generation error for conversation %s: %s", conv_id, exc)
-        yield f"data: {json.dumps({'error': provider_msg})}\n\n"
+        yield _sse("error", {"error_message": provider_msg})
         # Don't persist a failed assistant message
         return
 
@@ -363,13 +388,14 @@ async def _stream_response(
             assistant_seq,
             model=model_row["model_id"],
             agent_definition_id=active_agent_id,
+            message_id=generation_id,
         )
         await _bump_updated_at(supabase, conv_id)
     except Exception as exc:
         logger.error("Failed to persist assistant message: %s", exc)
 
-    # Terminal SSE event
-    yield f"data: {json.dumps({'done': True})}\n\n"
+    # Terminal SSE event — generation_id used by client to identify the persisted message
+    yield _sse("done", {})
 
     # ---------------------------------------------------------------------------
     # Background jobs (non-blocking)

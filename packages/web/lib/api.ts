@@ -104,10 +104,15 @@ export async function parseApiError(response: Response): Promise<string> {
  * Conversation CRUD API functions (Sprint 3)
  */
 import type {
+  AgentDefinition,
+  AgentInstance,
   Conversation,
   ConversationWithMessages,
+  CreateAgentRequest,
   CreateConversationRequest,
+  UpdateAgentRequest,
   UpdateConversationRequest,
+  UpdateInstanceRequest,
   ModelConfiguration,
 } from "./types/models";
 
@@ -172,6 +177,68 @@ export async function listEnabledGenerationModels(): Promise<
   if (!res.ok) throw new Error(await parseApiError(res));
   const data = await res.json();
   return (data.models ?? data) as ModelConfiguration[];
+}
+
+/**
+ * Agent API functions (Sprint 4 — KIN-287, KIN-288)
+ */
+
+export async function listAgents(): Promise<AgentDefinition[]> {
+  const res = await apiFetch("/api/v1/agents");
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return res.json();
+}
+
+export async function createAgent(
+  data: CreateAgentRequest
+): Promise<AgentDefinition> {
+  const res = await apiFetch("/api/v1/agents", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return res.json();
+}
+
+export async function getAgent(id: string): Promise<AgentDefinition> {
+  const res = await apiFetch(`/api/v1/agents/${id}`);
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return res.json();
+}
+
+export async function updateAgent(
+  id: string,
+  data: UpdateAgentRequest
+): Promise<AgentDefinition> {
+  const res = await apiFetch(`/api/v1/agents/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return res.json();
+}
+
+export async function deleteAgent(id: string): Promise<void> {
+  const res = await apiFetch(`/api/v1/agents/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(await parseApiError(res));
+}
+
+export async function getAgentInstance(agentId: string): Promise<AgentInstance> {
+  const res = await apiFetch(`/api/v1/agents/${agentId}/instance`);
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return res.json();
+}
+
+export async function updateAgentInstance(
+  agentId: string,
+  data: UpdateInstanceRequest
+): Promise<AgentInstance> {
+  const res = await apiFetch(`/api/v1/agents/${agentId}/instance`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return res.json();
 }
 
 /**
