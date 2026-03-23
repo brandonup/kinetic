@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { ChatThread } from "@/components/ChatThread";
 import { ChatInput } from "@/components/ChatInput";
 import { AgentSelector } from "@/components/AgentSelector";
-import { getConversation, updateConversation } from "@/lib/api";
+import { getConversation, updateConversation, apiFetch } from "@/lib/api";
 import { createStreamEventSource } from "@/lib/api";
 import { supabase } from "@/lib/supabaseClient";
 import type { ConversationWithMessages, Message } from "@/lib/types/models";
@@ -40,18 +40,14 @@ export default function ConversationPage() {
       if (!session) return;
       setUserId(session.user.id);
 
-      fetch("/api/v1/profile/api-keys", {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      })
+      apiFetch("/api/v1/profile/api-keys")
         .then((r) => r.json())
         .then((data: { provider: string }[]) => {
           setEnabledProviders((data ?? []).map((k) => k.provider));
         })
         .catch(() => {});
 
-      fetch("/api/v1/profile", {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      })
+      apiFetch("/api/v1/profile")
         .then((r) => r.json())
         .then((data: { default_model_id?: string | null }) => {
           setDefaultModelId(data.default_model_id ?? null);

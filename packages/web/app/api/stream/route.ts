@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
   }
 
   const modelId = searchParams.get("model_id");
+  const agentInstanceId = searchParams.get("agent_instance_id");
 
   // POST to FastAPI generation endpoint (EventSource only supports GET,
   // so this proxy translates GET → POST and injects the JWT).
@@ -33,6 +34,7 @@ export async function GET(req: NextRequest) {
 
   const body: Record<string, string> = { content };
   if (modelId) body.model_id = modelId;
+  if (agentInstanceId) body.agent_instance_id = agentInstanceId;
 
   const headers: HeadersInit = {
     "Content-Type": "application/json",
