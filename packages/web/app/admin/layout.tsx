@@ -8,6 +8,7 @@ import { supabase } from "@/lib/supabaseClient";
 const NAV_ITEMS = [
   { label: "Users", href: "/admin/users", activePrefix: "/admin/users" },
   { label: "LLM Models", href: "/admin/models", activePrefix: "/admin/models" },
+  { label: "RAG Debug", href: "/admin/rag-debug", activePrefix: "/admin/rag-debug" },
   { label: "Back to App", href: "/projects", activePrefix: null },
 ];
 

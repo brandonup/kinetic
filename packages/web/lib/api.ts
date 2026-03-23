@@ -45,7 +45,7 @@ export async function apiFetch(
   const { requireAuth = true, headers, ...fetchOptions } = options;
 
   const requestHeaders: Record<string, string> = {
-    "Content-Type": "application/json",
+    ...(fetchOptions.body instanceof FormData ? {} : { "Content-Type": "application/json" }),
     ...(headers as Record<string, string>),
   };
 
