@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Kinetic dark theme — always dark */
+    --background: 222 25% 7%;
+    --foreground: 210 20% 92%;
+
+    --card: 222 20% 10%;
+    --card-foreground: 210 20% 92%;
+
+    --popover: 222 20% 10%;
+    --popover-foreground: 210 20% 92%;
+
+    /* Teak/amber primary */
+    --primary: 30 70% 47%;
+    --primary-foreground: 30 10% 98%;
+
+    --secondary: 220 15% 16%;
+    --secondary-foreground: 210 20% 85%;
+
+    --muted: 220 15% 14%;
+    --muted-foreground: 215 12% 55%;
+
+    --accent: 30 60% 42%;
+    --accent-foreground: 30 10% 98%;
+
+    --destructive: 0 63% 40%;
+    --destructive-foreground: 210 20% 92%;
+
+    --border: 220 15% 18%;
+    --input: 220 15% 16%;
+    --ring: 30 70% 47%;
+
+    --radius: 0.5rem;
+
+    /* Sidebar */
+    --sidebar-width: 220px;
+    --sidebar-bg: 222 25% 9%;
+    --sidebar-border: 220 15% 15%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
