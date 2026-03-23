@@ -1,5 +1,5 @@
 """
-Tests for Linked Upload extraction endpoints — KIN-314.
+Tests for Linked Upload extraction endpoints — KIN-310 / KIN-311.
 
 Spec: docs/feature-linked-upload.md
 Implementation tickets: KIN-310 (User Profile + Company), KIN-311 (Agent Profile)
@@ -10,8 +10,6 @@ Endpoints under test:
   POST /api/profile/upload-document
   POST /api/company/{id}/upload-document
   POST /api/agent/{id}/upload-document
-
-Stub status: skipped — awaiting KIN-310 + KIN-311 implementation.
 """
 
 from io import BytesIO
