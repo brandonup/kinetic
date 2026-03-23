@@ -1,0 +1,37 @@
+# Kinetic API — Python dependencies
+# KIN-252: auth service port
+
+# Web framework
+fastapi>=0.109
+uvicorn[standard]>=0.27
+
+# Validation / settings
+pydantic>=2.5
+pydantic-settings>=2.1
+
+# JWT verification
+PyJWT>=2.8
+cryptography>=42.0        # required by PyJWT for RS256/ES256 algs
+
+# HTTP client (JWKS fetch in supabase_jwt.py)
+httpx>=0.26
+
+# Supabase Python client (used in deps.py for admin role check)
+supabase>=2.3
+
+# Testing
+pytest>=7.4
+pytest-asyncio>=0.23
+
+# LLM abstraction
+litellm>=1.30
+
+# Ingestion pipeline
+unstructured[all-docs]>=0.12
+tiktoken>=0.6
+openai>=1.14
+tenacity>=8.2
+python-multipart>=0.0.9
+
+# FastAPI TestClient transport
+# httpx already listed above — starlette TestClient uses it automatically

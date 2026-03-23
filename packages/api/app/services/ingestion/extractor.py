@@ -1,0 +1,80 @@
+"""
+Text extraction via unstructured library.
+
+Supports: PDF, DOCX, DOC, PPTX, PPT, TXT, MD, CSV, XLSX, XLS, RTF, JSONL.
+Raises UnsupportedFileTypeError for unsupported content types.
+Raises RuntimeError on extraction failure (caller handles retry).
+"""
+
+from __future__ import annotations
+
+import io
+import logging
+from typing import Set
+
+logger = logging.getLogger(__name__)
+
+SUPPORTED_MIME_TYPES: Set[str] = {
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.ms-powerpoint",
+    "text/plain",
+    "text/markdown",
+    "text/x-markdown",
+    "text/csv",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.ms-excel",
+    "application/rtf",
+    "text/rtf",
+    "application/jsonl",
+    "application/x-jsonlines",
+}
+
+
+class UnsupportedFileTypeError(ValueError):
+    """Raised when the file content type is not in the supported set."""
+
+
+def extract_text(content: bytes, content_type: str, filename: str) -> str:
+    """
+    Extract plain text from a document using the unstructured library.
+
+    Args:
+        content: Raw file bytes.
+        content_type: MIME type of the document.
+        filename: Original filename (used by unstructured for format hints).
+
+    Returns:
+        Extracted text as a single string with double-newline paragraph separators.
+
+    Raises:
+        UnsupportedFileTypeError: content_type not in SUPPORTED_MIME_TYPES.
+        RuntimeError: Extraction failed (transient — caller should retry).
+    """
+    if content_type not in SUPPORTED_MIME_TYPES:
+        raise UnsupportedFileTypeError(
+            f"Unsupported file type: {content_type!r}. "
+            f"Supported: {sorted(SUPPORTED_MIME_TYPES)}"
+        )
+
+    try:
+        from unstructured.partition.auto import partition  # type: ignore[import]
+
+        elements = partition(
+            file=io.BytesIO(content),
+            content_type=content_type,
+            metadata_filename=filename,
+        )
+        texts = [str(el).strip() for el in elements if str(el).strip()]
+        if not texts:
+            logger.warning("No text extracted from %s (content_type=%s)", filename, content_type)
+            return ""
+        return "\n\n".join(texts)
+
+    except UnsupportedFileTypeError:
+        raise
+    except Exception as exc:
+        logger.error("Text extraction failed for %s: %s", filename, exc)
+        raise RuntimeError(f"Text extraction failed for {filename!r}: {exc}") from exc
