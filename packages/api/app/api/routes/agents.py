@@ -16,6 +16,7 @@ Conventions: all Supabase calls in async def use run_in_executor; raise AppExcep
 
 import asyncio
 import logging
+import re
 from datetime import datetime, timezone
 from typing import Literal, Optional
 
@@ -68,9 +69,39 @@ class UpdateAgentInstanceRequest(BaseModel):
     framework_overrides: FrameworkOverrides
 
 
+class CreateFrameworkRequest(BaseModel):
+    name: str
+    when_to_apply: list[str]
+    principles: list[str]
+    confidence: Literal["high", "medium"]
+    framework_id: Optional[str] = None  # auto-generated from name if omitted
+    category: Optional[str] = None
+    description: Optional[str] = None
+    example_application: Optional[str] = None
+    steps: list[str] = []
+    related_frameworks: list[str] = []
+
+
+class UpdateFrameworkRequest(BaseModel):
+    name: Optional[str] = None
+    when_to_apply: Optional[list[str]] = None
+    category: Optional[str] = None
+    example_application: Optional[str] = None
+    confidence: Optional[Literal["high", "medium"]] = None
+    principles: Optional[list[str]] = None
+
+
+class UploadFrameworksRequest(BaseModel):
+    frameworks: list[dict]
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def _slug(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "framework"
 
 
 def get_supabase_client():
@@ -298,6 +329,302 @@ async def update_instance(
     )
     if not update_result.data:
         raise NotFoundError("Agent instance not found after update")
+    return update_result.data[0]
+
+
+@router.post("/{agent_id}/frameworks/upload")
+async def upload_frameworks(
+    agent_id: str,
+    body: UploadFrameworksRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """
+    Bulk-import frameworks for an agent definition via JSON upload. Owner only.
+
+    For each item: validates required fields, then upserts (update if framework_id
+    already exists, insert otherwise). Per-item errors are collected in `failed` —
+    they never abort the whole upload.
+
+    Returns:
+        {"added": int, "updated": int, "retained": int, "failed": list[dict]}
+    """
+    loop = asyncio.get_running_loop()
+    client = get_supabase_client()
+
+    # Step 1: Fetch agent — 404 if not found
+    agent_result = await loop.run_in_executor(
+        None,
+        lambda: client
+            .table("agent_definitions")
+            .select(_AGENT_FIELDS)
+            .eq("id", agent_id)
+            .single()
+            .execute(),
+    )
+    agent = agent_result.data
+    if not agent:
+        raise NotFoundError("Agent not found")
+
+    # Step 2: Owner check
+    if agent["owner_id"] != current_user.user_id:
+        raise AuthorizationError("You do not own this agent")
+
+    # Step 3: Fetch all existing frameworks for this agent
+    existing_result = await loop.run_in_executor(
+        None,
+        lambda: client
+            .table("frameworks")
+            .select("id, framework_id")
+            .eq("agent_definition_id", agent_id)
+            .execute(),
+    )
+    existing: dict[str, str] = {
+        row["framework_id"]: row["id"]
+        for row in (existing_result.data or [])
+    }
+
+    added = 0
+    updated = 0
+    failed: list[dict] = []
+
+    # Step 4: Process each item
+    for item in body.frameworks:
+        fw_id_label = item.get("framework_id", "?")
+
+        # Validate required fields
+        name = item.get("name")
+        when_to_apply = item.get("when_to_apply")
+        confidence = item.get("confidence")
+        principles = item.get("principles")
+
+        if not isinstance(name, str) or not name:
+            failed.append({"framework_id": fw_id_label, "error": "name is required"})
+            continue
+        if not isinstance(when_to_apply, list) or len(when_to_apply) < 1:
+            failed.append({"framework_id": fw_id_label, "error": "when_to_apply must be a non-empty list"})
+            continue
+        if confidence not in {"high", "medium"}:
+            failed.append({"framework_id": fw_id_label, "error": "confidence must be 'high' or 'medium'"})
+            continue
+        if not isinstance(principles, list) or len(principles) < 1:
+            failed.append({"framework_id": fw_id_label, "error": "principles must be a non-empty list"})
+            continue
+
+        fw_id = item.get("framework_id")
+
+        if fw_id and fw_id in existing:
+            # Update existing framework
+            update_dict: dict = {"updated_at": datetime.now(timezone.utc).isoformat()}
+            for field in ("name", "when_to_apply", "confidence", "principles", "category",
+                          "description", "example_application", "steps", "related_frameworks", "origin",
+                          "source_posts"):
+                if field in item:
+                    update_dict[field] = item[field]
+            try:
+                await loop.run_in_executor(
+                    None,
+                    lambda uid=existing[fw_id], ud=update_dict: client
+                        .table("frameworks")
+                        .update(ud)
+                        .eq("id", uid)
+                        .execute(),
+                )
+                updated += 1
+            except Exception as exc:
+                logger.error("upload_frameworks: update failed", extra={"framework_id": fw_id, "error": str(exc)})
+                failed.append({"framework_id": fw_id, "error": str(exc)})
+        else:
+            # Insert new framework
+            row = {
+                "agent_definition_id": agent_id,
+                "origin": item.get("origin", "manual"),
+                "framework_id": fw_id or _slug(name),
+                "name": name,
+                "when_to_apply": when_to_apply,
+                "confidence": confidence,
+                "principles": principles,
+            }
+            for field in ("category", "description", "example_application", "steps", "related_frameworks"):
+                if field in item:
+                    row[field] = item[field]
+            try:
+                await loop.run_in_executor(
+                    None,
+                    lambda r=row: client.table("frameworks").insert(r).execute(),
+                )
+                added += 1
+            except Exception as exc:
+                logger.error("upload_frameworks: insert failed", extra={"framework_id": fw_id_label, "error": str(exc)})
+                failed.append({"framework_id": fw_id_label, "error": str(exc)})
+
+    retained = len(existing) - updated
+    return {"added": added, "updated": updated, "retained": retained, "failed": failed}
+
+
+@router.post("/{agent_id}/frameworks")
+async def create_framework(
+    agent_id: str,
+    body: CreateFrameworkRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """
+    Create a new framework for an agent definition. Owner only.
+
+    Raises:
+        NotFoundError (404): Agent not found.
+        AuthorizationError (403): Current user is not the owner.
+        ValidationError (400): when_to_apply or principles is empty.
+        ValidationError (400): DB returned no data after insert.
+    """
+    loop = asyncio.get_running_loop()
+    client = get_supabase_client()
+
+    # Step 1: Fetch agent — 404 if not found
+    agent_result = await loop.run_in_executor(
+        None,
+        lambda: client
+            .table("agent_definitions")
+            .select(_AGENT_FIELDS)
+            .eq("id", agent_id)
+            .single()
+            .execute(),
+    )
+    agent = agent_result.data
+    if not agent:
+        raise NotFoundError("Agent not found")
+
+    # Step 2: Owner check
+    if agent["owner_id"] != current_user.user_id:
+        raise AuthorizationError("You do not own this agent")
+
+    # Step 3: Validate required list fields
+    if not body.when_to_apply:
+        raise ValidationError("when_to_apply must not be empty")
+    if not body.principles:
+        raise ValidationError("principles must not be empty")
+
+    # Step 4: Build row
+    framework_id = body.framework_id or _slug(body.name)
+    row = {
+        "framework_id": framework_id,
+        "agent_definition_id": agent_id,
+        "origin": "manual",
+        "name": body.name,
+        "when_to_apply": body.when_to_apply,
+        "principles": body.principles,
+        "confidence": body.confidence,
+        "steps": body.steps,
+        "related_frameworks": body.related_frameworks,
+    }
+    if body.category is not None:
+        row["category"] = body.category
+    if body.description is not None:
+        row["description"] = body.description
+    if body.example_application is not None:
+        row["example_application"] = body.example_application
+
+    # Step 5: Insert
+    result = await loop.run_in_executor(
+        None,
+        lambda: client.table("frameworks").insert(row).execute(),
+    )
+    if not result.data:
+        logger.error(
+            "create_framework: no data returned from insert",
+            extra={"agent_id": agent_id, "user_id": current_user.user_id},
+        )
+        raise ValidationError("Failed to create framework")
+    return result.data[0]
+
+
+@router.patch("/{agent_id}/frameworks/{framework_db_id}")
+async def update_framework(
+    agent_id: str,
+    framework_db_id: str,  # frameworks.id (UUID PK) — NOT the semantic framework_id text column
+    body: UpdateFrameworkRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """
+    Update a framework for an agent definition. Owner only.
+
+    NOTE: `framework_db_id` is the DB primary key (frameworks.id UUID), not the semantic
+    `frameworks.framework_id` text slug. Frontend must send framework.id, not framework.framework_id.
+
+    Raises:
+        NotFoundError (404): Agent not found.
+        AuthorizationError (403): Current user is not the owner.
+        NotFoundError (404): Framework not found under this agent.
+        ValidationError (400): when_to_apply or principles set to empty list.
+        NotFoundError (404): DB returned no data after update.
+    """
+    loop = asyncio.get_running_loop()
+    client = get_supabase_client()
+
+    # Step 1: Fetch agent — 404 if not found
+    agent_result = await loop.run_in_executor(
+        None,
+        lambda: client
+            .table("agent_definitions")
+            .select(_AGENT_FIELDS)
+            .eq("id", agent_id)
+            .single()
+            .execute(),
+    )
+    agent = agent_result.data
+    if not agent:
+        raise NotFoundError("Agent not found")
+
+    # Step 2: Owner check
+    if agent["owner_id"] != current_user.user_id:
+        raise AuthorizationError("You do not own this agent")
+
+    # Step 3: Fetch framework by DB primary key
+    fw_result = await loop.run_in_executor(
+        None,
+        lambda: client
+            .table("frameworks")
+            .select("*")
+            .eq("id", framework_db_id)
+            .eq("agent_definition_id", agent_id)
+            .single()
+            .execute(),
+    )
+    framework = fw_result.data
+    if not framework:
+        raise NotFoundError("Framework not found")
+
+    # Step 4: Build updates dict from non-None fields
+    updates: dict = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    if body.name is not None:
+        updates["name"] = body.name
+    if body.when_to_apply is not None:
+        updates["when_to_apply"] = body.when_to_apply
+    if body.category is not None:
+        updates["category"] = body.category
+    if body.example_application is not None:
+        updates["example_application"] = body.example_application
+    if body.confidence is not None:
+        updates["confidence"] = body.confidence
+    if body.principles is not None:
+        updates["principles"] = body.principles
+
+    # Step 5: Validate list fields not set to empty
+    if "when_to_apply" in updates and len(updates["when_to_apply"]) == 0:
+        raise ValidationError("when_to_apply must not be empty")
+    if "principles" in updates and len(updates["principles"]) == 0:
+        raise ValidationError("principles must not be empty")
+
+    # Step 6: Update
+    update_result = await loop.run_in_executor(
+        None,
+        lambda: client
+            .table("frameworks")
+            .update(updates)
+            .eq("id", framework_db_id)
+            .execute(),
+    )
+    if not update_result.data:
+        raise NotFoundError("Framework not found after update")
     return update_result.data[0]
 
 

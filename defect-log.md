@@ -38,3 +38,7 @@ _Append-only. One row per Critical or Important finding from code review._
 | 2026-03-23 | KIN-306 | Gilfoyle | spec-gap | Important | Soft-deleted conversation not filtered (missing deleted_at IS NULL) in store_message ownership check and periodic job conversation fetch |
 | 2026-03-23 | KIN-306 | Gilfoyle | error-swallow | Important | Per-proposal insert().execute() unwrapped in _generate_periodic_proposals_job — DB failure crashes loop silently with no log and partial insert |
 | 2026-03-23 | KIN-306 | Gilfoyle | test-missing | Important | Missing count=20 boundary test; no agent-scoped job test; no trigger_type assertion on inserted rows |
+| 2026-03-23 | KIN-320 | Gilfoyle | api-contract | Important | PATCH /{agent_id}/frameworks/{framework_id} path param named `framework_id` but queries by DB UUID (`frameworks.id`) — naming mismatch will cause future client wiring errors |
+| 2026-03-23 | KIN-320 | Gilfoyle | error-swallow | Important | upload_frameworks update path omits `source_posts` from field list — silently drops source_posts updates on re-upload of extracted frameworks |
+| 2026-03-23 | KIN-320 | Gilfoyle | other | Important | handleFormSave sends empty PATCH body with no guard — spurious DB write and misleading "Framework saved" toast when user saves without changes |
+| 2026-03-23 | KIN-320 | Gilfoyle | other | Important | loadFrameworks after upload swallows network errors — stale list shown with no toast if refresh fails post-upload |

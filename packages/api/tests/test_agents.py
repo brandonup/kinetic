@@ -500,3 +500,291 @@ class TestFrameworkEndpoints:
         with patch(PATCH_TARGET, return_value=mock_db):
             response = client.delete(f"/api/v1/agents/{TEST_AGENT_ID}/frameworks/{fw_id}")
         assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Framework mutation endpoints (create + patch)
+# ---------------------------------------------------------------------------
+
+
+class TestFrameworkMutations:
+    def test_create_framework_200(self, client):
+        """Owner posts valid body — 200, returned row has correct name."""
+        agent = _agent_row()
+        fw_row = _framework_row(agent_id=TEST_AGENT_ID)
+        fw_row = {**fw_row, "name": "My New Framework"}
+        mock_db = MagicMock()
+
+        # Agent fetch (uses .single())
+        mock_db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+            MagicMock(data=agent)
+        )
+        # Insert
+        mock_db.table.return_value.insert.return_value.execute.return_value = MagicMock(
+            data=[fw_row]
+        )
+
+        with patch(PATCH_TARGET, return_value=mock_db):
+            response = client.post(
+                f"/api/v1/agents/{TEST_AGENT_ID}/frameworks",
+                json={
+                    "name": "My New Framework",
+                    "when_to_apply": ["when facing ambiguity"],
+                    "principles": ["Be clear"],
+                    "confidence": "high",
+                },
+            )
+        assert response.status_code == 200
+        assert response.json()["name"] == "My New Framework"
+
+    def test_create_framework_403_non_owner(self, client):
+        """Non-owner posting to another user's agent — 403."""
+        agent = _agent_row(owner_id=OTHER_USER_ID, visibility="public")
+        mock_db = MagicMock()
+
+        mock_db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+            MagicMock(data=agent)
+        )
+
+        with patch(PATCH_TARGET, return_value=mock_db):
+            response = client.post(
+                f"/api/v1/agents/{TEST_AGENT_ID}/frameworks",
+                json={
+                    "name": "Hijack Framework",
+                    "when_to_apply": ["always"],
+                    "principles": ["own it"],
+                    "confidence": "high",
+                },
+            )
+        assert response.status_code == 403
+
+    def test_create_framework_400_empty_when_to_apply(self, client):
+        """when_to_apply: [] — 400 validation error."""
+        agent = _agent_row()
+        mock_db = MagicMock()
+
+        mock_db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+            MagicMock(data=agent)
+        )
+
+        with patch(PATCH_TARGET, return_value=mock_db):
+            response = client.post(
+                f"/api/v1/agents/{TEST_AGENT_ID}/frameworks",
+                json={
+                    "name": "Bad Framework",
+                    "when_to_apply": [],
+                    "principles": ["Be clear"],
+                    "confidence": "high",
+                },
+            )
+        assert response.status_code == 400
+
+    def test_patch_framework_200(self, client):
+        """Owner patches name — 200, returned name is updated."""
+        agent = _agent_row()
+        fw_id = str(uuid4())
+        fw = _framework_row(fw_id=fw_id, agent_id=TEST_AGENT_ID)
+        updated_fw = {**fw, "name": "Renamed Framework"}
+        mock_db = MagicMock()
+
+        # Agent fetch and framework fetch both use .single(); use side_effect to differentiate
+        single_results = [MagicMock(data=agent), MagicMock(data=fw)]
+        call_count = {"n": 0}
+
+        def _single_execute():
+            idx = call_count["n"]
+            call_count["n"] += 1
+            return single_results[idx] if idx < len(single_results) else MagicMock(data=None)
+
+        mock_db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.side_effect = (
+            _single_execute
+        )
+        # The framework fetch uses .eq().eq().single() — same chain resolves to same mock
+        mock_db.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.side_effect = (
+            _single_execute
+        )
+        # Update
+        mock_db.table.return_value.update.return_value.eq.return_value.execute.return_value = (
+            MagicMock(data=[updated_fw])
+        )
+
+        with patch(PATCH_TARGET, return_value=mock_db):
+            response = client.patch(
+                f"/api/v1/agents/{TEST_AGENT_ID}/frameworks/{fw_id}",
+                json={"name": "Renamed Framework"},
+            )
+        assert response.status_code == 200
+        assert response.json()["name"] == "Renamed Framework"
+
+    def test_patch_framework_403_non_owner(self, client):
+        """Non-owner cannot patch a framework — 403."""
+        agent = _agent_row(owner_id=OTHER_USER_ID, visibility="public")
+        fw_id = str(uuid4())
+        mock_db = MagicMock()
+
+        mock_db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+            MagicMock(data=agent)
+        )
+
+        with patch(PATCH_TARGET, return_value=mock_db):
+            response = client.patch(
+                f"/api/v1/agents/{TEST_AGENT_ID}/frameworks/{fw_id}",
+                json={"name": "Hijack"},
+            )
+        assert response.status_code == 403
+
+    def test_patch_framework_404_not_found(self, client):
+        """Framework not found under this agent — 404."""
+        agent = _agent_row()
+        fw_id = str(uuid4())
+        mock_db = MagicMock()
+
+        # Agent fetch succeeds, framework fetch returns None
+        single_results = [MagicMock(data=agent), MagicMock(data=None)]
+        call_count = {"n": 0}
+
+        def _single_execute():
+            idx = call_count["n"]
+            call_count["n"] += 1
+            return single_results[idx] if idx < len(single_results) else MagicMock(data=None)
+
+        mock_db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.side_effect = (
+            _single_execute
+        )
+        mock_db.table.return_value.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.side_effect = (
+            _single_execute
+        )
+
+        with patch(PATCH_TARGET, return_value=mock_db):
+            response = client.patch(
+                f"/api/v1/agents/{TEST_AGENT_ID}/frameworks/{fw_id}",
+                json={"name": "Ghost"},
+            )
+        assert response.status_code == 404
+
+    def test_upload_adds_new_and_updates_existing(self, client):
+        """1 new framework + 1 existing → added:1, updated:1, retained:0, failed:[]"""
+        agent = _agent_row()
+        existing_fw_uuid = str(uuid4())
+        mock_db = MagicMock()
+
+        # Agent fetch (uses .select().eq().single().execute())
+        mock_db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+            MagicMock(data=agent)
+        )
+
+        # Fetch existing frameworks (uses .select().eq().execute() — single .eq(), no .single())
+        mock_db.table.return_value.select.return_value.eq.return_value.execute.return_value = (
+            MagicMock(data=[{"id": existing_fw_uuid, "framework_id": "existing-fw"}])
+        )
+
+        # Update existing framework (uses .update().eq().execute())
+        mock_db.table.return_value.update.return_value.eq.return_value.execute.return_value = (
+            MagicMock(data=[{"id": existing_fw_uuid, "framework_id": "existing-fw"}])
+        )
+
+        # Insert new framework (uses .insert().execute())
+        mock_db.table.return_value.insert.return_value.execute.return_value = MagicMock(
+            data=[{"id": str(uuid4()), "framework_id": "new-fw"}]
+        )
+
+        with patch(PATCH_TARGET, return_value=mock_db):
+            response = client.post(
+                f"/api/v1/agents/{TEST_AGENT_ID}/frameworks/upload",
+                json={
+                    "frameworks": [
+                        {
+                            "name": "Existing",
+                            "framework_id": "existing-fw",
+                            "when_to_apply": ["trigger"],
+                            "confidence": "high",
+                            "principles": ["p1"],
+                        },
+                        {
+                            "name": "New One",
+                            "framework_id": "new-fw",
+                            "when_to_apply": ["trigger2"],
+                            "confidence": "medium",
+                            "principles": ["p2"],
+                        },
+                    ]
+                },
+            )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["added"] == 1
+        assert data["updated"] == 1
+        assert data["retained"] == 0
+        assert data["failed"] == []
+
+    def test_upload_skips_invalid_items(self, client):
+        """Item missing when_to_apply → appears in failed list, valid item processed."""
+        agent = _agent_row()
+        mock_db = MagicMock()
+
+        # Agent fetch (uses .single())
+        mock_db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+            MagicMock(data=agent)
+        )
+
+        # Fetch existing frameworks — empty (uses .select().eq().execute(), no .single())
+        mock_db.table.return_value.select.return_value.eq.return_value.execute.return_value = (
+            MagicMock(data=[])
+        )
+        # Insert new valid framework
+        mock_db.table.return_value.insert.return_value.execute.return_value = MagicMock(
+            data=[{"id": str(uuid4()), "framework_id": "valid-fw"}]
+        )
+
+        with patch(PATCH_TARGET, return_value=mock_db):
+            response = client.post(
+                f"/api/v1/agents/{TEST_AGENT_ID}/frameworks/upload",
+                json={
+                    "frameworks": [
+                        {
+                            # Missing when_to_apply
+                            "name": "Bad Item",
+                            "framework_id": "bad-fw",
+                            "confidence": "high",
+                            "principles": ["p1"],
+                        },
+                        {
+                            "name": "Valid Item",
+                            "framework_id": "valid-fw",
+                            "when_to_apply": ["trigger"],
+                            "confidence": "medium",
+                            "principles": ["p2"],
+                        },
+                    ]
+                },
+            )
+        assert response.status_code == 200
+        data = response.json()
+        assert data["added"] == 1
+        assert len(data["failed"]) == 1
+
+    def test_upload_403_non_owner(self, client):
+        """Non-owner gets 403."""
+        agent = _agent_row(owner_id=OTHER_USER_ID, visibility="public")
+        mock_db = MagicMock()
+
+        mock_db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+            MagicMock(data=agent)
+        )
+
+        with patch(PATCH_TARGET, return_value=mock_db):
+            response = client.post(
+                f"/api/v1/agents/{TEST_AGENT_ID}/frameworks/upload",
+                json={
+                    "frameworks": [
+                        {
+                            "name": "Framework",
+                            "framework_id": "fw-1",
+                            "when_to_apply": ["trigger"],
+                            "confidence": "high",
+                            "principles": ["p1"],
+                        }
+                    ]
+                },
+            )
+        assert response.status_code == 403
