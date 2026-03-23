@@ -104,14 +104,14 @@ Each framework has 3-5 `when_to_apply` trigger phrases. Each trigger phrase gets
 
 MCP authentication uses per-user bearer tokens stored in `mcp_tokens`:
 
-- **Generation:** User generates a token from the UI. The plaintext token is shown once, then discarded. Only the bcrypt hash is stored.
-- **Lookup:** On each MCP request, the bearer token is hashed and compared against stored hashes. This is O(n) per user's active tokens — acceptable at MVP scale (~1-3 tokens per user).
+- **Generation:** User generates a token from the UI. The plaintext token is shown once, then discarded. Only the SHA-256 hash is stored.
+- **Lookup:** On each MCP request, SHA-256 the incoming token and look up `mcp_tokens WHERE token_hash = $hash AND revoked_at IS NULL`. O(1) via unique index.
 - **Revocation:** Setting `revoked_at` on a token row. Revoked tokens are excluded from lookup via a partial index.
 - **Rate limiting:** `mcp_rate_limits` table tracks daily request count per user via upsert (`ON CONFLICT DO UPDATE SET request_count = request_count + 1`). HTTP 429 when `request_count >= daily_cap`.
 
-**Why bcrypt (not HMAC):** bcrypt is the standard for token storage — constant-time comparison, no timing attacks. The lookup cost (~100ms per hash check) is acceptable for MCP's 1,000 req/day cap.
+**Why SHA-256 (not bcrypt):** MCP bearer tokens arrive without a user_id — the token IS the credential. bcrypt is non-deterministic, so no UNIQUE index can be placed on the hash. Without an index, lookup requires a full table scan or a format change to embed a row ID in the token. SHA-256 is deterministic: hash the token, index-scan, done. Token entropy is 256 bits (32 random bytes) — brute-force against SHA-256 is computationally infeasible regardless of hash speed. Use `hmac.compare_digest()` for constant-time comparison.
 
-**Why not API keys (same as BYOK):** MCP tokens are infrastructure credentials (like OAuth tokens), not user secrets (like LLM API keys). They don't need AES-256-GCM encryption — bcrypt hashing with one-time display is the standard pattern.
+**Why not API keys (same as BYOK):** MCP tokens are infrastructure credentials (like OAuth tokens), not user secrets (like LLM API keys). They don't need AES-256-GCM encryption — SHA-256 hashing with one-time display is the standard pattern.
 
 ### 9. `generate-instructions` Endpoint
 
@@ -179,9 +179,9 @@ MCP authentication uses per-user bearer tokens stored in `mcp_tokens`:
 
 | Option | Pros | Cons | Why Not Chosen |
 |---|---|---|---|
-| **bcrypt hash (chosen)** | Industry standard for token storage. No key management needed. | O(n) lookup per user's tokens (n ≈ 1-3). | N/A |
+| **SHA-256 + UNIQUE index (chosen)** | O(1) lookup via unique index. Deterministic — enables DB-level uniqueness constraint. 256-bit token entropy makes brute-force infeasible. `hmac.compare_digest` gives constant-time comparison. No key management. | None at MVP scale. | N/A |
+| bcrypt hash | Industry standard for password storage. | Non-deterministic — no UNIQUE index possible. Without embedded row ID in token format, lookup requires full table scan or O(n) iteration over all user tokens. User ID unknown at auth time, so O(n per user) is not achievable without format change. | Incompatible with stateless bearer token lookup. |
 | AES-256-GCM (like API keys) | Recoverable — can display the token again. | Unnecessary — tokens are shown once. Adds encryption key dependency for infrastructure tokens. | Over-engineered. Users don't need to see tokens again. |
-| HMAC-SHA256 | Faster lookup (constant time per hash). | Not constant-time comparison without careful implementation. | bcrypt is simpler and standard. |
 
 ---
 
@@ -192,12 +192,12 @@ MCP authentication uses per-user bearer tokens stored in `mcp_tokens`:
 - Auto-created instances eliminate user friction. No "subscribe" step.
 - JSONB framework overrides are atomic and schema-flexible — future override types (parameter tweaks, model preferences) can be added without migration.
 - Retain-on-missing upload merge protects user-created frameworks from extraction re-runs.
-- bcrypt tokens follow standard security patterns — no custom crypto for infrastructure auth.
+- SHA-256 token hashing is O(1) lookup with no key management — simple and correct for high-entropy bearer tokens.
 
 **Negative:**
 - No versioning means a broken AgentDefinition update affects all invokers immediately. At MVP scale (~50 users, mostly private agents), this is a user error, not a system failure.
 - Application-layer token cap enforcement requires careful testing — a bug could allow memory entries to exceed the cap. Mitigation: integration tests validate rejection at the boundary.
-- bcrypt token lookup is O(n) — at 1,000 MCP requests/day with ~3 tokens per user, this adds ~300ms of hashing per request. Acceptable but should be monitored.
+- SHA-256 token lookup is O(1) via unique index. No hashing overhead concern.
 - Framework trigger embedding regeneration on upload adds latency to bulk uploads (3-5 embeddings per framework * N frameworks). Mitigated by running in background task.
 
 **Neutral:**
@@ -214,7 +214,7 @@ MCP authentication uses per-user bearer tokens stored in `mcp_tokens`:
 
 - **Framework override drift:** If a framework is deleted from the definition, pinned/excluded references in instances become stale. **Mitigation:** Defensive filtering on read — unknown framework IDs in overrides are silently ignored. No cleanup cascade needed.
 
-- **MCP token brute-force:** bcrypt is slow by design, but 1,000 req/day rate limit already prevents high-volume attacks. **Mitigation:** Rate limit is the primary defense. Token entropy (256-bit random) makes brute-force infeasible.
+- **MCP token brute-force:** Token entropy is 256 bits (32 random bytes). Brute-forcing SHA-256 against 256-bit input is computationally infeasible regardless of hash speed. Rate limit (1,000 req/day) is an additional defense layer. **Mitigation:** Token entropy is the primary defense. Rate limit is secondary.
 
 - **`generate-instructions` quality:** Auto-generated system prompts may not capture the thought leader's voice accurately. **Mitigation:** This is a draft — user always reviews and edits before saving. The prompt template should emphasize voice/style extraction.
 
@@ -226,5 +226,5 @@ Revisit this ADR when:
 - `shared` visibility ships — update propagation strategy needs notification/changelog
 - Agent count exceeds 500 (framework trigger embedding volume, HNSW index pressure)
 - Multi-agent per conversation ships — instance management becomes more complex
-- MCP request volume exceeds 10,000/day per user — bcrypt lookup may need caching
+- MCP request volume exceeds 10,000/day per user — SHA-256 lookup is O(1), no caching concern
 - Agent marketplace ships — definition ownership transfer, payment layer, and review process add requirements to the data model
