@@ -475,6 +475,8 @@ async def send_message(
             )
         except Exception:
             logger.exception("Failed to persist assistant message for conv %s", conv_id)
+            yield f"data: {json.dumps({'error': 'persistence_failed', 'message': 'Response was generated but could not be saved. Please try again.'})}\n\n"
+            return
 
         # 7. Background jobs (non-blocking) — ADR-004
         _dispatch_background_jobs(

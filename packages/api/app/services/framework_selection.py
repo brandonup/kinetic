@@ -248,6 +248,10 @@ async def _haiku_rerank(
     if not chosen_id:
         return candidates[0] if candidates else None
 
+    # Respect explicit "none" — reranker says no framework applies
+    if chosen_id.lower() == "none":
+        return None
+
     # Match to a candidate
     # Try exact framework_id match first, then name match, then db id
     for fw in candidates:

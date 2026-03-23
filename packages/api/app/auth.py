@@ -8,12 +8,41 @@ Accepts JWT from Authorization: Bearer <token> header OR ?token=<jwt> query para
 """
 from __future__ import annotations
 
+import base64
+import json
+import time
 from typing import Optional
 
 from fastapi import Query, Request
 from pydantic import BaseModel
 
 from app.core.errors import UnauthorizedError
+
+
+def _check_jwt_claims(jwt: str) -> None:
+    """Fail-fast local check for exp/nbf claims before making a Supabase API call.
+
+    This does NOT verify the signature — Supabase does that.  It only guards
+    against obviously-expired or not-yet-valid tokens, catching the common
+    case without a network round-trip.
+    """
+    try:
+        parts = jwt.split(".")
+        if len(parts) != 3:
+            return  # malformed; let Supabase reject it
+        # JWT payload is base64url-encoded; pad to a multiple of 4
+        payload_b64 = parts[1] + "=" * (-len(parts[1]) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(payload_b64))
+    except Exception:
+        return  # unparseable; let Supabase reject it
+
+    now = time.time()
+    exp = payload.get("exp")
+    if exp is not None and now > exp:
+        raise UnauthorizedError("Token expired")
+    nbf = payload.get("nbf")
+    if nbf is not None and now < nbf:
+        raise UnauthorizedError("Token not yet valid")
 
 
 class UserContext(BaseModel):
@@ -43,6 +72,8 @@ async def get_current_user(
 
     if not jwt:
         raise UnauthorizedError("No authentication token provided")
+
+    _check_jwt_claims(jwt)
 
     try:
         from app.db import get_supabase_client
