@@ -356,11 +356,10 @@ app/
         l9_agent_rag.py       # stub (Sprint 4)
       history.py             # conversation history injection
       token_budget.py        # budget tracking + truncation
-  routers/
-    conversations.py         # POST /{id}/messages SSE endpoint
-  services/
     byok.py                  # key lookup + decryption
     litellm_client.py        # LiteLLM streaming wrapper
+  routers/
+    conversations.py         # POST /{id}/messages SSE endpoint
 ```
 
 `assembler.py` iterates `LAYER_REGISTRY` — an ordered list of `(layer_id, fetch_fn)` tuples. Adding a new layer in Sprint 4/5 = add one entry to the registry and implement the fetch function. The assembler loop does not change.

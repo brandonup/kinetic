@@ -21,7 +21,7 @@ Each request authenticates via a bearer token, declares a scope (project, agent,
 ### 2.1 Token model
 
 - **Per-user bearer tokens.** Each user can generate multiple tokens — one per external client integration.
-- **Storage:** `mcp_tokens` table. Fields: `id`, `user_id`, `label` (user-assigned), `token_hash` (SHA-256), `created_at`, `last_used_at`, `revoked_at` (null = active).
+- **Storage:** `mcp_tokens` table. Fields: `id`, `user_id`, `name` (user-assigned), `token_hash` (SHA-256), `created_at`, `last_used_at`, `revoked_at` (null = active).
 - **Validation:** On each request, hash the incoming token and look up `mcp_tokens` where `token_hash = hash AND revoked_at IS NULL`. Resolve to `user_id`. Reject with 401 if not found or revoked.
 - **Token format:** 32-byte random value, base64url-encoded. Prefix `mcp_` for recognisability. Example: `mcp_<base64url(32 bytes)>`.
 
@@ -173,7 +173,7 @@ User must be the owner of the project (`projects.user_id = authenticated_user_id
 
 ### 6.3 Company access
 
-User must be a member of the company (record in `company_members` or equivalent). Return 403 if not.
+User must be the owner of the company (`companies.user_id = authenticated_user_id`). Return 403 if not. (No multi-member company model exists in MVP — companies are single-owner.)
 
 ---
 
@@ -281,7 +281,7 @@ All token management endpoints use standard JWT auth (not MCP bearer token). The
 |--------|------|-------|
 | `id` | UUID PK | |
 | `user_id` | UUID FK → users | |
-| `label` | text | User-assigned name, max 64 chars |
+| `name` | text | User-assigned name, max 64 chars |
 | `token_hash` | text | SHA-256 of the raw token. Unique. |
 | `created_at` | timestamptz | |
 | `last_used_at` | timestamptz \| null | Updated on each successful use |

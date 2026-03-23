@@ -88,6 +88,7 @@ Extends Supabase `auth.users`. A trigger creates a row here on auth signup.
 | `role` | `user_role` | `NOT NULL DEFAULT 'user'` | `admin` or `user` |
 | `default_model_id` | `uuid` | `REFERENCES llm_models(id) ON DELETE SET NULL` | User's preferred generation model |
 | `active_company_id` | `uuid` | `REFERENCES companies(id) ON DELETE SET NULL` | Currently active company for UI state |
+| `mcp_daily_limit` | `integer` | `DEFAULT NULL` | Per-user MCP request cap override. Null = platform default (1,000/day). Admin-set. |
 | `disabled_at` | `timestamptz` | `DEFAULT NULL` | Null = active. Set by admin on disable. |
 | `created_at` | `timestamptz` | `NOT NULL DEFAULT now()` | |
 | `updated_at` | `timestamptz` | `NOT NULL DEFAULT now()` | |
