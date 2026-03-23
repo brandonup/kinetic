@@ -91,13 +91,26 @@ def add_exception_handlers(app: FastAPI) -> None:
     async def _pydantic_validation(
         request: Request, exc: RequestValidationError
     ) -> JSONResponse:
+        # Pydantic v2 may include non-serializable Exception objects in ctx.
+        # Stringify any non-primitive values before JSON encoding.
+        def _sanitize(errors: list) -> list:
+            result = []
+            for err in errors:
+                clean = {k: str(v) if not isinstance(v, (str, int, float, bool, type(None), list, dict)) else v
+                         for k, v in err.items()}
+                if "ctx" in clean and isinstance(clean["ctx"], dict):
+                    clean["ctx"] = {k: str(v) if not isinstance(v, (str, int, float, bool, type(None))) else v
+                                    for k, v in clean["ctx"].items()}
+                result.append(clean)
+            return result
+
         return JSONResponse(
             status_code=422,
             content={
                 "error": {
                     "code": "validation_error",
                     "message": "Request validation failed",
-                    "details": exc.errors(),
+                    "details": _sanitize(exc.errors()),
                 }
             },
         )
