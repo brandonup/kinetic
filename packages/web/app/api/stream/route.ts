@@ -15,17 +15,38 @@ export async function GET(req: NextRequest) {
   const cookieToken = req.cookies.get("sb-access-token")?.value;
   const effectiveToken = accessToken || cookieToken;
 
-  // Forward to Kinetic FastAPI chat stream endpoint
-  const backendParams = new URLSearchParams(searchParams);
-  backendParams.delete("access_token");
-  const backendUrl = `${API_BASE_URL}/api/v1/chat/stream?${backendParams.toString()}`;
+  const conversationId = searchParams.get("conversation_id");
+  if (!conversationId) {
+    return new Response("Missing conversation_id", { status: 400 });
+  }
 
-  const headers: HeadersInit = { Accept: "text/event-stream" };
+  const content = searchParams.get("content");
+  if (!content) {
+    return new Response("Missing content", { status: 400 });
+  }
+
+  const modelId = searchParams.get("model_id");
+
+  // POST to FastAPI generation endpoint (EventSource only supports GET,
+  // so this proxy translates GET → POST and injects the JWT).
+  const backendUrl = `${API_BASE_URL}/api/v1/conversations/${conversationId}/messages`;
+
+  const body: Record<string, string> = { content };
+  if (modelId) body.model_id = modelId;
+
+  const headers: HeadersInit = {
+    "Content-Type": "application/json",
+    Accept: "text/event-stream",
+  };
   if (effectiveToken) {
     headers["Authorization"] = `Bearer ${effectiveToken}`;
   }
 
-  const backendRes = await fetch(backendUrl, { method: "GET", headers });
+  const backendRes = await fetch(backendUrl, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
 
   if (!backendRes.ok || !backendRes.body) {
     const text = await backendRes.text();

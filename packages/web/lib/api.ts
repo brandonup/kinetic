@@ -101,6 +101,80 @@ export async function parseApiError(response: Response): Promise<string> {
 }
 
 /**
+ * Conversation CRUD API functions (Sprint 3)
+ */
+import type {
+  Conversation,
+  ConversationWithMessages,
+  CreateConversationRequest,
+  UpdateConversationRequest,
+  ModelConfiguration,
+} from "./types/models";
+
+export async function createConversation(
+  data: CreateConversationRequest
+): Promise<Conversation> {
+  const res = await apiFetch("/api/v1/conversations", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return res.json();
+}
+
+export async function listConversations(params?: {
+  company_id?: string;
+  project_id?: string;
+  include_deleted?: boolean;
+}): Promise<{ conversations: Conversation[] }> {
+  const qs = new URLSearchParams();
+  if (params?.company_id) qs.set("company_id", params.company_id);
+  if (params?.project_id) qs.set("project_id", params.project_id);
+  if (params?.include_deleted) qs.set("include_deleted", "true");
+  const res = await apiFetch(`/api/v1/conversations?${qs.toString()}`);
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return res.json();
+}
+
+export async function getConversation(
+  id: string
+): Promise<ConversationWithMessages> {
+  const res = await apiFetch(`/api/v1/conversations/${id}`);
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return res.json();
+}
+
+export async function updateConversation(
+  id: string,
+  data: UpdateConversationRequest
+): Promise<Conversation> {
+  const res = await apiFetch(`/api/v1/conversations/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error(await parseApiError(res));
+  return res.json();
+}
+
+export async function deleteConversation(id: string): Promise<void> {
+  const res = await apiFetch(`/api/v1/conversations/${id}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(await parseApiError(res));
+}
+
+export async function listEnabledGenerationModels(): Promise<
+  ModelConfiguration[]
+> {
+  const res = await apiFetch(
+    "/api/v1/admin/models?category=generation&enabled=true"
+  );
+  if (!res.ok) throw new Error(await parseApiError(res));
+  const data = await res.json();
+  return (data.models ?? data) as ModelConfiguration[];
+}
+
+/**
  * EventSource factory for SSE streaming via Next.js proxy route.
  * Passes auth token as query param (EventSource cannot send headers).
  */
@@ -108,12 +182,16 @@ export function createStreamEventSource(params: {
   conversationId: string;
   content: string;
   accessToken?: string;
+  modelId?: string;
   agentInstanceId?: string;
 }): EventSource {
   const searchParams = new URLSearchParams({
     conversation_id: params.conversationId,
     content: params.content,
   });
+  if (params.modelId) {
+    searchParams.set("model_id", params.modelId);
+  }
   if (params.agentInstanceId) {
     searchParams.set("agent_instance_id", params.agentInstanceId);
   }
