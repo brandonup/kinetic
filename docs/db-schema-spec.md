@@ -506,14 +506,14 @@ Per-user bearer tokens for MCP access. Token plaintext shown once on generation,
 |---|---|---|---|
 | `id` | `uuid` | `PK DEFAULT gen_random_uuid()` | |
 | `user_id` | `uuid` | `NOT NULL REFERENCES users(id) ON DELETE CASCADE` | |
-| `token_hash` | `text` | `NOT NULL UNIQUE` | SHA-256 of the raw token |
+| `token_hash` | `text` | `NOT NULL` | SHA-256 of the raw token |
 | `name` | `text` | | User label, e.g., "Claude Desktop" |
 | `last_used_at` | `timestamptz` | | |
 | `revoked_at` | `timestamptz` | | Null = active |
 | `created_at` | `timestamptz` | `NOT NULL DEFAULT now()` | |
 
 **Indexes:**
-- `idx_mcp_tokens_hash` on `(token_hash)` — unique, primary lookup path
+- `idx_mcp_tokens_hash` on `(token_hash)` UNIQUE — primary lookup path
 - `idx_mcp_tokens_user` on `(user_id)` WHERE `revoked_at IS NULL`
 
 **RLS:**
