@@ -26,27 +26,27 @@ const STATUS_CONFIG: Record<
 > = {
   pending: {
     label: "Pending",
-    className: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+    className: "bg-muted text-muted-foreground",
   },
   extracting: {
     label: "Extracting",
-    className: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
+    className: "bg-teak-900/40 text-teak-300",
   },
   chunking: {
     label: "Chunking",
-    className: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
+    className: "bg-teak-900/40 text-teak-300",
   },
   embedding: {
     label: "Embedding",
-    className: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
+    className: "bg-teak-900/40 text-teak-300",
   },
   completed: {
     label: "Completed",
-    className: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
+    className: "bg-emerald-900/40 text-emerald-400",
   },
   failed: {
     label: "Failed",
-    className: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300",
+    className: "bg-destructive/15 text-destructive",
   },
 };
 
