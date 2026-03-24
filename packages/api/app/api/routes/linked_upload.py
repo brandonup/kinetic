@@ -26,6 +26,7 @@ from app.db.supabase_client import get_supabase
 from app.services.encryption import decrypt_api_key, load_master_key
 from app.services.ingestion.extractor import UnsupportedFileTypeError, extract_text
 from app.services.llm_client import call_llm
+from app.services.prompts import get_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -139,12 +140,7 @@ class LinkedUploadExtractor:
         raw_name = call_llm(
             messages=[{
                 "role": "user",
-                "content": (
-                    "Extract the person's full name from this document. "
-                    "Return only the name — no additional text. "
-                    "If the name cannot be determined, return null.\n\n"
-                    + snippet
-                ),
+                "content": get_prompt(PROMPT_ID_PROFILE, "name_extract") + "\n\n" + snippet,
             }],
             model=model,
             api_key=api_key,
@@ -156,13 +152,7 @@ class LinkedUploadExtractor:
         raw_bio = call_llm(
             messages=[{
                 "role": "user",
-                "content": (
-                    "Generate a concise professional bio (2-4 sentences, max 1000 characters) "
-                    "based on the person's current role, professional background, and domain "
-                    "expertise as described in the document. Write in first person. Do not include "
-                    "specific company names, dates, or metrics unless essential to context.\n\n"
-                    + snippet
-                ),
+                "content": get_prompt(PROMPT_ID_PROFILE, "bio_extract") + "\n\n" + snippet,
             }],
             model=model,
             api_key=api_key,
@@ -179,12 +169,7 @@ class LinkedUploadExtractor:
         raw_name = call_llm(
             messages=[{
                 "role": "user",
-                "content": (
-                    "Extract the company name from the document. "
-                    "Return only the name. "
-                    "If ambiguous or not found, return null.\n\n"
-                    + snippet
-                ),
+                "content": get_prompt(PROMPT_ID_COMPANY, "name_extract") + "\n\n" + snippet,
             }],
             model=model,
             api_key=api_key,
@@ -196,12 +181,7 @@ class LinkedUploadExtractor:
         raw_desc = call_llm(
             messages=[{
                 "role": "user",
-                "content": (
-                    "Generate a concise company description (2-4 sentences, max 1000 characters) "
-                    "covering what the company does, who it serves, and what makes it distinctive. "
-                    "Base this only on the document content. Write in third person.\n\n"
-                    + snippet
-                ),
+                "content": get_prompt(PROMPT_ID_COMPANY, "description_extract") + "\n\n" + snippet,
             }],
             model=model,
             api_key=api_key,
@@ -218,13 +198,7 @@ class LinkedUploadExtractor:
         raw_name = call_llm(
             messages=[{
                 "role": "user",
-                "content": (
-                    "Identify the primary author, speaker, or thought leader in this document. "
-                    "Return their full name only — no additional text. "
-                    "If the document has no clear single author, return the most prominent name. "
-                    "If no name can be determined, return null.\n\n"
-                    + snippet
-                ),
+                "content": get_prompt(PROMPT_ID_AGENT, "name_extract") + "\n\n" + snippet,
             }],
             model=model,
             api_key=api_key,
@@ -236,17 +210,7 @@ class LinkedUploadExtractor:
         raw_instructions = call_llm(
             messages=[{
                 "role": "user",
-                "content": (
-                    "You are building a system prompt for an AI agent that thinks and reasons "
-                    "like the person whose writing is provided below. Analyze the document for: "
-                    "(1) thinking style, (2) communication patterns, (3) core principles, "
-                    "(4) areas of expertise, (5) distinctive perspective. "
-                    "Generate a system prompt (300–500 tokens) written as instructions to an LLM. "
-                    "The prompt should begin with 'You are [name]...' and instruct the model to "
-                    "adopt this person's reasoning style, principles, and communication patterns. "
-                    "Do not simply summarize the document.\n\n"
-                    + snippet
-                ),
+                "content": get_prompt(PROMPT_ID_AGENT, "instructions_extract") + "\n\n" + snippet,
             }],
             model=model,
             api_key=api_key,

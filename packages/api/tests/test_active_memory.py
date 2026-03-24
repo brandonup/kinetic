@@ -995,8 +995,14 @@ class TestConversationEndProposals:
         POST /conversations/{id}/end dispatches a proposal generation job.
         Verify: TaskDispatcher.dispatch() called once with the correct conversation_id.
         """
+        mock_client = MagicMock()
+        # Ownership check: conversations.select().eq().eq().is_().single().execute()
+        mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.is_.return_value.single.return_value.execute.return_value = MagicMock(
+            data={"id": CONVERSATION_ID}
+        )
         mock_dispatcher = MagicMock()
-        with patch(CONV_DISPATCHER_PATCH, return_value=mock_dispatcher):
+        with patch(CONV_ROUTE_PATCH, return_value=mock_client), \
+             patch(CONV_DISPATCHER_PATCH, return_value=mock_dispatcher):
             resp = client.post(f"/api/v1/conversations/{CONVERSATION_ID}/end")
 
         assert resp.status_code == 202
@@ -1004,6 +1010,24 @@ class TestConversationEndProposals:
         call_args = mock_dispatcher.dispatch.call_args[0]
         # dispatch(fn, conversation_id, user_id) — args[1] is conversation_id
         assert call_args[1] == CONVERSATION_ID
+
+    def test_conversation_end_wrong_user_returns_404(self, client):
+        """
+        POST /conversations/{id}/end with a conversation owned by another user → 404.
+        The ownership check must prevent dispatching the background job. (KIN-344)
+        """
+        mock_client = MagicMock()
+        # Ownership check fails: no matching row
+        mock_client.table.return_value.select.return_value.eq.return_value.eq.return_value.is_.return_value.single.return_value.execute.return_value = MagicMock(
+            data=None
+        )
+        mock_dispatcher = MagicMock()
+        with patch(CONV_ROUTE_PATCH, return_value=mock_client), \
+             patch(CONV_DISPATCHER_PATCH, return_value=mock_dispatcher):
+            resp = client.post(f"/api/v1/conversations/{CONVERSATION_ID}/end")
+
+        assert resp.status_code == 404
+        mock_dispatcher.dispatch.assert_not_called()
 
     def test_conversation_end_existing_proposals_append_not_duplicate(self, client):
         """

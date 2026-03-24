@@ -632,6 +632,23 @@ async def end_conversation(
 
     Spec: active-memory-spec.md § Trigger 2
     """
+    loop = asyncio.get_running_loop()
+    client = get_supabase_client()
+
+    # Verify conversation ownership — exclude soft-deleted conversations (KIN-344)
+    conv_res = await loop.run_in_executor(
+        None,
+        lambda: client.table("conversations")
+        .select("id")
+        .eq("id", conversation_id)
+        .eq("user_id", current_user.user_id)
+        .is_("deleted_at", "null")
+        .single()
+        .execute(),
+    )
+    if not conv_res.data:
+        raise NotFoundError("Conversation not found")
+
     dispatcher = get_task_dispatcher(background_tasks)
     dispatcher.dispatch(_generate_proposals_job, conversation_id, current_user.user_id)
     return {"status": "accepted"}
