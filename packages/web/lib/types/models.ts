@@ -244,6 +244,38 @@ export interface DocumentRetryResponse {
   message: string;
 }
 
+// Chat message types (KIN-337)
+export type MessageRole = "user" | "assistant" | "system";
+
+export interface ChatMessageRecord {
+  id: string;
+  conversation_id: string;
+  role: MessageRole;
+  content: string;
+  agent_definition_id: string | null;
+  /** Resolved via JOIN agent_definitions ON messages.agent_definition_id = agent_definitions.id.
+   *  Not a column in the messages table — API must populate this. */
+  agent_name: string | null;
+  model: string | null;
+  token_count: number | null;
+  sequence: number;
+  created_at: string;
+  /** Resolved from retrieval_debug_logs.injected_chunks joined via message_id.
+   *  Not a column in the messages table — API must hydrate from debug logs. */
+  citations: ChatCitation[];
+}
+
+/** Maps to retrieval_debug_logs.injected_chunks (§20).
+ *  chunk_id + score + text_preview come from injected_chunks jsonb.
+ *  document_title is resolved via JOIN knowledge_base_chunks → knowledge_base_documents.
+ *  If the join is unavailable, document_title may be null. */
+export interface ChatCitation {
+  chunk_id: string;
+  document_title: string | null;
+  text_preview: string;
+  score: number;
+}
+
 // Streaming event types (used by SSE proxy)
 export type StreamEventType = "start" | "delta" | "done" | "error";
 
