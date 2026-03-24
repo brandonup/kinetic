@@ -352,10 +352,25 @@ async def upload_company_document(
 
     Raises:
         HTTPException(400): No API key / unsupported file type / file too large.
+        HTTPException(404): Company not found or not owned by user.
         HTTPException(422): Text extraction failed.
         HTTPException(500): LLM call failed.
     """
     client = get_supabase_client()
+    loop = asyncio.get_running_loop()
+
+    # Ownership check — verify company belongs to current user (KIN-342)
+    company_res = await loop.run_in_executor(
+        None,
+        lambda: client.table("companies")
+        .select("id")
+        .eq("id", company_id)
+        .eq("user_id", current_user.user_id)
+        .single()
+        .execute(),
+    )
+    if not company_res.data:
+        raise HTTPException(status_code=404, detail="Company not found.")
 
     key_row = await _get_first_api_key(client, current_user.user_id)
     if key_row is None:
@@ -414,10 +429,25 @@ async def upload_agent_document(
 
     Raises:
         HTTPException(400): No API key / unsupported file type / file too large.
+        HTTPException(404): Agent not found or not owned by user.
         HTTPException(422): Text extraction failed.
         HTTPException(500): LLM call failed.
     """
     client = get_supabase_client()
+    loop = asyncio.get_running_loop()
+
+    # Ownership check — verify agent belongs to current user (KIN-342)
+    agent_res = await loop.run_in_executor(
+        None,
+        lambda: client.table("agent_definitions")
+        .select("id")
+        .eq("id", agent_id)
+        .eq("owner_id", current_user.user_id)
+        .single()
+        .execute(),
+    )
+    if not agent_res.data:
+        raise HTTPException(status_code=404, detail="Agent not found.")
 
     key_row = await _get_first_api_key(client, current_user.user_id)
     if key_row is None:
