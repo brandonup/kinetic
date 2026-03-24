@@ -15,8 +15,8 @@
     --popover-foreground: 210 20% 92%;
 
     /* Teal primary */
-    --primary: 30 70% 47%;
-    --primary-foreground: 30 10% 98%;
+    --primary: 173 58% 39%;
+    --primary-foreground: 166 10% 98%;
 
     --secondary: 220 15% 16%;
     --secondary-foreground: 210 20% 85%;
@@ -24,15 +24,15 @@
     --muted: 220 15% 14%;
     --muted-foreground: 215 12% 55%;
 
-    --accent: 30 60% 42%;
-    --accent-foreground: 30 10% 98%;
+    --accent: 175 50% 34%;
+    --accent-foreground: 166 10% 98%;
 
     --destructive: 0 63% 40%;
     --destructive-foreground: 210 20% 92%;
 
     --border: 220 15% 18%;
     --input: 220 15% 16%;
-    --ring: 30 70% 47%;
+    --ring: 173 58% 39%;
 
     --radius: 0.5rem;
 
