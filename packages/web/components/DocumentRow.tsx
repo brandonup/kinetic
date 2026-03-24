@@ -9,9 +9,10 @@
  * KIN-346 · PRD §7
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { DocumentStatusBadge } from "@/components/DocumentStatusBadge";
+import { TagEditor } from "@/components/TagEditor";
 import { Button } from "@/components/ui/button";
 import { apiFetch, parseApiError } from "@/lib/api";
 import { useDocumentStatus } from "@/lib/hooks/useDocumentStatus";
@@ -22,6 +23,7 @@ interface DocumentRowProps {
   title: string;
   fileType?: string;
   initialStatus?: DocumentStatus;
+  initialTags?: string[];
 }
 
 export function DocumentRow({
@@ -29,6 +31,7 @@ export function DocumentRow({
   title,
   fileType,
   initialStatus,
+  initialTags = [],
 }: DocumentRowProps) {
   const { data, refetch } = useDocumentStatus(documentId, {
     enabled: Boolean(documentId),
@@ -40,6 +43,12 @@ export function DocumentRow({
   const status = data?.status ?? initialStatus ?? "pending";
   const errorStage = data?.error_stage ?? null;
   const errorMessage = data?.error_message ?? null;
+
+  // Memoize initial tags to avoid re-initializing TagEditor on poll cycles (I5)
+  const stableTagsRef = useRef<string[]>(initialTags);
+  if (data?.tags && stableTagsRef.current === initialTags) {
+    stableTagsRef.current = data.tags;
+  }
 
   const handleRetry = useCallback(async () => {
     setRetrying(true);
@@ -109,6 +118,12 @@ export function DocumentRow({
         <p className="text-xs text-destructive mt-1" role="alert">
           {retryError}
         </p>
+      )}
+
+      {status === "completed" && (
+        <div className="mt-1.5">
+          <TagEditor documentId={documentId} initialTags={stableTagsRef.current} />
+        </div>
       )}
     </div>
   );
