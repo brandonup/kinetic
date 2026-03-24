@@ -1,14 +1,34 @@
 """
 Kinetic API — FastAPI application entry point.
 
-Wires together: CORS, exception handlers, and routers.
+Wires together: CORS, exception handlers, routers, and startup tasks.
 """
+
+import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.errors import add_exception_handlers
+from app.services.background import cleanup_stale_jobs
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """App startup/shutdown lifecycle. Runs stale job cleanup on startup (KIN-338)."""
+    try:
+        from app.db.supabase_client import get_supabase
+        supabase = get_supabase()
+        cleaned = await cleanup_stale_jobs(supabase)
+        if cleaned:
+            logger.info("Startup: cleaned up %d stale background jobs", cleaned)
+    except Exception as exc:
+        logger.warning("Startup: stale job cleanup failed (non-fatal): %s", exc)
+    yield
 from app.api.routes.users import router as users_router
 from app.api.routes.documents import router as documents_router
 from app.api.routes.profile import router as profile_router
@@ -21,12 +41,17 @@ from app.api.routes.active_memory import admin_router as active_memory_admin_rou
 from app.api.routes.conversations import router as conversations_router
 from app.api.routes.linked_upload import router as linked_upload_router
 from app.api.routes.agents import router as agents_router
+from app.api.routes.mcp_tokens import router as mcp_tokens_router
+from app.api.routes.mcp import router as mcp_router
+from app.api.routes.admin_rag_debug import router as admin_rag_debug_router
+from app.api.routes.kb_management import router as kb_management_router
 from app.middleware.log_scrub import LogScrubMiddleware
 
 app = FastAPI(
     title=settings.APP_NAME,
     description="Context-rich AI workspace API",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 # Log scrub must be added before CORS so it fires on every request
@@ -52,3 +77,7 @@ app.include_router(active_memory_admin_router)
 app.include_router(conversations_router)
 app.include_router(linked_upload_router)
 app.include_router(agents_router)
+app.include_router(mcp_tokens_router)
+app.include_router(mcp_router)
+app.include_router(admin_rag_debug_router)
+app.include_router(kb_management_router)
