@@ -30,15 +30,15 @@ const STATUS_CONFIG: Record<
   },
   extracting: {
     label: "Extracting",
-    className: "bg-teak-900/40 text-teak-300",
+    className: "bg-teal-900/40 text-teal-300",
   },
   chunking: {
     label: "Chunking",
-    className: "bg-teak-900/40 text-teak-300",
+    className: "bg-teal-900/40 text-teal-300",
   },
   embedding: {
     label: "Embedding",
-    className: "bg-teak-900/40 text-teak-300",
+    className: "bg-teal-900/40 text-teal-300",
   },
   completed: {
     label: "Completed",

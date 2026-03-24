@@ -45,7 +45,7 @@ const config: Config = {
           DEFAULT: "hsl(var(--popover))",
           foreground: "hsl(var(--popover-foreground))",
         },
-        teak: {
+        teal: {
           "50": "#fdf8f0",
           "100": "#faefd9",
           "200": "#f4d9a8",
