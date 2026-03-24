@@ -201,6 +201,49 @@ export interface UploadFrameworksResponse {
   failed: Array<{ framework_id: string; error: string }>;
 }
 
+// MCP token types (KIN-325)
+export interface McpToken {
+  id: string;
+  name: string;
+  last_used_at: string | null;
+  created_at: string;
+}
+
+export interface McpTokenListResponse {
+  tokens: McpToken[];
+}
+
+export interface CreateMcpTokenResponse {
+  id: string;
+  name: string;
+  token: string; // raw token — shown once only, never stored in frontend state after modal dismissed
+  created_at: string;
+}
+
+// Document / KB types (KIN-346)
+export type DocumentStatus =
+  | "pending"
+  | "extracting"
+  | "chunking"
+  | "embedding"
+  | "completed"
+  | "failed";
+
+export interface DocumentStatusResponse {
+  document_id: string;
+  status: DocumentStatus;
+  error_stage: string | null;
+  error_message: string | null;
+  retry_count: number;
+  tags: string[];
+}
+
+export interface DocumentRetryResponse {
+  document_id: string;
+  status: string;
+  message: string;
+}
+
 // Streaming event types (used by SSE proxy)
 export type StreamEventType = "start" | "delta" | "done" | "error";
 

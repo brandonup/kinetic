@@ -12,6 +12,7 @@
 import { useEffect, useState } from "react";
 
 import { FrameworkLibraryTab } from "@/components/FrameworkLibraryTab";
+import { KnowledgeBaseTab } from "@/components/KnowledgeBaseTab";
 import { apiFetch } from "@/lib/api";
 import type { AgentDefinition, UserProfile } from "@/lib/types/models";
 import { cn } from "@/lib/utils";
@@ -150,7 +151,7 @@ export default function AgentProfilePage({ params }: { params: { id: string } })
         )}
 
         {activeTab === "kb" && (
-          <p className="text-sm text-muted-foreground">Coming soon.</p>
+          <KnowledgeBaseTab knowledgeBaseId={agent.knowledge_base_id} />
         )}
 
         {activeTab === "frameworks" && (
