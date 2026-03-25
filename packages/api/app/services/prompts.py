@@ -24,6 +24,9 @@ PROMPTS: dict[str, dict[str, Any]] = {
         "name_extract": (
             "Extract the person's full name from this document. "
             "Return only the name — no additional text. "
+            "If no individual person can be identified as the author "
+            "(e.g., a company blog post, team page, or unsigned document), "
+            "return null. Do not guess or fabricate a name. "
             "If the name cannot be determined, return null."
         ),
         "bio_extract": (
@@ -39,7 +42,9 @@ PROMPTS: dict[str, dict[str, Any]] = {
     "generate-company-profile-v1": {
         "name_extract": (
             "Extract the company name from the document. "
-            "Return only the name. "
+            "Return the shortest canonical company name only. "
+            "Strip taglines, slogans, emojis, 'About' prefixes, "
+            "'Introducing' preamble, and any decorative text. "
             "If ambiguous or not found, return null."
         ),
         "description_extract": (
