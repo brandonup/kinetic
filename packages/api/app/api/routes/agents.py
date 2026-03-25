@@ -45,7 +45,7 @@ _INSTANCE_FIELDS = (
 
 class CreateAgentRequest(BaseModel):
     name: str
-    instructions: str
+    instructions: str = ""  # Empty by default; non-empty required only for public visibility (enforced in route handler)
     type: Literal["custom", "thought_leader"]
     visibility: Literal["private", "public"] = "private"
     mcp_enabled: bool = False

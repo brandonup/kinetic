@@ -140,6 +140,44 @@ class TestCreateAgent:
             )
         assert response.status_code == 400
 
+    def test_create_allows_empty_instructions_for_private(self, client):
+        """KIN-365: instructions defaults to "" — private agents can be created without instructions."""
+        row = _agent_row(instructions="")
+        mock_db = MagicMock()
+        mock_db.table.return_value.insert.return_value.execute.return_value = MagicMock(
+            data=[row]
+        )
+        with patch(PATCH_TARGET, return_value=mock_db):
+            response = client.post(
+                "/api/v1/agents",
+                json={
+                    "name": "Draft Agent",
+                    "type": "custom",
+                    # instructions omitted — should use default ""
+                },
+            )
+        assert response.status_code == 200
+        assert response.json()["name"] == "Draft Agent"
+
+    def test_create_allows_empty_instructions_explicitly(self, client):
+        """KIN-365: explicit empty string instructions also allowed for private agents."""
+        row = _agent_row(instructions="")
+        mock_db = MagicMock()
+        mock_db.table.return_value.insert.return_value.execute.return_value = MagicMock(
+            data=[row]
+        )
+        with patch(PATCH_TARGET, return_value=mock_db):
+            response = client.post(
+                "/api/v1/agents",
+                json={
+                    "name": "Empty Instructions Agent",
+                    "instructions": "",
+                    "type": "custom",
+                    "visibility": "private",
+                },
+            )
+        assert response.status_code == 200
+
 
 # ---------------------------------------------------------------------------
 # Get single agent
