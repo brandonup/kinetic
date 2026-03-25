@@ -1,7 +1,7 @@
 /**
- * Login page tests — KIN-252
+ * Login page tests — KIN-252, KIN-363
  *
- * Verifies the login page renders the magic link form and Google OAuth button.
+ * Verifies the login page renders the Google OAuth button (Google-only auth for MVP).
  * Supabase client is mocked to prevent real network calls.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -17,7 +17,6 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/supabaseClient", () => ({
   supabase: {
     auth: {
-      signInWithOtp: vi.fn().mockResolvedValue({ error: null }),
       signInWithOAuth: vi.fn().mockResolvedValue({ error: null }),
     },
   },
@@ -29,20 +28,11 @@ vi.mock("@/components/ui/use-toast", () => ({
 }));
 
 import LoginPage from "@/app/login/page";
+import { supabase } from "@/lib/supabaseClient";
 
 describe("LoginPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  it("renders the email input", () => {
-    render(<LoginPage />);
-    expect(screen.getByLabelText(/email/i)).toBeDefined();
-  });
-
-  it("renders the Send magic link button", () => {
-    render(<LoginPage />);
-    expect(screen.getByRole("button", { name: /send magic link/i })).toBeDefined();
   });
 
   it("renders the Continue with Google button", () => {
@@ -50,15 +40,23 @@ describe("LoginPage", () => {
     expect(screen.getByRole("button", { name: /continue with google/i })).toBeDefined();
   });
 
-  it("shows confirmation state after magic link is sent", async () => {
+  it("does not render a magic link form or email input", () => {
+    render(<LoginPage />);
+    expect(screen.queryByLabelText(/email/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /magic link/i })).toBeNull();
+  });
+
+  it("calls signInWithOAuth on button click", async () => {
     const user = userEvent.setup();
     render(<LoginPage />);
 
-    await user.type(screen.getByLabelText(/email/i), "test@example.com");
-    await user.click(screen.getByRole("button", { name: /send magic link/i }));
+    await user.click(screen.getByRole("button", { name: /continue with google/i }));
 
-    // After successful OTP send, shows "Check your email" card
-    expect(await screen.findByText(/check your email/i)).toBeDefined();
-    expect(screen.getByText("test@example.com")).toBeDefined();
+    expect(supabase.auth.signInWithOAuth).toHaveBeenCalledWith({
+      provider: "google",
+      options: {
+        redirectTo: expect.stringContaining("/auth/callback"),
+      },
+    });
   });
 });
