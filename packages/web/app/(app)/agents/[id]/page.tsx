@@ -1,18 +1,22 @@
 "use client";
 
 /**
- * Agent Profile Page — KIN-319
+ * Agent Profile Page — KIN-319, KIN-366
  *
  * Route: /agents/:id
  * Tabs: Instructions | Knowledge Base | Framework Library | Settings
  * API:  GET /api/v1/agents/:id (agent)
  *       GET /api/v1/profile    (current user — owner check)
+ *       PATCH /api/v1/agents/:id (save instructions)
+ *       POST /api/v1/agents/:id/generate-instructions (regenerate from KB)
  */
 
 import { useEffect, useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { FrameworkLibraryTab } from "@/components/FrameworkLibraryTab";
 import { KnowledgeBaseTab } from "@/components/KnowledgeBaseTab";
+import { useToast } from "@/components/ui/use-toast";
 import { apiFetch } from "@/lib/api";
 import type { AgentDefinition, UserProfile } from "@/lib/types/models";
 import { cn } from "@/lib/utils";
@@ -28,6 +32,7 @@ const TABS: { id: Tab; label: string }[] = [
 
 export default function AgentProfilePage({ params }: { params: { id: string } }) {
   const { id } = params;
+  const { toast } = useToast();
 
   const [agent, setAgent] = useState<AgentDefinition | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -35,6 +40,11 @@ export default function AgentProfilePage({ params }: { params: { id: string } })
   const [notFound, setNotFound] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("instructions");
+
+  // Instructions editing state
+  const [editedInstructions, setEditedInstructions] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     void loadData();
@@ -63,6 +73,7 @@ export default function AgentProfilePage({ params }: { params: { id: string } })
 
       const data: AgentDefinition = await agentRes.json();
       setAgent(data);
+      setEditedInstructions(data.instructions || "");
 
       if (profileRes.ok) {
         const profile: UserProfile = await profileRes.json();
@@ -76,6 +87,68 @@ export default function AgentProfilePage({ params }: { params: { id: string } })
   }
 
   const isOwner = Boolean(agent && currentUserId && agent.owner_id === currentUserId);
+  const isDirty = agent ? editedInstructions !== (agent.instructions || "") : false;
+
+  async function handleSaveInstructions() {
+    if (!agent) return;
+    setSaving(true);
+    try {
+      const res = await apiFetch(`/api/v1/agents/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ instructions: editedInstructions }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: err?.detail || "Failed to save instructions.",
+        });
+        return;
+      }
+      const updated: AgentDefinition = await res.json();
+      setAgent(updated);
+      toast({ title: "Saved", description: "Instructions updated." });
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "An unexpected error occurred.",
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRegenerateInstructions() {
+    setGenerating(true);
+    try {
+      const res = await apiFetch(`/api/v1/agents/${id}/generate-instructions`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        toast({
+          variant: "destructive",
+          title: "Generation failed",
+          description: err?.detail || "Could not generate instructions.",
+        });
+        return;
+      }
+      const data: { instructions: string } = await res.json();
+      setEditedInstructions(data.instructions);
+      toast({ title: "Generated", description: "Review the instructions below, then save." });
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "An unexpected error occurred.",
+      });
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   if (loading) {
     return (
@@ -143,10 +216,38 @@ export default function AgentProfilePage({ params }: { params: { id: string } })
               <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
                 Instructions
               </p>
-              <pre className="text-sm whitespace-pre-wrap font-sans leading-relaxed">
-                {agent.instructions}
-              </pre>
+              {isOwner ? (
+                <textarea
+                  className="w-full min-h-[200px] rounded-md border border-input bg-background px-3 py-2 text-sm leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  value={editedInstructions}
+                  onChange={(e) => setEditedInstructions(e.target.value)}
+                  placeholder="Enter system prompt instructions..."
+                />
+              ) : (
+                <pre className="text-sm whitespace-pre-wrap font-sans leading-relaxed">
+                  {agent.instructions}
+                </pre>
+              )}
             </div>
+            {isOwner && (
+              <div className="flex gap-2">
+                <Button
+                  onClick={handleSaveInstructions}
+                  disabled={saving || !isDirty}
+                >
+                  {saving ? "Saving..." : "Save"}
+                </Button>
+                {agent.type === "thought_leader" && (
+                  <Button
+                    variant="outline"
+                    onClick={handleRegenerateInstructions}
+                    disabled={generating}
+                  >
+                    {generating ? "Generating..." : "Regenerate from corpus"}
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
         )}
 

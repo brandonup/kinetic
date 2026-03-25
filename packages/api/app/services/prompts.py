@@ -74,6 +74,21 @@ PROMPTS: dict[str, dict[str, Any]] = {
             "Do not simply summarize the document."
         ),
     },
+    # -----------------------------------------------------------------------
+    # Generate Instructions from KB — KIN-366
+    # -----------------------------------------------------------------------
+    "generate-instructions-v1": {
+        "system_prompt_generate": (
+            "You are building a system prompt for an AI agent that thinks and reasons "
+            "like the person whose writing is provided below. Analyze the corpus for: "
+            "(1) thinking style, (2) communication patterns, (3) core principles, "
+            "(4) areas of expertise, (5) distinctive perspective. "
+            "Generate a system prompt (300-500 tokens) written as instructions to an LLM. "
+            "The prompt should begin with 'You are [name]...' and instruct the model to "
+            "adopt this person's reasoning style, principles, and communication patterns. "
+            "Do not simply summarize the documents. Synthesize across all provided content."
+        ),
+    },
 }
 
 

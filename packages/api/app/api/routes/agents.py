@@ -793,6 +793,147 @@ async def delete_agent(
         raise NotFoundError("Agent not found after delete")
 
 
+# ---------------------------------------------------------------------------
+# Generate instructions from KB — KIN-366
+# ---------------------------------------------------------------------------
+
+_TEXT_LIMIT_GENERATE = 12_000  # Max corpus chars sent to LLM
+
+
+@router.post("/{agent_id}/generate-instructions")
+async def generate_instructions(
+    agent_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """
+    Auto-generate a system prompt from the agent's KB documents.
+
+    Reads completed document chunks, concatenates text, sends to BYOK LLM
+    with a generation prompt. Returns drafted instructions for user review.
+    Does NOT auto-save — caller reviews and saves via PATCH /api/v1/agents/:id.
+
+    Spec: docs/specs/agents.md §7 (Thought Leader Agent Flow, Step 3), §10
+    Requires: owner, KB with docs, at least one BYOK key.
+
+    Raises:
+        AuthorizationError(403): Not the agent owner.
+        ValidationError(400): No KB, no docs, or no API key.
+        HTTPException(500): LLM call failed.
+    """
+    from fastapi import HTTPException
+
+    from app.services.encryption import decrypt_api_key, load_master_key
+    from app.services.llm_client import call_llm
+    from app.services.prompts import get_prompt
+
+    client = get_supabase_client()
+    loop = asyncio.get_running_loop()
+
+    # 1. Fetch agent and verify ownership
+    agent_result = await loop.run_in_executor(
+        None,
+        lambda: client
+            .table("agent_definitions")
+            .select(_AGENT_FIELDS)
+            .eq("id", agent_id)
+            .single()
+            .execute(),
+    )
+    agent = agent_result.data
+    if not agent:
+        raise NotFoundError("Agent not found.")
+    if agent["owner_id"] != current_user.user_id:
+        raise AuthorizationError("Only the agent owner can generate instructions.")
+
+    # 2. Look up KB via knowledge_bases table (polymorphic FK: agent_definition_id)
+    kb_result = await loop.run_in_executor(
+        None,
+        lambda: client
+            .table("knowledge_bases")
+            .select("id")
+            .eq("agent_definition_id", agent_id)
+            .execute(),
+    )
+    kb_rows = kb_result.data or []
+    if not kb_rows:
+        raise ValidationError("Agent has no knowledge base. Upload documents first.")
+    kb_id = kb_rows[0]["id"]
+
+    # 3. Fetch completed, non-deleted documents
+    docs_result = await loop.run_in_executor(
+        None,
+        lambda: client
+            .table("knowledge_base_documents")
+            .select("id, title, status")
+            .eq("knowledge_base_id", kb_id)
+            .eq("status", "completed")
+            .is_("deleted_at", "null")
+            .execute(),
+    )
+    docs = docs_result.data or []
+    if not docs:
+        raise ValidationError("No completed documents in knowledge base. Upload and process documents first.")
+
+    # 4. Fetch chunks for those documents (db-schema-spec §13: knowledge_base_chunks)
+    doc_ids = [d["id"] for d in docs]
+    chunks_result = await loop.run_in_executor(
+        None,
+        lambda: client
+            .table("knowledge_base_chunks")
+            .select("text, chunk_index")
+            .in_("document_id", doc_ids)
+            .order("chunk_index")
+            .execute(),
+    )
+    chunks = chunks_result.data or []
+    corpus_text = "\n\n".join(c["text"] for c in chunks if c.get("text"))
+    corpus_text = corpus_text[:_TEXT_LIMIT_GENERATE]
+
+    if not corpus_text.strip():
+        raise ValidationError("No text content found in knowledge base documents.")
+
+    # 5. Get BYOK key
+    key_result = await loop.run_in_executor(
+        None,
+        lambda: client
+            .table("user_api_keys")
+            .select("provider, key_ciphertext, key_nonce")
+            .eq("user_id", current_user.user_id)
+            .execute(),
+    )
+    key_rows = key_result.data or []
+    if not key_rows:
+        raise ValidationError("No API key configured. Add an API key to use this feature.")
+    key_row = key_rows[0]
+
+    # 6. Decrypt key and call LLM
+    master_key = load_master_key()
+    api_key = decrypt_api_key(
+        bytes.fromhex(key_row["key_ciphertext"]),
+        bytes.fromhex(key_row["key_nonce"]),
+        master_key,
+        current_user.user_id,
+    )
+
+    prompt_text = get_prompt("generate-instructions-v1", "system_prompt_generate")
+    try:
+        generated = call_llm(
+            messages=[{
+                "role": "user",
+                "content": prompt_text + "\n\n" + corpus_text,
+            }],
+            model="gpt-4o-mini",
+            api_key=api_key,
+            max_tokens=800,
+            timeout=30,
+        ).strip()
+    except Exception as exc:
+        logger.error("LLM generation failed for agent %s: %s", agent_id, exc)
+        raise HTTPException(status_code=500, detail="Instruction generation failed. Please try again.")
+
+    return {"instructions": generated}
+
+
 @router.get("/{agent_id}/frameworks")
 async def list_frameworks(
     agent_id: str,
