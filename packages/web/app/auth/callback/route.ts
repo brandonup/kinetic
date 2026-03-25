@@ -13,6 +13,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       ? rawRedirect
       : "/projects";
 
+  const redirectUrl = new URL(redirectTo, requestUrl.origin);
+  const response = NextResponse.redirect(redirectUrl);
+
   if (code) {
     const cookieStore = cookies();
     const supabase = createServerClient(
@@ -24,10 +27,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
             return cookieStore.get(name)?.value;
           },
           set(name: string, value: string, options: CookieOptions) {
-            cookieStore.set({ name, value, ...options });
+            response.cookies.set({ name, value, ...options });
           },
           remove(name: string, options: CookieOptions) {
-            cookieStore.set({ name, value: "", ...options });
+            response.cookies.set({ name, value: "", ...options });
           },
         },
       }
@@ -35,5 +38,5 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     await supabase.auth.exchangeCodeForSession(code);
   }
 
-  return NextResponse.redirect(new URL(redirectTo, requestUrl.origin));
+  return response;
 }
