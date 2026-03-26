@@ -8,7 +8,7 @@
  * KIN-345 + KIN-346 · PRD §7
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { DocumentRow } from "@/components/DocumentRow";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +17,30 @@ import { Input } from "@/components/ui/input";
 import { apiFetch, parseApiError } from "@/lib/api";
 import type { DocumentStatus } from "@/lib/types/models";
 import { cn } from "@/lib/utils";
+
+// ---------------------------------------------------------------------------
+// Upload constants
+// ---------------------------------------------------------------------------
+
+const MAX_UPLOAD_BYTES = 25 * 1024 * 1024; // 25 MB
+
+const ACCEPTED_TYPES = new Set([
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+  "text/csv",
+  "text/plain",
+  "text/markdown",
+  "text/x-markdown",
+  "application/rtf",
+]);
+
+const ACCEPT_STRING =
+  ".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.csv,.txt,.md,.rtf";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -64,6 +88,11 @@ export function KnowledgeBaseTab({ knowledgeBaseId }: KnowledgeBaseTabProps) {
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [renamingFolderId, setRenamingFolderId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+
+  // Upload
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Collect all unique tags from documents
   const allTags = Array.from(new Set(documents.flatMap((d) => d.tags))).sort();
@@ -183,6 +212,63 @@ export function KnowledgeBaseTab({ knowledgeBaseId }: KnowledgeBaseTabProps) {
       }
     },
     [knowledgeBaseId, activeFolderId, fetchData],
+  );
+
+  // ---------------------------------------------------------------------------
+  // Document upload
+  // ---------------------------------------------------------------------------
+
+  const handleUploadFiles = useCallback(
+    async (files: FileList | null) => {
+      if (!files || files.length === 0 || !knowledgeBaseId) return;
+      setUploadError(null);
+
+      // Client-side validation
+      for (const file of Array.from(files)) {
+        if (!ACCEPTED_TYPES.has(file.type)) {
+          setUploadError(
+            `Unsupported file type: ${file.name}. Accepted: PDF, DOCX, PPTX, XLSX, CSV, TXT, MD, RTF.`,
+          );
+          return;
+        }
+        if (file.size > MAX_UPLOAD_BYTES) {
+          setUploadError(
+            `File too large: ${file.name} (${(file.size / 1024 / 1024).toFixed(1)} MB). Maximum is 25 MB.`,
+          );
+          return;
+        }
+      }
+
+      setUploading(true);
+      try {
+        for (const file of Array.from(files)) {
+          const formData = new FormData();
+          formData.append("file", file);
+          formData.append("knowledge_base_id", knowledgeBaseId);
+
+          const res = await apiFetch("/api/v1/documents/upload", {
+            method: "POST",
+            body: formData,
+          });
+
+          if (!res.ok) {
+            const msg = await parseApiError(res);
+            setUploadError(`Upload failed for ${file.name}: ${msg}`);
+            break;
+          }
+        }
+        // Refresh document list after uploads
+        await fetchData();
+      } catch (err) {
+        console.error("[KnowledgeBaseTab] upload error:", err);
+        setUploadError("Upload failed. Please try again.");
+      } finally {
+        setUploading(false);
+        // Reset file input so same file can be re-selected
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+    },
+    [knowledgeBaseId, fetchData],
   );
 
   // ---------------------------------------------------------------------------
@@ -331,6 +417,29 @@ export function KnowledgeBaseTab({ knowledgeBaseId }: KnowledgeBaseTabProps) {
 
       {/* Main content */}
       <div className="flex-1 space-y-3">
+        {/* Upload button */}
+        <div className="flex items-center gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept={ACCEPT_STRING}
+            className="hidden"
+            onChange={(e) => void handleUploadFiles(e.target.files)}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={uploading}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            {uploading ? "Uploading..." : "Upload documents"}
+          </Button>
+          {uploadError && (
+            <p className="text-xs text-destructive">{uploadError}</p>
+          )}
+        </div>
+
         {/* Tag filter chips */}
         {allTags.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
