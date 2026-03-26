@@ -56,8 +56,6 @@ function makeAgent(overrides: Record<string, unknown> = {}) {
     instructions: "You are Nate Jones...",
     type: "thought_leader",
     visibility: "private",
-    knowledge_base_id: "kb-uuid-1",
-    mcp_enabled: false,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
     ...overrides,
@@ -72,8 +70,18 @@ function makeProfile(userId: string = USER_ID) {
   };
 }
 
-function mockFetchResponses(agent: Record<string, unknown>, profileUserId: string = USER_ID) {
+function mockFetchResponses(
+  agent: Record<string, unknown>,
+  profileUserId: string = USER_ID,
+  kbId: string | null = "kb-uuid-1",
+) {
   mockApiFetch.mockImplementation((url: string) => {
+    if (url.includes("/knowledge-base") && !url.includes("generate")) {
+      if (kbId) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ id: kbId }) });
+      }
+      return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ detail: "Not found" }) });
+    }
     if (url.includes("/api/v1/agents/") && !url.includes("generate")) {
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(agent) });
     }
@@ -175,5 +183,42 @@ describe("AgentProfilePage — Instructions tab", () => {
       const textarea = screen.getByRole("textbox") as HTMLTextAreaElement;
       expect(textarea.value).toContain("Generated: You are Nate Jones");
     });
+  });
+});
+
+describe("AgentProfilePage — Knowledge Base tab (KIN-367)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("shows Create Knowledge Base button when no KB attached and user is owner", async () => {
+    const user = userEvent.setup();
+    mockFetchResponses(makeAgent(), USER_ID, null); // no KB
+
+    render(<AgentProfilePage params={{ id: AGENT_ID }} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Nate Jones" })).toBeDefined();
+    });
+
+    // Click KB tab
+    await user.click(screen.getByRole("button", { name: /knowledge base/i }));
+
+    expect(screen.getByRole("button", { name: /create knowledge base/i })).toBeDefined();
+  });
+
+  it("hides Create Knowledge Base button for non-owner", async () => {
+    const user = userEvent.setup();
+    mockFetchResponses(makeAgent(), "other-user-id", null); // no KB, not owner
+
+    render(<AgentProfilePage params={{ id: AGENT_ID }} />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Nate Jones" })).toBeDefined();
+    });
+
+    await user.click(screen.getByRole("button", { name: /knowledge base/i }));
+
+    expect(screen.queryByRole("button", { name: /create knowledge base/i })).toBeNull();
   });
 });

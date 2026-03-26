@@ -36,7 +36,7 @@ router = APIRouter(prefix="/api/v1/agents", tags=["agents"])
 # ---------------------------------------------------------------------------
 
 _AGENT_FIELDS = (
-    "id, owner_id, name, instructions, type, visibility, knowledge_base_id, mcp_enabled, created_at, updated_at"
+    "id, owner_id, name, instructions, type, visibility, created_at, updated_at"
 )
 _INSTANCE_FIELDS = (
     "id, agent_definition_id, user_id, framework_overrides, created_at, updated_at"
@@ -48,16 +48,11 @@ class CreateAgentRequest(BaseModel):
     instructions: str = ""  # Empty by default; non-empty required only for public visibility (enforced in route handler)
     type: Literal["custom", "thought_leader"]
     visibility: Literal["private", "public"] = "private"
-    mcp_enabled: bool = False
-
-
 class UpdateAgentRequest(BaseModel):
     name: Optional[str] = None
     instructions: Optional[str] = None
     type: Optional[Literal["custom", "thought_leader"]] = None
     visibility: Optional[Literal["private", "public"]] = None
-    mcp_enabled: Optional[bool] = None
-    knowledge_base_id: Optional[str] = None
 
 
 class FrameworkOverrides(BaseModel):
@@ -80,6 +75,8 @@ class CreateFrameworkRequest(BaseModel):
     example_application: Optional[str] = None
     steps: list[str] = []
     related_frameworks: list[str] = []
+    type: Optional[str] = None
+    do_not_use_when: list[str] = []
 
 
 class UpdateFrameworkRequest(BaseModel):
@@ -89,6 +86,8 @@ class UpdateFrameworkRequest(BaseModel):
     example_application: Optional[str] = None
     confidence: Optional[Literal["high", "medium"]] = None
     principles: Optional[list[str]] = None
+    type: Optional[str] = None
+    do_not_use_when: Optional[list[str]] = None
 
 
 class UploadFrameworksRequest(BaseModel):
@@ -183,7 +182,6 @@ async def create_agent(
         "instructions": body.instructions,
         "type": body.type,
         "visibility": body.visibility,
-        "mcp_enabled": body.mcp_enabled,
     }
 
     loop = asyncio.get_running_loop()
@@ -417,7 +415,7 @@ async def upload_frameworks(
             update_dict: dict = {"updated_at": datetime.now(timezone.utc).isoformat()}
             for field in ("name", "when_to_apply", "confidence", "principles", "category",
                           "description", "example_application", "steps", "related_frameworks", "origin",
-                          "source_posts"):
+                          "source_posts", "type", "do_not_use_when"):
                 if field in item:
                     update_dict[field] = item[field]
             try:
@@ -444,7 +442,8 @@ async def upload_frameworks(
                 "confidence": confidence,
                 "principles": principles,
             }
-            for field in ("category", "description", "example_application", "steps", "related_frameworks"):
+            for field in ("category", "description", "example_application", "steps",
+                          "related_frameworks", "source_posts", "type", "do_not_use_when"):
                 if field in item:
                     row[field] = item[field]
             try:
@@ -522,6 +521,10 @@ async def create_framework(
         row["description"] = body.description
     if body.example_application is not None:
         row["example_application"] = body.example_application
+    if body.type is not None:
+        row["type"] = body.type
+    if body.do_not_use_when:
+        row["do_not_use_when"] = body.do_not_use_when
 
     # Step 5: Insert
     result = await loop.run_in_executor(
@@ -607,6 +610,10 @@ async def update_framework(
         updates["confidence"] = body.confidence
     if body.principles is not None:
         updates["principles"] = body.principles
+    if body.type is not None:
+        updates["type"] = body.type
+    if body.do_not_use_when is not None:
+        updates["do_not_use_when"] = body.do_not_use_when
 
     # Step 5: Validate list fields not set to empty
     if "when_to_apply" in updates and len(updates["when_to_apply"]) == 0:
@@ -711,10 +718,6 @@ async def update_agent(
         updates["type"] = body.type
     if body.visibility is not None:
         updates["visibility"] = body.visibility
-    if body.mcp_enabled is not None:
-        updates["mcp_enabled"] = body.mcp_enabled
-    if body.knowledge_base_id is not None:
-        updates["knowledge_base_id"] = body.knowledge_base_id
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
 
     update_result = await loop.run_in_executor(
@@ -932,6 +935,82 @@ async def generate_instructions(
         raise HTTPException(status_code=500, detail="Instruction generation failed. Please try again.")
 
     return {"instructions": generated}
+
+
+# ---------------------------------------------------------------------------
+# Agent Knowledge Base — KIN-367
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{agent_id}/knowledge-base")
+async def get_agent_knowledge_base(
+    agent_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """Look up the KB attached to this agent. 404 if none."""
+    client = get_supabase_client()
+    loop = asyncio.get_running_loop()
+
+    agent_result = await loop.run_in_executor(
+        None,
+        lambda: client.table("agent_definitions")
+            .select("id, owner_id, visibility").eq("id", agent_id).single().execute(),
+    )
+    agent = agent_result.data
+    if not agent:
+        raise NotFoundError("Agent not found.")
+    if agent["owner_id"] != current_user.user_id and agent["visibility"] != "public":
+        raise AuthorizationError("Access denied.")
+
+    kb_result = await loop.run_in_executor(
+        None,
+        lambda: client.table("knowledge_bases")
+            .select("id").eq("agent_definition_id", agent_id).execute(),
+    )
+    kb_rows = kb_result.data or []
+    if not kb_rows:
+        raise NotFoundError("No knowledge base attached to this agent.")
+    return {"id": kb_rows[0]["id"]}
+
+
+@router.post("/{agent_id}/knowledge-base", status_code=201)
+async def create_agent_knowledge_base(
+    agent_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """Create a KB for the agent. Idempotent — returns existing if already attached. Owner only."""
+    client = get_supabase_client()
+    loop = asyncio.get_running_loop()
+
+    agent_result = await loop.run_in_executor(
+        None,
+        lambda: client.table("agent_definitions")
+            .select("id, owner_id").eq("id", agent_id).single().execute(),
+    )
+    agent = agent_result.data
+    if not agent:
+        raise NotFoundError("Agent not found.")
+    if agent["owner_id"] != current_user.user_id:
+        raise AuthorizationError("Only the agent owner can create a knowledge base.")
+
+    kb_result = await loop.run_in_executor(
+        None,
+        lambda: client.table("knowledge_bases")
+            .select("id").eq("agent_definition_id", agent_id).execute(),
+    )
+    kb_rows = kb_result.data or []
+    if kb_rows:
+        return {"id": kb_rows[0]["id"]}
+
+    insert_result = await loop.run_in_executor(
+        None,
+        lambda: client.table("knowledge_bases")
+            .insert({"agent_definition_id": agent_id, "user_id": current_user.user_id})
+            .execute(),
+    )
+    if not insert_result.data:
+        raise ValidationError("Failed to create knowledge base.")
+    return {"id": insert_result.data[0]["id"]}
 
 
 @router.get("/{agent_id}/frameworks")

@@ -1,12 +1,14 @@
 "use client";
 
 /**
- * Agent Profile Page — KIN-319, KIN-366
+ * Agent Profile Page — KIN-319, KIN-366, KIN-367
  *
  * Route: /agents/:id
  * Tabs: Instructions | Knowledge Base | Framework Library | Settings
  * API:  GET /api/v1/agents/:id (agent)
  *       GET /api/v1/profile    (current user — owner check)
+ *       GET /api/v1/agents/:id/knowledge-base (KB lookup)
+ *       POST /api/v1/agents/:id/knowledge-base (create KB)
  *       PATCH /api/v1/agents/:id (save instructions)
  *       POST /api/v1/agents/:id/generate-instructions (regenerate from KB)
  */
@@ -36,6 +38,7 @@ export default function AgentProfilePage({ params }: { params: { id: string } })
 
   const [agent, setAgent] = useState<AgentDefinition | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [kbId, setKbId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -45,6 +48,7 @@ export default function AgentProfilePage({ params }: { params: { id: string } })
   const [editedInstructions, setEditedInstructions] = useState("");
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [creatingKb, setCreatingKb] = useState(false);
 
   useEffect(() => {
     void loadData();
@@ -56,9 +60,10 @@ export default function AgentProfilePage({ params }: { params: { id: string } })
     setNotFound(false);
     setLoadError(false);
     try {
-      const [agentRes, profileRes] = await Promise.all([
+      const [agentRes, profileRes, kbRes] = await Promise.all([
         apiFetch(`/api/v1/agents/${id}`),
         apiFetch("/api/v1/profile"),
+        apiFetch(`/api/v1/agents/${id}/knowledge-base`),
       ]);
 
       if (agentRes.status === 404) {
@@ -78,6 +83,13 @@ export default function AgentProfilePage({ params }: { params: { id: string } })
       if (profileRes.ok) {
         const profile: UserProfile = await profileRes.json();
         setCurrentUserId(profile.id);
+      }
+
+      if (kbRes.ok) {
+        const kb: { id: string } = await kbRes.json();
+        setKbId(kb.id);
+      } else {
+        setKbId(null);
       }
     } catch {
       setLoadError(true);
@@ -147,6 +159,35 @@ export default function AgentProfilePage({ params }: { params: { id: string } })
       });
     } finally {
       setGenerating(false);
+    }
+  }
+
+  async function handleCreateKnowledgeBase() {
+    setCreatingKb(true);
+    try {
+      const res = await apiFetch(`/api/v1/agents/${id}/knowledge-base`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: err?.detail || "Failed to create knowledge base.",
+        });
+        return;
+      }
+      const data: { id: string } = await res.json();
+      setKbId(data.id);
+      toast({ title: "Created", description: "Knowledge base ready. Upload documents to get started." });
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "An unexpected error occurred.",
+      });
+    } finally {
+      setCreatingKb(false);
     }
   }
 
@@ -252,7 +293,25 @@ export default function AgentProfilePage({ params }: { params: { id: string } })
         )}
 
         {activeTab === "kb" && (
-          <KnowledgeBaseTab knowledgeBaseId={agent.knowledge_base_id} />
+          kbId ? (
+            <KnowledgeBaseTab knowledgeBaseId={kbId} />
+          ) : isOwner ? (
+            <div className="flex flex-col items-center justify-center py-12 space-y-3">
+              <p className="text-sm text-muted-foreground">
+                No knowledge base attached to this agent.
+              </p>
+              <Button
+                onClick={handleCreateKnowledgeBase}
+                disabled={creatingKb}
+              >
+                {creatingKb ? "Creating..." : "Create Knowledge Base"}
+              </Button>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No knowledge base attached to this agent.
+            </p>
+          )
         )}
 
         {activeTab === "frameworks" && (
