@@ -38,10 +38,12 @@ const ACCEPTED_TYPES = new Set([
   "text/x-markdown",
   "application/rtf",
   "application/json",
+  "application/jsonl",
+  "application/x-jsonlines",
 ]);
 
 const ACCEPT_STRING =
-  ".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.csv,.txt,.md,.rtf,.json";
+  ".pdf,.docx,.doc,.pptx,.ppt,.xlsx,.xls,.csv,.txt,.md,.rtf,.json,.jsonl";
 
 // ---------------------------------------------------------------------------
 // Types

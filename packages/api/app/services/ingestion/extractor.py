@@ -69,6 +69,18 @@ def extract_text(content: bytes, content_type: str, filename: str) -> str:
         except json.JSONDecodeError as exc:
             raise RuntimeError(f"Invalid JSON in {filename!r}: {exc}") from exc
 
+    # JSONL: parse each line, pretty-print, join with double newlines
+    if content_type in ("application/jsonl", "application/x-jsonlines"):
+        try:
+            text = content.decode("utf-8")
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            parsed_lines = [json.dumps(json.loads(line), indent=2, ensure_ascii=False) for line in lines]
+            if not parsed_lines:
+                return ""
+            return "\n\n".join(parsed_lines)
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            raise RuntimeError(f"Invalid JSONL in {filename!r}: {exc}") from exc
+
     try:
         from unstructured.partition.auto import partition  # type: ignore[import]
 
