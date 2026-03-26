@@ -205,8 +205,8 @@ async def upsert_api_key(
     row = {
         "user_id": current_user.user_id,
         "provider": body.provider,
-        "key_ciphertext": ciphertext.hex(),  # bytea stored as hex string via Supabase client
-        "key_nonce": nonce.hex(),
+        "key_ciphertext": "\\x" + ciphertext.hex(),  # \x prefix tells PostgREST to decode as binary hex
+        "key_nonce": "\\x" + nonce.hex(),
         "key_hint": key_hint,
     }
 
