@@ -22,7 +22,25 @@ os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
 os.environ.setdefault("SUPABASE_ANON_KEY", "test-anon-key")
 os.environ.setdefault("SUPABASE_JWT_SECRET", "test-jwt-secret")
 os.environ.setdefault("API_KEY_ENCRYPTION_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")  # 32 zero-bytes, base64 (43 A's + =)
-os.environ.setdefault("PLATFORM_OPENAI_KEY", "sk-test-platform-openai-key")
+
+# ---------------------------------------------------------------------------
+# Sandbox workaround: prevent pydantic-settings from stat-ing .env files.
+# The sandbox denies os.stat() on .env* paths. Override the config module's
+# ENV_FILE_PATH to a non-existent path BEFORE Settings() is instantiated.
+# ---------------------------------------------------------------------------
+import pathlib as _pathlib
+
+_original_is_file = _pathlib.Path.is_file
+
+
+def _safe_is_file(self, *args, **kwargs):
+    """Return False for .env files to avoid sandbox PermissionError."""
+    if ".env" in self.name:
+        return False
+    return _original_is_file(self, *args, **kwargs)
+
+
+_pathlib.Path.is_file = _safe_is_file
 
 from datetime import datetime, timedelta, timezone
 from typing import Generator

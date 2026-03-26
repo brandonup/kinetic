@@ -75,6 +75,17 @@ PROMPTS: dict[str, dict[str, Any]] = {
         ),
     },
     # -----------------------------------------------------------------------
+    # Context Stack — System prompt for chat generation (KIN-385)
+    # -----------------------------------------------------------------------
+    "context-stack-system-v1": {
+        "system": (
+            "You are a helpful AI assistant. Use the context provided below to inform your responses. "
+            "Always prioritize information from the context layers when relevant to the user's question.\n\n"
+            "{context_layers}\n\n"
+            "{rag_context}"
+        ),
+    },
+    # -----------------------------------------------------------------------
     # Generate Instructions from KB — KIN-366
     # -----------------------------------------------------------------------
     "generate-instructions-v1": {
