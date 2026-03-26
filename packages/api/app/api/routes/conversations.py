@@ -505,6 +505,278 @@ def _generate_periodic_proposals_job(conversation_id: str, user_id: str) -> None
 
 
 # ---------------------------------------------------------------------------
+# Rolling summary compression background job (KIN-392)
+# ---------------------------------------------------------------------------
+
+# Number of most-recent messages always kept in full (not summarized).
+# MVP constant — dynamic budget calculation deferred until context token
+# accounting is added to the assembler.
+RECENT_TURNS_KEEP = 20
+
+# Notification stored as a system message when compression fails and the context assembler
+# falls back to naive truncation (KIN-393).
+_TRUNCATION_NOTIFICATION = (
+    "Conversation history was trimmed — your API key encountered an error."
+)
+
+
+def _insert_system_notification(client, conversation_id: str) -> None:
+    """Append a role='system' notification message to the conversation message history.
+
+    Called when rolling summary compression fails due to a BYOK or LLM error so that
+    the UI can surface the event inline in the chat. Silent on insert failure.
+    """
+    try:
+        seq_res = (
+            client.table("messages")
+            .select("sequence")
+            .eq("conversation_id", conversation_id)
+            .order("sequence", desc=True)
+            .limit(1)
+            .execute()
+        )
+        next_seq = (seq_res.data[0]["sequence"] + 1) if seq_res.data else 0
+        client.table("messages").insert({
+            "conversation_id": conversation_id,
+            "role": "system",
+            "content": _TRUNCATION_NOTIFICATION,
+            "sequence": next_seq,
+        }).execute()
+        logger.info(
+            "_insert_system_notification: inserted for conversation %s", conversation_id
+        )
+    except Exception as exc:
+        logger.warning(
+            "_insert_system_notification: failed for conversation %s: %s",
+            conversation_id,
+            exc,
+        )
+
+
+def _generate_summary_job(conversation_id: str, user_id: str) -> None:
+    """
+    Background job: generate rolling summary for conversation history compression.
+
+    Triggered every 10 messages. Summarizes all messages except the most recent
+    RECENT_TURNS_KEEP turns into a condensed paragraph and stores a new row in
+    conversation_summaries.
+
+    Incremental approach: if a prior summary exists, folds it + new messages
+    together (more efficient than re-summarizing from scratch).
+
+    Silent-skip conditions (same BYOK/silent-skip policy as other bg jobs):
+    - Fewer than RECENT_TURNS_KEEP + 1 valid messages (nothing to summarize)
+    - Summary already covers all messages up to target boundary
+    - No default model configured for user
+    - No BYOK API key for the provider
+    - Key decryption fails
+    - LLM call fails
+
+    Schema refs:
+    - conversations: verify ownership + scope
+    - conversation_summaries: messages_covered_up_to (last summarized sequence)
+    - messages: role + content + sequence
+    - users.default_model_id → llm_models.model_id + provider
+    - user_api_keys: key_ciphertext + key_nonce
+
+    Ticket: KIN-392
+    """
+    from app.services.prompts import get_prompt
+
+    client = get_supabase_client()
+
+    # 1. Verify conversation ownership
+    conv_res = (
+        client.table("conversations")
+        .select("id")
+        .eq("id", conversation_id)
+        .eq("user_id", user_id)
+        .is_("deleted_at", "null")
+        .single()
+        .execute()
+    )
+    if not conv_res.data:
+        logger.warning(
+            "_generate_summary_job: conversation %s not found for user %s",
+            conversation_id,
+            user_id,
+        )
+        return
+
+    # 2. Fetch all messages ordered by sequence
+    msg_res = (
+        client.table("messages")
+        .select("role, content, sequence")
+        .eq("conversation_id", conversation_id)
+        .order("sequence")
+        .execute()
+    )
+    all_messages = [
+        m for m in (msg_res.data or [])
+        if m.get("role") in ("user", "assistant")
+    ]
+    if len(all_messages) <= RECENT_TURNS_KEEP:
+        # Nothing to summarize — all messages fit in the recent window
+        logger.info(
+            "_generate_summary_job: only %d messages, nothing to compress (threshold %d)",
+            len(all_messages),
+            RECENT_TURNS_KEEP,
+        )
+        return
+
+    # Messages to summarize: everything except the last RECENT_TURNS_KEEP
+    messages_to_summarize = all_messages[:-RECENT_TURNS_KEEP]
+    target_covered_up_to = messages_to_summarize[-1]["sequence"]
+
+    # 3. Fetch latest existing summary
+    sum_res = (
+        client.table("conversation_summaries")
+        .select("summary_text, messages_covered_up_to")
+        .eq("conversation_id", conversation_id)
+        .order("messages_covered_up_to", desc=True)
+        .limit(1)
+        .execute()
+    )
+    prior_summary = sum_res.data[0] if sum_res.data else None
+
+    # Skip if summary is already current
+    if prior_summary and prior_summary["messages_covered_up_to"] >= target_covered_up_to:
+        logger.info(
+            "_generate_summary_job: summary already current (covered_up_to=%d, target=%d)",
+            prior_summary["messages_covered_up_to"],
+            target_covered_up_to,
+        )
+        return
+
+    # 4. Resolve BYOK key
+    user_res = (
+        client.table("users")
+        .select("default_model_id")
+        .eq("id", user_id)
+        .single()
+        .execute()
+    )
+    if not user_res.data or not user_res.data.get("default_model_id"):
+        logger.info("_generate_summary_job: no default model for user %s, skipping", user_id)
+        return
+
+    model_id = user_res.data["default_model_id"]
+    model_res = (
+        client.table("llm_models")
+        .select("model_id, provider")
+        .eq("id", model_id)
+        .single()
+        .execute()
+    )
+    if not model_res.data:
+        logger.info("_generate_summary_job: model %s not found in llm_models, skipping", model_id)
+        return
+
+    model_name: str = model_res.data["model_id"]
+    provider: str = model_res.data["provider"]
+
+    key_res = (
+        client.table("user_api_keys")
+        .select("key_ciphertext, key_nonce")
+        .eq("user_id", user_id)
+        .eq("provider", provider)
+        .single()
+        .execute()
+    )
+    if not key_res.data:
+        logger.info(
+            "_generate_summary_job: no BYOK key for provider %s, skipping", provider
+        )
+        _insert_system_notification(client, conversation_id)
+        return
+
+    try:
+        master_key = load_master_key()
+        ciphertext = _to_bytes(key_res.data["key_ciphertext"])
+        nonce = _to_bytes(key_res.data["key_nonce"])
+        api_key = decrypt_api_key(ciphertext, nonce, master_key, user_id)
+    except Exception as exc:
+        logger.warning("_generate_summary_job: key decryption failed: %s", exc)
+        _insert_system_notification(client, conversation_id)
+        return
+
+    # 5. Build LLM prompt
+    if prior_summary:
+        # Incremental: fold prior summary + new messages since last covered sequence
+        new_messages = [
+            m for m in messages_to_summarize
+            if m["sequence"] > prior_summary["messages_covered_up_to"]
+        ]
+        if not new_messages:
+            logger.info(
+                "_generate_summary_job: no new messages to incorporate for conversation %s",
+                conversation_id,
+            )
+            return
+        prompt_text = get_prompt("conversation-summary-v1", "summarize_incremental")
+        conversation_text = "\n".join(
+            f"{m['role'].upper()}: {m['content']}" for m in new_messages
+        )
+        llm_messages = [
+            {
+                "role": "user",
+                "content": (
+                    f"{prompt_text}\n\n"
+                    f"Previous summary:\n{prior_summary['summary_text']}\n\n"
+                    f"New messages:\n{conversation_text}"
+                ),
+            }
+        ]
+    else:
+        # Fresh summary from scratch
+        prompt_text = get_prompt("conversation-summary-v1", "summarize_new")
+        conversation_text = "\n".join(
+            f"{m['role'].upper()}: {m['content']}" for m in messages_to_summarize
+        )
+        llm_messages = [
+            {
+                "role": "user",
+                "content": f"{prompt_text}\n\nConversation:\n{conversation_text}",
+            }
+        ]
+
+    # 6. Call BYOK LLM — fall back to truncation + notification on failure (KIN-393)
+    try:
+        summary_text = call_llm(
+            messages=llm_messages,
+            model=model_name,
+            api_key=api_key,
+            max_tokens=600,
+        )
+    except Exception as exc:
+        logger.warning("_generate_summary_job: LLM call failed: %s", exc)
+        _insert_system_notification(client, conversation_id)
+        return
+
+    summary_text = summary_text.strip()
+    if not summary_text:
+        logger.info("_generate_summary_job: LLM returned empty summary, skipping")
+        return
+
+    # 7. Insert new summary row (append-only per schema)
+    row = {
+        "conversation_id": conversation_id,
+        "summary_text": summary_text,
+        "messages_covered_up_to": target_covered_up_to,
+        "model": model_name,
+    }
+    try:
+        client.table("conversation_summaries").insert(row).execute()
+        logger.info(
+            "_generate_summary_job: summary stored for conversation %s (covered_up_to=%d)",
+            conversation_id,
+            target_covered_up_to,
+        )
+    except Exception as exc:
+        logger.error("_generate_summary_job: insert failed: %s", exc)
+
+
+# ---------------------------------------------------------------------------
 # Title generation background job (KIN-389)
 # ---------------------------------------------------------------------------
 

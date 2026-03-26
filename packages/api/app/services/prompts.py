@@ -86,6 +86,25 @@ PROMPTS: dict[str, dict[str, Any]] = {
         ),
     },
     # -----------------------------------------------------------------------
+    # Rolling Summary Compression — KIN-392
+    # -----------------------------------------------------------------------
+    "conversation-summary-v1": {
+        "summarize_new": (
+            "Summarize the conversation below into a concise paragraph (200–400 words). "
+            "Focus on: decisions made, topics discussed, key facts established, and the user's goals. "
+            "This summary will replace older messages as context for future turns in the same conversation. "
+            "Be specific and preserve important details. "
+            "Return only the summary text — no preamble, no heading."
+        ),
+        "summarize_incremental": (
+            "You have a running summary of an ongoing conversation, plus new messages that have since occurred. "
+            "Update the summary to incorporate the new messages. "
+            "The updated summary should be concise (200–400 words) and cover the full conversation arc. "
+            "Focus on: decisions made, topics discussed, key facts, and the user's goals. "
+            "Return only the updated summary text — no preamble, no heading."
+        ),
+    },
+    # -----------------------------------------------------------------------
     # Generate Instructions from KB — KIN-366
     # -----------------------------------------------------------------------
     "generate-instructions-v1": {

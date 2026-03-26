@@ -521,18 +521,24 @@ class ContextAssembler:
 
         history: list[dict] = []
 
-        # Prepend summary if available
-        if summary_text:
+        # Filter to user/assistant messages only
+        valid_messages = [
+            m for m in messages if m.get("role") in ("user", "assistant")
+        ]
+
+        if sum_res.data and summary_text:
+            # Summary available: prepend it, then show only messages not yet covered.
+            # This prevents duplication between the summary and the recent window.
+            messages_covered_up_to: int = sum_res.data[0]["messages_covered_up_to"]
             history.append({
                 "role": "system",
                 "content": f"[Previous conversation summary]\n{summary_text}",
             })
+            recent = [m for m in valid_messages if m["sequence"] > messages_covered_up_to]
+        else:
+            # No summary: show the last 20 messages in full
+            recent = valid_messages[-20:]
 
-        # Filter to user/assistant messages only, take last 20
-        valid_messages = [
-            m for m in messages if m.get("role") in ("user", "assistant")
-        ]
-        recent = valid_messages[-20:]
         for msg in recent:
             history.append({"role": msg["role"], "content": msg["content"]})
 

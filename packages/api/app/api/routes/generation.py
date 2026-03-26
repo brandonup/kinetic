@@ -305,9 +305,9 @@ async def generate(
             })
             yield f"data: {done_event}\n\n"
 
-            # Periodic memory proposal trigger (KIN-388)
+            # Periodic memory proposal + rolling summary trigger (KIN-388, KIN-392)
             # After user + assistant stored, total = _sequence + 1
-            # Fire every 10 messages, debounced on pending proposals
+            # Fire every 10 messages, proposals debounced on pending proposals
             total_messages = _sequence + 1
             if total_messages % 10 == 0:
                 try:
@@ -343,6 +343,27 @@ async def generate(
                     logger.warning(
                         "generate: periodic proposal dispatch failed (non-fatal): %s",
                         prop_exc,
+                    )
+
+                # Rolling summary compression — fire-and-forget (KIN-392)
+                try:
+                    from app.api.routes.conversations import _generate_summary_job
+
+                    _loop.run_in_executor(
+                        None,
+                        _generate_summary_job,
+                        _conversation_id,
+                        current_user.user_id,
+                    )
+                    logger.info(
+                        "generate: dispatched summary job for conversation %s (msg %d)",
+                        _conversation_id,
+                        total_messages,
+                    )
+                except Exception as sum_exc:
+                    logger.warning(
+                        "generate: summary dispatch failed (non-fatal): %s",
+                        sum_exc,
                     )
 
             # Title auto-generation trigger (KIN-389)
