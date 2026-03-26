@@ -55,6 +55,30 @@ def get_supabase_client():
 # ---------------------------------------------------------------------------
 
 
+def _build_citations(rag_chunks: list) -> list[dict]:
+    """Build citation metadata from RAG chunks for the SSE done event.
+
+    Returns citations sorted by similarity_score DESC (most relevant first).
+    Snippet is first ~200 chars of chunk text.
+
+    Spec: generation-engine-spec.md §8.2, §8.3
+    Ticket: KIN-387
+    """
+    citations = []
+    for chunk in rag_chunks:
+        citations.append({
+            "document_id": chunk.document_id,
+            "document_title": chunk.document_title,
+            "file_type": chunk.document_type,
+            "chunk_index": chunk.chunk_index,
+            "snippet": chunk.text[:200],
+            "similarity_score": chunk.similarity_score,
+            "scope": chunk.scope,
+        })
+    citations.sort(key=lambda c: c["similarity_score"], reverse=True)
+    return citations
+
+
 class GenerateRequest(BaseModel):
     message: str  # User's current message
     model_id: Optional[str] = None  # llm_models.id override (UUID)
@@ -272,7 +296,12 @@ async def generate(
             message_id = (
                 ai_insert_res.data[0]["id"] if ai_insert_res.data else "unknown"
             )
-            done_event = json.dumps({"type": "done", "message_id": message_id})
+            done_event = json.dumps({
+                "type": "done",
+                "message_id": message_id,
+                "model": _model_name,
+                "citations": _build_citations(ctx.rag_chunks),
+            })
             yield f"data: {done_event}\n\n"
 
         except Exception as exc:

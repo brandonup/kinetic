@@ -753,3 +753,184 @@ class TestGenerateFullFlowIntegration:
         # L8/L9: Source (RAG)
         assert "[Source:" in prompt
         assert "Company Playbook" in prompt
+
+
+# ---------------------------------------------------------------------------
+# Citation assembly tests — KIN-387
+# ---------------------------------------------------------------------------
+
+DOC_ID_1 = str(uuid4())
+DOC_ID_2 = str(uuid4())
+
+
+def _make_chunk(
+    doc_id: str,
+    doc_title: str,
+    doc_type: str,
+    chunk_index: int,
+    text: str,
+    similarity_score: float,
+    scope: str,
+):
+    from app.services.rag.retrieval import RetrievedChunk
+
+    return RetrievedChunk(
+        chunk_id=str(uuid4()),
+        document_id=doc_id,
+        document_title=doc_title,
+        document_type=doc_type,
+        text=text,
+        chunk_index=chunk_index,
+        section_path=None,
+        page_range=None,
+        similarity_score=similarity_score,
+        token_count=10,
+        scope=scope,
+    )
+
+
+class TestCitationsInDoneEvent:
+    """RAG chunks present → done event includes citations sorted by similarity DESC."""
+
+    def test_citations_returned_in_done_event(self, gen_client):
+        chunk_high = _make_chunk(
+            DOC_ID_1, "Product Roadmap", "application/pdf",
+            0, "A" * 300, 0.92, "project_kb",
+        )
+        chunk_low = _make_chunk(
+            DOC_ID_2, "Team Handbook", "text/plain",
+            1, "B" * 50, 0.71, "agent_kb",
+        )
+        mock_ctx = MockAssembledContext(
+            rag_chunks=[chunk_low, chunk_high],  # deliberately out of order
+            rag_context_text="some rag text",
+        )
+        mock_sb = _build_mock_supabase()
+
+        async def _mock_stream(**kwargs):
+            yield "Answer text"
+
+        with (
+            patch("app.api.routes.generation.get_supabase_client", return_value=mock_sb),
+            patch("app.services.user_keys.fetch_user_key", return_value=API_KEY),
+            patch(
+                "app.services.context_assembler.ContextAssembler.assemble",
+                new_callable=AsyncMock,
+                return_value=mock_ctx,
+            ),
+            patch("app.services.llm_client.stream_llm", side_effect=_mock_stream),
+        ):
+            resp = gen_client.post(
+                f"/api/v1/conversations/{CONV_ID}/generate",
+                json={"message": "What is the roadmap?"},
+            )
+
+        assert resp.status_code == 200
+        events = _parse_sse(resp.text)
+        done = next(e for e in events if e["type"] == "done")
+
+        assert "citations" in done
+        assert done["model"] == MODEL_NAME  # spec §1.5
+        citations = done["citations"]
+        assert len(citations) == 2
+
+        # Sorted by similarity DESC — high score first
+        assert citations[0]["document_id"] == DOC_ID_1
+        assert citations[0]["similarity_score"] == 0.92
+        assert citations[1]["document_id"] == DOC_ID_2
+        assert citations[1]["similarity_score"] == 0.71
+
+        # Citation fields
+        c = citations[0]
+        assert c["document_title"] == "Product Roadmap"
+        assert c["file_type"] == "application/pdf"
+        assert c["chunk_index"] == 0
+        assert c["scope"] == "project_kb"
+        # Snippet is first ~200 chars of chunk text
+        assert c["snippet"] == "A" * 200
+
+        c2 = citations[1]
+        assert c2["document_title"] == "Team Handbook"
+        assert c2["file_type"] == "text/plain"
+        assert c2["scope"] == "agent_kb"
+        # Text shorter than 200 chars — full text returned
+        assert c2["snippet"] == "B" * 50
+
+
+class TestCitationsEmptyWithNoRAG:
+    """No RAG chunks → done event includes citations: []."""
+
+    def test_done_event_includes_empty_citations_when_no_rag(self, gen_client):
+        mock_ctx = MockAssembledContext(rag_chunks=[], rag_context_text="")
+        mock_sb = _build_mock_supabase()
+
+        async def _mock_stream(**kwargs):
+            yield "Answer"
+
+        with (
+            patch("app.api.routes.generation.get_supabase_client", return_value=mock_sb),
+            patch("app.services.user_keys.fetch_user_key", return_value=API_KEY),
+            patch(
+                "app.services.context_assembler.ContextAssembler.assemble",
+                new_callable=AsyncMock,
+                return_value=mock_ctx,
+            ),
+            patch("app.services.llm_client.stream_llm", side_effect=_mock_stream),
+        ):
+            resp = gen_client.post(
+                f"/api/v1/conversations/{CONV_ID}/generate",
+                json={"message": "General question"},
+            )
+
+        assert resp.status_code == 200
+        events = _parse_sse(resp.text)
+        done = next(e for e in events if e["type"] == "done")
+
+        assert "citations" in done
+        assert done["citations"] == []
+
+
+class TestCitationsBothScopes:
+    """L8 (project_kb) and L9 (agent_kb) citations both captured in done event."""
+
+    def test_citations_include_both_project_and_agent_kb(self, gen_client):
+        project_chunk = _make_chunk(
+            DOC_ID_1, "Project Doc", "text/plain",
+            0, "project content here", 0.80, "project_kb",
+        )
+        agent_chunk = _make_chunk(
+            DOC_ID_2, "Agent Doc", "application/pdf",
+            2, "agent content here", 0.75, "agent_kb",
+        )
+        mock_ctx = MockAssembledContext(
+            rag_chunks=[project_chunk, agent_chunk],
+            rag_context_text="combined rag text",
+        )
+        mock_sb = _build_mock_supabase()
+
+        async def _mock_stream(**kwargs):
+            yield "Combined answer"
+
+        with (
+            patch("app.api.routes.generation.get_supabase_client", return_value=mock_sb),
+            patch("app.services.user_keys.fetch_user_key", return_value=API_KEY),
+            patch(
+                "app.services.context_assembler.ContextAssembler.assemble",
+                new_callable=AsyncMock,
+                return_value=mock_ctx,
+            ),
+            patch("app.services.llm_client.stream_llm", side_effect=_mock_stream),
+        ):
+            resp = gen_client.post(
+                f"/api/v1/conversations/{CONV_ID}/generate",
+                json={"message": "Tell me everything"},
+            )
+
+        assert resp.status_code == 200
+        events = _parse_sse(resp.text)
+        done = next(e for e in events if e["type"] == "done")
+
+        citations = done["citations"]
+        scopes = {c["scope"] for c in citations}
+        assert "project_kb" in scopes
+        assert "agent_kb" in scopes
