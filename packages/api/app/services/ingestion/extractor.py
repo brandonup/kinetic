@@ -90,15 +90,41 @@ def extract_text(content: bytes, content_type: str, filename: str) -> str:
         except json.JSONDecodeError as exc:
             raise RuntimeError(f"Invalid JSON in {filename!r}: {exc}") from exc
 
-    # JSONL: parse each line, pretty-print, join with double newlines
+    # JSONL: extract text-relevant fields from each line, skip metadata
+    # Common patterns: {"content": "..."}, {"text": "..."}, {"body": "..."}
+    # Falls back to all string values if no known text field found.
     if content_type in ("application/jsonl", "application/x-jsonlines"):
+        _TEXT_KEYS = ("content", "text", "body", "message", "description")
         try:
-            text = content.decode("utf-8")
-            lines = [line.strip() for line in text.splitlines() if line.strip()]
-            parsed_lines = [json.dumps(json.loads(line), indent=2, ensure_ascii=False) for line in lines]
-            if not parsed_lines:
+            raw = content.decode("utf-8")
+            segments: list[str] = []
+            for line in raw.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                obj = json.loads(line)
+                if not isinstance(obj, dict):
+                    segments.append(str(obj))
+                    continue
+                # Try known text fields first (title + content body)
+                parts: list[str] = []
+                if obj.get("title"):
+                    parts.append(str(obj["title"]))
+                for key in _TEXT_KEYS:
+                    val = obj.get(key)
+                    if isinstance(val, str) and val.strip():
+                        parts.append(val.strip())
+                        break
+                if parts:
+                    segments.append("\n".join(parts))
+                else:
+                    # Fallback: concatenate all string values
+                    all_strings = [str(v) for v in obj.values() if isinstance(v, str) and v.strip()]
+                    if all_strings:
+                        segments.append("\n".join(all_strings))
+            if not segments:
                 return ""
-            return "\n\n".join(parsed_lines)
+            return "\n\n".join(segments)
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise RuntimeError(f"Invalid JSONL in {filename!r}: {exc}") from exc
 
