@@ -39,6 +39,25 @@ class UnsupportedFileTypeError(ValueError):
     """Raised when the file content type is not in the supported set."""
 
 
+# Extension → MIME type fallback for types browsers send as application/octet-stream
+_EXT_TO_MIME: dict[str, str] = {
+    ".json": "application/json",
+    ".jsonl": "application/jsonl",
+}
+
+
+def _resolve_content_type(content_type: str, filename: str) -> str:
+    """Resolve actual content type, falling back to extension for ambiguous MIME types."""
+    if content_type in SUPPORTED_MIME_TYPES:
+        return content_type
+    # Browsers send unknown extensions as application/octet-stream or empty
+    if content_type in ("application/octet-stream", ""):
+        ext = filename[filename.rfind("."):].lower() if "." in filename else ""
+        if ext in _EXT_TO_MIME:
+            return _EXT_TO_MIME[ext]
+    return content_type
+
+
 def extract_text(content: bytes, content_type: str, filename: str) -> str:
     """
     Extract plain text from a document using the unstructured library.
@@ -55,6 +74,8 @@ def extract_text(content: bytes, content_type: str, filename: str) -> str:
         UnsupportedFileTypeError: content_type not in SUPPORTED_MIME_TYPES.
         RuntimeError: Extraction failed (transient — caller should retry).
     """
+    content_type = _resolve_content_type(content_type, filename)
+
     if content_type not in SUPPORTED_MIME_TYPES:
         raise UnsupportedFileTypeError(
             f"Unsupported file type: {content_type!r}. "

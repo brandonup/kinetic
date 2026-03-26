@@ -227,10 +227,14 @@ export function KnowledgeBaseTab({ knowledgeBaseId }: KnowledgeBaseTabProps) {
       setUploadError(null);
 
       // Client-side validation
+      // Extensions that browsers may not map to a known MIME type
+      const ACCEPTED_EXTENSIONS = new Set([".json", ".jsonl"]);
+
       for (const file of Array.from(files)) {
-        if (!ACCEPTED_TYPES.has(file.type)) {
+        const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+        if (!ACCEPTED_TYPES.has(file.type) && !ACCEPTED_EXTENSIONS.has(ext)) {
           setUploadError(
-            `Unsupported file type: ${file.name}. Accepted: PDF, DOCX, PPTX, XLSX, CSV, TXT, MD, RTF.`,
+            `Unsupported file type: ${file.name}. Accepted: PDF, DOCX, PPTX, XLSX, CSV, TXT, MD, RTF, JSON, JSONL.`,
           );
           return;
         }
