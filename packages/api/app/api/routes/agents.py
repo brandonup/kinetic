@@ -58,6 +58,7 @@ class UpdateAgentRequest(BaseModel):
 class FrameworkOverrides(BaseModel):
     pinned: list[str] = []
     excluded: list[str] = []
+    disabled: bool = False
 
 
 class UpdateAgentInstanceRequest(BaseModel):

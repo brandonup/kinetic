@@ -358,8 +358,15 @@ class TestAgentInstanceAutoCreated:
 # ---------------------------------------------------------------------------
 
 
-def _base_mock_sb_with_agent():
-    """Return a mock supabase pre-configured for a conversation with an agent + project."""
+def _base_mock_sb_with_agent(framework_overrides=None):
+    """Return a mock supabase pre-configured for a conversation with an agent + project.
+
+    Args:
+        framework_overrides: Dict for the agent_instances override lookup (KIN-391).
+            Defaults to empty overrides (no pin/exclude/disable).
+    """
+    if framework_overrides is None:
+        framework_overrides = {"pinned": [], "excluded": [], "disabled": False}
     return _build_mock_supabase({
         "conversations": [
             {"company_id": COMPANY_ID, "project_id": PROJECT_ID, "active_agent_id": AGENT_DEF_ID},
@@ -372,7 +379,11 @@ def _base_mock_sb_with_agent():
             [{"content": "agent memory"}],
         ],
         "agent_definitions": [{"name": "TestAgent", "instructions": "Be helpful"}],
-        "agent_instances": [{"id": AGENT_INSTANCE_ID}],
+        # Two calls: (1) L6 agent memory instance lookup, (2) L7 overrides lookup
+        "agent_instances": [
+            {"id": AGENT_INSTANCE_ID},
+            {"framework_overrides": framework_overrides},
+        ],
         "messages": [[]],
         "conversation_summaries": [[]],
     })
@@ -727,3 +738,163 @@ class TestConversationHistoryEmpty:
         )
 
         assert result.conversation_history == []
+
+
+# ---------------------------------------------------------------------------
+# KIN-391: Framework user overrides — disabled, pinned, excluded
+# ---------------------------------------------------------------------------
+
+PINNED_FW_ID = str(uuid4())
+
+
+class TestL7OverrideDisabled:
+    """KIN-391: disabled=True skips L7 entirely — no pipeline call."""
+
+    @pytest.mark.asyncio
+    @patch("app.services.user_keys.fetch_user_key_async", new_callable=AsyncMock)
+    @patch("app.services.rag.framework_selection.select_framework", new_callable=AsyncMock)
+    @patch("app.services.rag.retrieval.retrieve", new_callable=AsyncMock)
+    async def test_disabled_skips_l7(self, mock_retrieve, mock_select, mock_key):
+        mock_key.return_value = "sk-test-key"
+        mock_retrieve.return_value = []
+
+        mock_sb = _base_mock_sb_with_agent(
+            framework_overrides={"pinned": [], "excluded": [], "disabled": True}
+        )
+        assembler = ContextAssembler()
+        result = await assembler.assemble(
+            supabase=mock_sb,
+            user_id=USER_ID,
+            conversation_id=CONVERSATION_ID,
+            query_text="test with disabled",
+        )
+
+        # select_framework should NOT be called
+        mock_select.assert_not_called()
+        combined = "\n".join(result.system_parts)
+        assert "[Framework:" not in combined
+
+
+class TestL7OverridePinned:
+    """KIN-391: pinned list bypasses pipeline, injects pinned frameworks."""
+
+    @pytest.mark.asyncio
+    @patch("app.services.user_keys.fetch_user_key_async", new_callable=AsyncMock)
+    @patch("app.services.rag.framework_selection.select_framework", new_callable=AsyncMock)
+    @patch("app.services.rag.framework_selection.fetch_pinned_frameworks", new_callable=AsyncMock)
+    @patch("app.services.rag.retrieval.retrieve", new_callable=AsyncMock)
+    async def test_pinned_bypasses_pipeline(self, mock_retrieve, mock_fetch_pinned, mock_select, mock_key):
+        from app.services.rag.framework_selection import FrameworkMatch
+
+        mock_key.return_value = "sk-test-key"
+        mock_retrieve.return_value = []
+        mock_fetch_pinned.return_value = [
+            FrameworkMatch(
+                matched_framework_id=PINNED_FW_ID,
+                matched_framework_name="Pinned Framework",
+                framework_text="Framework: Pinned Framework\n\nDescription: Force-injected",
+            )
+        ]
+
+        mock_sb = _base_mock_sb_with_agent(
+            framework_overrides={"pinned": [PINNED_FW_ID], "excluded": [], "disabled": False}
+        )
+        assembler = ContextAssembler()
+        result = await assembler.assemble(
+            supabase=mock_sb,
+            user_id=USER_ID,
+            conversation_id=CONVERSATION_ID,
+            query_text="test with pinned",
+        )
+
+        # Pipeline NOT called, pinned fetch IS called
+        mock_select.assert_not_called()
+        mock_fetch_pinned.assert_called_once_with([PINNED_FW_ID], mock_sb)
+        assert any("[Framework: Pinned Framework]" in p for p in result.system_parts)
+
+
+class TestL7OverrideExcluded:
+    """KIN-391: excluded list passed to pipeline as excluded_ids."""
+
+    @pytest.mark.asyncio
+    @patch("app.services.user_keys.fetch_user_key_async", new_callable=AsyncMock)
+    @patch("app.services.rag.framework_selection.select_framework", new_callable=AsyncMock)
+    @patch("app.services.rag.retrieval.retrieve", new_callable=AsyncMock)
+    async def test_excluded_passed_to_pipeline(self, mock_retrieve, mock_select, mock_key):
+        from app.services.rag.framework_selection import FrameworkMatch
+
+        mock_key.return_value = "sk-test-key"
+        mock_retrieve.return_value = []
+        mock_select.return_value = FrameworkMatch(None, None, None)
+
+        excluded_fw_id = str(uuid4())
+        mock_sb = _base_mock_sb_with_agent(
+            framework_overrides={"pinned": [], "excluded": [excluded_fw_id], "disabled": False}
+        )
+        assembler = ContextAssembler()
+        await assembler.assemble(
+            supabase=mock_sb,
+            user_id=USER_ID,
+            conversation_id=CONVERSATION_ID,
+            query_text="test with excluded",
+        )
+
+        # Pipeline called with excluded_ids
+        mock_select.assert_called_once()
+        call_kwargs = mock_select.call_args
+        assert call_kwargs.kwargs.get("excluded_ids") == {excluded_fw_id}
+
+
+class TestL7OverrideNoInstance:
+    """KIN-391: No agent_instance row → pipeline runs normally (empty overrides)."""
+
+    @pytest.mark.asyncio
+    @patch("app.services.user_keys.fetch_user_key_async", new_callable=AsyncMock)
+    @patch("app.services.rag.framework_selection.select_framework", new_callable=AsyncMock)
+    @patch("app.services.rag.retrieval.retrieve", new_callable=AsyncMock)
+    async def test_no_instance_runs_pipeline_normally(self, mock_retrieve, mock_select, mock_key):
+        from app.services.rag.framework_selection import FrameworkMatch
+
+        mock_key.return_value = "sk-test-key"
+        mock_retrieve.return_value = []
+        mock_select.return_value = FrameworkMatch(
+            matched_framework_id="fw-normal",
+            matched_framework_name="Normal Match",
+            framework_text="Framework: Normal Match\n\nDescription: Selected normally",
+        )
+
+        # Second agent_instances call returns None (no instance found)
+        mock_sb = _build_mock_supabase({
+            "conversations": [
+                {"company_id": COMPANY_ID, "project_id": PROJECT_ID, "active_agent_id": AGENT_DEF_ID},
+            ],
+            "users": [{"name": "Tester", "bio": "QA"}],
+            "companies": [{"name": "TestCo", "description": "Testing"}],
+            "projects": [{"instructions": "Test instructions"}],
+            "active_memory_entries": [
+                [{"content": "project memory"}],
+                [{"content": "agent memory"}],
+            ],
+            "agent_definitions": [{"name": "TestAgent", "instructions": "Be helpful"}],
+            # First call: L6 instance lookup, second: overrides lookup returns None
+            "agent_instances": [
+                {"id": AGENT_INSTANCE_ID},
+                None,
+            ],
+            "messages": [[]],
+            "conversation_summaries": [[]],
+        })
+
+        assembler = ContextAssembler()
+        result = await assembler.assemble(
+            supabase=mock_sb,
+            user_id=USER_ID,
+            conversation_id=CONVERSATION_ID,
+            query_text="test no instance",
+        )
+
+        # Pipeline runs normally with no excluded_ids
+        mock_select.assert_called_once()
+        call_kwargs = mock_select.call_args
+        assert call_kwargs.kwargs.get("excluded_ids") is None
+        assert any("[Framework: Normal Match]" in p for p in result.system_parts)

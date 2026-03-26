@@ -156,7 +156,7 @@ class ContextAssembler:
         # L7: Framework selection (if active_agent_id + OpenAI key)
         if active_agent_id and openai_key:
             await self._assemble_framework(
-                supabase, active_agent_id, query_text, openai_key, ctx
+                supabase, active_agent_id, user_id, query_text, openai_key, ctx
             )
 
         # L8-L9: RAG retrieval (if OpenAI key)
@@ -358,16 +358,66 @@ class ContextAssembler:
         self,
         supabase,
         active_agent_id: str,
+        user_id: str,
         query_text: str,
         openai_key: str,
         ctx: AssembledContext,
     ) -> None:
-        """L7: Select a framework for the active agent and append to system_parts."""
-        from app.services.rag.framework_selection import select_framework
+        """L7: Select a framework for the active agent and append to system_parts.
+
+        Checks framework_overrides on the user's AgentInstance first:
+          - disabled=True → skip L7 entirely
+          - pinned list → force-inject pinned frameworks, skip pipeline
+          - excluded list → filter excluded from candidate pool before selection
+
+        Spec: docs/specs/agents.md §11.4
+        Ticket: KIN-391
+        """
+        from app.services.rag.framework_selection import (
+            fetch_pinned_frameworks,
+            select_framework,
+        )
 
         try:
+            loop = asyncio.get_running_loop()
+
+            # Fetch agent instance to check framework_overrides
+            instance_res = await loop.run_in_executor(
+                None,
+                lambda: supabase.table("agent_instances")
+                .select("framework_overrides")
+                .eq("agent_definition_id", active_agent_id)
+                .eq("user_id", user_id)
+                .maybe_single()
+                .execute(),
+            )
+            overrides = (instance_res.data or {}).get("framework_overrides", {})
+
+            # Disabled: skip L7 entirely
+            if overrides.get("disabled"):
+                logger.info(
+                    "L7 skipped: framework overrides disabled for agent %s, user %s",
+                    active_agent_id, user_id,
+                )
+                return
+
+            # Pinned: force-inject pinned frameworks, skip pipeline
+            pinned = overrides.get("pinned", [])
+            if pinned:
+                matches = await fetch_pinned_frameworks(pinned, supabase)
+                for match in matches:
+                    if match.framework_text:
+                        ctx.system_parts.append(
+                            f"[Framework: {match.matched_framework_name}]\n{match.framework_text}"
+                        )
+                return
+
+            # Normal pipeline with exclusions
+            excluded = set(overrides.get("excluded", []))
             match = await select_framework(
-                query_text, active_agent_id, supabase, openai_key=openai_key
+                query_text, active_agent_id, supabase,
+                openai_key=openai_key,
+                excluded_ids=excluded if excluded else None,
             )
             if match.framework_text:
                 ctx.system_parts.append(
