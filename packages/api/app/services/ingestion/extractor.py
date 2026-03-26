@@ -1,7 +1,7 @@
 """
 Text extraction via unstructured library.
 
-Supports: PDF, DOCX, DOC, PPTX, PPT, TXT, MD, CSV, XLSX, XLS, RTF, JSONL.
+Supports: PDF, DOCX, DOC, PPTX, PPT, TXT, MD, CSV, XLSX, XLS, RTF, JSON, JSONL.
 Raises UnsupportedFileTypeError for unsupported content types.
 Raises RuntimeError on extraction failure (caller handles retry).
 """
@@ -9,6 +9,7 @@ Raises RuntimeError on extraction failure (caller handles retry).
 from __future__ import annotations
 
 import io
+import json
 import logging
 from typing import Set
 
@@ -28,6 +29,7 @@ SUPPORTED_MIME_TYPES: Set[str] = {
     "application/vnd.ms-excel",
     "application/rtf",
     "text/rtf",
+    "application/json",
     "application/jsonl",
     "application/x-jsonlines",
 }
@@ -58,6 +60,14 @@ def extract_text(content: bytes, content_type: str, filename: str) -> str:
             f"Unsupported file type: {content_type!r}. "
             f"Supported: {sorted(SUPPORTED_MIME_TYPES)}"
         )
+
+    # JSON: parse and pretty-print rather than passing to unstructured
+    if content_type == "application/json":
+        try:
+            parsed = json.loads(content)
+            return json.dumps(parsed, indent=2, ensure_ascii=False)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"Invalid JSON in {filename!r}: {exc}") from exc
 
     try:
         from unstructured.partition.auto import partition  # type: ignore[import]
