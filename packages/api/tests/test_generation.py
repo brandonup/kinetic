@@ -934,3 +934,380 @@ class TestCitationsBothScopes:
         scopes = {c["scope"] for c in citations}
         assert "project_kb" in scopes
         assert "agent_kb" in scopes
+
+
+# ---------------------------------------------------------------------------
+# Agent invocation tests — KIN-386
+# ---------------------------------------------------------------------------
+
+
+class TestAgentDeactivation:
+    """agent_id explicitly sent as null → active_agent_id set to None on conversation."""
+
+    def test_agent_deactivation_clears_active_agent(self, gen_client):
+        mock_sb = _build_mock_supabase()
+
+        async def _mock_stream(**kwargs):
+            yield "ok"
+
+        mock_ctx = MockAssembledContext()
+
+        with (
+            patch("app.api.routes.generation.get_supabase_client", return_value=mock_sb),
+            patch("app.services.user_keys.fetch_user_key", return_value=API_KEY),
+            patch(
+                "app.services.context_assembler.ContextAssembler.assemble",
+                new_callable=AsyncMock,
+                return_value=mock_ctx,
+            ),
+            patch("app.services.llm_client.stream_llm", side_effect=_mock_stream),
+        ):
+            resp = gen_client.post(
+                f"/api/v1/conversations/{CONV_ID}/generate",
+                json={"message": "test", "agent_id": None},
+            )
+
+        assert resp.status_code == 200
+
+        # Verify conversation update was called to set active_agent_id = None
+        # The conversation table is called for: select (ownership) + update (deactivation)
+        conv_calls = [
+            call for call in mock_sb.table.call_args_list
+            if call[0] == ("conversations",)
+        ]
+        assert len(conv_calls) >= 2  # select + update
+
+
+class TestAgentNotSentKeepsCurrent:
+    """agent_id not included in request body → active_agent_id unchanged."""
+
+    def test_omitting_agent_id_preserves_current_agent(self, gen_client):
+        mock_sb = _build_mock_supabase()
+
+        async def _mock_stream(**kwargs):
+            yield "ok"
+
+        mock_ctx = MockAssembledContext()
+
+        with (
+            patch("app.api.routes.generation.get_supabase_client", return_value=mock_sb),
+            patch("app.services.user_keys.fetch_user_key", return_value=API_KEY),
+            patch(
+                "app.services.context_assembler.ContextAssembler.assemble",
+                new_callable=AsyncMock,
+                return_value=mock_ctx,
+            ),
+            patch("app.services.llm_client.stream_llm", side_effect=_mock_stream),
+        ):
+            resp = gen_client.post(
+                f"/api/v1/conversations/{CONV_ID}/generate",
+                json={"message": "test"},  # No agent_id field
+            )
+
+        assert resp.status_code == 200
+
+        # Verify NO conversation update was called (only the select for ownership)
+        conv_calls = [
+            call for call in mock_sb.table.call_args_list
+            if call[0] == ("conversations",)
+        ]
+        # Only 1 call to conversations table = the ownership select (no update)
+        assert len(conv_calls) == 1
+
+
+class TestMessageAgentTagging:
+    """Messages carry agent_definition_id matching the active agent."""
+
+    def test_messages_tagged_with_active_agent_id(self, gen_client):
+        mock_sb = _build_mock_supabase()
+
+        async def _mock_stream(**kwargs):
+            yield "response"
+
+        mock_ctx = MockAssembledContext()
+
+        with (
+            patch("app.api.routes.generation.get_supabase_client", return_value=mock_sb),
+            patch("app.services.user_keys.fetch_user_key", return_value=API_KEY),
+            patch(
+                "app.services.context_assembler.ContextAssembler.assemble",
+                new_callable=AsyncMock,
+                return_value=mock_ctx,
+            ),
+            patch("app.services.llm_client.stream_llm", side_effect=_mock_stream),
+        ):
+            resp = gen_client.post(
+                f"/api/v1/conversations/{CONV_ID}/generate",
+                json={"message": "test"},
+            )
+
+        assert resp.status_code == 200
+        inserts = mock_sb._insert_calls
+        assert len(inserts) == 2
+
+        # Both user and assistant messages tagged with active agent
+        assert inserts[0]["agent_definition_id"] == AGENT_ID
+        assert inserts[1]["agent_definition_id"] == AGENT_ID
+
+
+class TestMessageAgentTaggingAfterDeactivation:
+    """After deactivation, messages carry agent_definition_id = None."""
+
+    def test_messages_tagged_none_after_deactivation(self, gen_client):
+        mock_sb = _build_mock_supabase()
+
+        async def _mock_stream(**kwargs):
+            yield "response"
+
+        mock_ctx = MockAssembledContext()
+
+        with (
+            patch("app.api.routes.generation.get_supabase_client", return_value=mock_sb),
+            patch("app.services.user_keys.fetch_user_key", return_value=API_KEY),
+            patch(
+                "app.services.context_assembler.ContextAssembler.assemble",
+                new_callable=AsyncMock,
+                return_value=mock_ctx,
+            ),
+            patch("app.services.llm_client.stream_llm", side_effect=_mock_stream),
+        ):
+            resp = gen_client.post(
+                f"/api/v1/conversations/{CONV_ID}/generate",
+                json={"message": "test", "agent_id": None},
+            )
+
+        assert resp.status_code == 200
+        inserts = mock_sb._insert_calls
+        assert len(inserts) == 2
+
+        # Both messages tagged with None (deactivated)
+        assert inserts[0]["agent_definition_id"] is None
+        assert inserts[1]["agent_definition_id"] is None
+
+
+# ---------------------------------------------------------------------------
+# Periodic memory proposal trigger tests — KIN-388
+# ---------------------------------------------------------------------------
+
+
+class TestPeriodicProposalTriggerFires:
+    """After 10th message (sequence 9 = assistant), periodic proposal job dispatched."""
+
+    def test_periodic_trigger_fires_at_10_messages(self, gen_client):
+        # Sequence 8 is the last existing message → user msg gets seq 9, assistant gets seq 10
+        # Total after both = 10+1 = 11. Not a multiple of 10.
+        # For total=10: last existing seq=7 → user=8, assistant=9, total=9+1=10 ✓
+        mock_sb = _build_mock_supabase(
+            message_count_data=[{"sequence": 7}],  # 8 existing messages (0-7)
+        )
+
+        # Wire up memory_proposals table for debounce check
+        _original_table = mock_sb.table.side_effect
+
+        def _table_with_proposals(name):
+            if name == "memory_proposals":
+                chain = MagicMock()
+                chain.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(
+                    data=[]  # No pending proposals → trigger should fire
+                )
+                return chain
+            return _original_table(name)
+
+        mock_sb.table.side_effect = _table_with_proposals
+
+        async def _mock_stream(**kwargs):
+            yield "response"
+
+        mock_ctx = MockAssembledContext()
+
+        with (
+            patch("app.api.routes.generation.get_supabase_client", return_value=mock_sb),
+            patch("app.services.user_keys.fetch_user_key", return_value=API_KEY),
+            patch(
+                "app.services.context_assembler.ContextAssembler.assemble",
+                new_callable=AsyncMock,
+                return_value=mock_ctx,
+            ),
+            patch("app.services.llm_client.stream_llm", side_effect=_mock_stream),
+            patch(
+                "app.api.routes.conversations._generate_periodic_proposals_job",
+            ) as mock_job,
+        ):
+            resp = gen_client.post(
+                f"/api/v1/conversations/{CONV_ID}/generate",
+                json={"message": "Message number 9"},
+            )
+
+        assert resp.status_code == 200
+        events = _parse_sse(resp.text)
+        assert any(e["type"] == "done" for e in events)
+
+        # Verify the periodic proposals job was dispatched
+        # It's called via run_in_executor, so check it was called
+        assert mock_job.called
+
+
+class TestPeriodicProposalTriggerSkipped:
+    """At non-10th message boundary, periodic proposal job NOT dispatched."""
+
+    def test_periodic_trigger_skipped_at_non_boundary(self, gen_client):
+        # 4 existing messages (0-3), user=4, assistant=5, total=6 → not multiple of 10
+        mock_sb = _build_mock_supabase(
+            message_count_data=[{"sequence": 3}],
+        )
+
+        async def _mock_stream(**kwargs):
+            yield "response"
+
+        mock_ctx = MockAssembledContext()
+
+        with (
+            patch("app.api.routes.generation.get_supabase_client", return_value=mock_sb),
+            patch("app.services.user_keys.fetch_user_key", return_value=API_KEY),
+            patch(
+                "app.services.context_assembler.ContextAssembler.assemble",
+                new_callable=AsyncMock,
+                return_value=mock_ctx,
+            ),
+            patch("app.services.llm_client.stream_llm", side_effect=_mock_stream),
+            patch(
+                "app.api.routes.conversations._generate_periodic_proposals_job",
+            ) as mock_job,
+        ):
+            resp = gen_client.post(
+                f"/api/v1/conversations/{CONV_ID}/generate",
+                json={"message": "Just a regular message"},
+            )
+
+        assert resp.status_code == 200
+        # Job should NOT have been called — not at 10-message boundary
+        assert not mock_job.called
+
+
+class TestPeriodicProposalDebounced:
+    """At 10th message but pending proposals exist → job NOT dispatched."""
+
+    def test_periodic_trigger_debounced_on_pending(self, gen_client):
+        mock_sb = _build_mock_supabase(
+            message_count_data=[{"sequence": 7}],  # total after both = 10
+        )
+
+        _original_table = mock_sb.table.side_effect
+
+        def _table_with_pending(name):
+            if name == "memory_proposals":
+                chain = MagicMock()
+                chain.select.return_value.eq.return_value.eq.return_value.limit.return_value.execute.return_value = MagicMock(
+                    data=[{"id": "existing-proposal"}]  # Pending exists → debounce
+                )
+                return chain
+            return _original_table(name)
+
+        mock_sb.table.side_effect = _table_with_pending
+
+        async def _mock_stream(**kwargs):
+            yield "response"
+
+        mock_ctx = MockAssembledContext()
+
+        with (
+            patch("app.api.routes.generation.get_supabase_client", return_value=mock_sb),
+            patch("app.services.user_keys.fetch_user_key", return_value=API_KEY),
+            patch(
+                "app.services.context_assembler.ContextAssembler.assemble",
+                new_callable=AsyncMock,
+                return_value=mock_ctx,
+            ),
+            patch("app.services.llm_client.stream_llm", side_effect=_mock_stream),
+            patch(
+                "app.api.routes.conversations._generate_periodic_proposals_job",
+            ) as mock_job,
+        ):
+            resp = gen_client.post(
+                f"/api/v1/conversations/{CONV_ID}/generate",
+                json={"message": "Message at boundary"},
+            )
+
+        assert resp.status_code == 200
+        # Job should NOT fire — pending proposals exist
+        assert not mock_job.called
+
+
+# ---------------------------------------------------------------------------
+# Title auto-generation tests — KIN-389
+# ---------------------------------------------------------------------------
+
+
+class TestTitleGenerationFirstMessage:
+    """After first AI response (sequence 1), title generation job dispatched."""
+
+    def test_title_job_dispatched_on_first_response(self, gen_client):
+        # No existing messages → user gets seq 0, assistant gets seq 1
+        mock_sb = _build_mock_supabase(message_count_data=[])
+
+        async def _mock_stream(**kwargs):
+            yield "First response"
+
+        mock_ctx = MockAssembledContext()
+
+        with (
+            patch("app.api.routes.generation.get_supabase_client", return_value=mock_sb),
+            patch("app.services.user_keys.fetch_user_key", return_value=API_KEY),
+            patch(
+                "app.services.context_assembler.ContextAssembler.assemble",
+                new_callable=AsyncMock,
+                return_value=mock_ctx,
+            ),
+            patch("app.services.llm_client.stream_llm", side_effect=_mock_stream),
+            patch(
+                "app.api.routes.conversations._generate_title_job",
+            ) as mock_title_job,
+        ):
+            resp = gen_client.post(
+                f"/api/v1/conversations/{CONV_ID}/generate",
+                json={"message": "Hello, what can you help me with?"},
+            )
+
+        assert resp.status_code == 200
+        # Title job should be dispatched
+        assert mock_title_job.called
+        # First arg is conversation_id
+        call_args = mock_title_job.call_args[0]
+        assert call_args[0] == CONV_ID
+
+
+class TestTitleGenerationSkippedAfterFirst:
+    """After subsequent messages (sequence > 1), title job NOT dispatched."""
+
+    def test_title_job_not_dispatched_on_later_messages(self, gen_client):
+        # 4 existing messages → user gets seq 4, assistant gets seq 5
+        mock_sb = _build_mock_supabase(
+            message_count_data=[{"sequence": 3}],
+        )
+
+        async def _mock_stream(**kwargs):
+            yield "Later response"
+
+        mock_ctx = MockAssembledContext()
+
+        with (
+            patch("app.api.routes.generation.get_supabase_client", return_value=mock_sb),
+            patch("app.services.user_keys.fetch_user_key", return_value=API_KEY),
+            patch(
+                "app.services.context_assembler.ContextAssembler.assemble",
+                new_callable=AsyncMock,
+                return_value=mock_ctx,
+            ),
+            patch("app.services.llm_client.stream_llm", side_effect=_mock_stream),
+            patch(
+                "app.api.routes.conversations._generate_title_job",
+            ) as mock_title_job,
+        ):
+            resp = gen_client.post(
+                f"/api/v1/conversations/{CONV_ID}/generate",
+                json={"message": "Follow up question"},
+            )
+
+        assert resp.status_code == 200
+        # Title job should NOT be dispatched — not the first message
+        assert not mock_title_job.called

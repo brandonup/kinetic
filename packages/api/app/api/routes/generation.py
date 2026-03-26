@@ -145,8 +145,9 @@ async def generate(
     project_id = conv_res.data.get("project_id")
     active_agent_id = conv_res.data.get("active_agent_id")
 
-    # 2. Agent switch
-    if body.agent_id and body.agent_id != active_agent_id:
+    # 2. Agent switch / deactivation (KIN-386)
+    # Use model_fields_set to distinguish "not sent" from "explicitly sent as null"
+    if "agent_id" in body.model_fields_set and body.agent_id != active_agent_id:
         await loop.run_in_executor(
             None,
             lambda: client.table("conversations")
@@ -303,6 +304,69 @@ async def generate(
                 "citations": _build_citations(ctx.rag_chunks),
             })
             yield f"data: {done_event}\n\n"
+
+            # Periodic memory proposal trigger (KIN-388)
+            # After user + assistant stored, total = _sequence + 1
+            # Fire every 10 messages, debounced on pending proposals
+            total_messages = _sequence + 1
+            if total_messages % 10 == 0:
+                try:
+                    pending_res = await _loop.run_in_executor(
+                        None,
+                        lambda: client.table("memory_proposals")
+                        .select("id")
+                        .eq("conversation_id", _conversation_id)
+                        .eq("status", "pending")
+                        .limit(1)
+                        .execute(),
+                    )
+                    if not (pending_res.data):
+                        from app.api.routes.conversations import (
+                            _generate_periodic_proposals_job,
+                        )
+
+                        # Fire-and-forget: run_in_executor submits to the
+                        # thread pool immediately; no await needed for the
+                        # job to execute. Discarding the future is intentional.
+                        _loop.run_in_executor(
+                            None,
+                            _generate_periodic_proposals_job,
+                            _conversation_id,
+                            current_user.user_id,
+                        )
+                        logger.info(
+                            "generate: dispatched periodic proposal job for conversation %s (msg %d)",
+                            _conversation_id,
+                            total_messages,
+                        )
+                except Exception as prop_exc:
+                    logger.warning(
+                        "generate: periodic proposal dispatch failed (non-fatal): %s",
+                        prop_exc,
+                    )
+
+            # Title auto-generation trigger (KIN-389)
+            # After first AI response (sequence 1 = 2nd message), generate title
+            if _sequence == 1:
+                try:
+                    from app.api.routes.conversations import _generate_title_job
+
+                    _loop.run_in_executor(
+                        None,
+                        _generate_title_job,
+                        _conversation_id,
+                        current_user.user_id,
+                        body.message,
+                    )
+                    logger.info(
+                        "generate: dispatched title generation for conversation %s",
+                        _conversation_id,
+                    )
+                except Exception as title_exc:
+                    logger.warning(
+                        "generate: title generation dispatch failed (non-fatal): %s",
+                        title_exc,
+                    )
 
         except Exception as exc:
             logger.error("generate: LLM streaming failed: %s", exc)

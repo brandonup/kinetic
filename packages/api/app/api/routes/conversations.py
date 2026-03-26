@@ -1,13 +1,16 @@
 """
-Conversations API routes — KIN-307, KIN-306.
+Conversations API routes — KIN-307, KIN-306, KIN-380.
 
 Endpoints:
-  POST /api/v1/conversations/{conversation_id}/messages — store message + periodic proposal trigger
-  POST /api/v1/conversations/{conversation_id}/end     — fire conversation-end proposal bg job
+  POST   /api/v1/conversations                            — create a conversation (201)
+  GET    /api/v1/conversations                            — list conversations, optional filters
+  GET    /api/v1/conversations/{conversation_id}          — get a single conversation
+  PATCH  /api/v1/conversations/{conversation_id}          — update title or active agent
+  DELETE /api/v1/conversations/{conversation_id}          — soft-delete (204)
+  POST   /api/v1/conversations/{conversation_id}/messages — store message + periodic proposal trigger
+  POST   /api/v1/conversations/{conversation_id}/end      — fire conversation-end proposal bg job
 
-Spec: docs/specs/active-memory-spec.md
-  § Trigger 2 (AI-Proposed at Conversation End) — KIN-307
-  § Trigger 3 (Periodic Background Proposals)   — KIN-306
+Spec: docs/specs/kin-257-projects-conversations-spec.md §2, docs/specs/active-memory-spec.md
 Schema: docs/db-schema-spec.md §5 (conversations), §6 (messages), §17 (memory_proposals),
         §19 (llm_models), §2 (user_api_keys)
 
@@ -23,13 +26,14 @@ import asyncio
 import json
 import logging
 import re
+from datetime import datetime, timezone
 from typing import Literal, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from pydantic import BaseModel, field_validator
 
 from app.auth.deps import CurrentUser, get_current_user
-from app.core.errors import NotFoundError, ValidationError
+from app.core.errors import AuthorizationError, NotFoundError, ValidationError
 from app.db.supabase_client import get_supabase
 from app.services.background import TaskDispatcher
 from app.services.encryption import decrypt_api_key, load_master_key
@@ -501,8 +505,131 @@ def _generate_periodic_proposals_job(conversation_id: str, user_id: str) -> None
 
 
 # ---------------------------------------------------------------------------
+# Title generation background job (KIN-389)
+# ---------------------------------------------------------------------------
+
+TITLE_PROMPT = (
+    "Generate a concise conversation title (max 6 words) for this message. "
+    "Return ONLY the title text, no quotes, no punctuation at the end."
+)
+
+
+def _generate_title_job(conversation_id: str, user_id: str, user_message: str) -> None:
+    """
+    Background job: auto-generate a conversation title from the first user message.
+
+    Uses the user's BYOK default model. Silent-skip on any failure — title stays null
+    and the UI renders "New conversation".
+
+    Spec: PRD §5 — "Auto-generated from first message; user can rename."
+    MEMORY.md: "Conversation title generation uses BYOK key (user's default model)."
+    """
+    client = get_supabase_client()
+
+    # Check if conversation already has a title (user may have set one at creation)
+    conv_res = (
+        client.table("conversations")
+        .select("title")
+        .eq("id", conversation_id)
+        .eq("user_id", user_id)
+        .is_("deleted_at", "null")
+        .single()
+        .execute()
+    )
+    if not conv_res.data:
+        return
+    if conv_res.data.get("title"):
+        logger.info("_generate_title_job: conversation %s already has title, skipping", conversation_id)
+        return
+
+    # Resolve BYOK key (same pattern as _generate_proposals_job)
+    user_res = (
+        client.table("users")
+        .select("default_model_id")
+        .eq("id", user_id)
+        .single()
+        .execute()
+    )
+    if not user_res.data or not user_res.data.get("default_model_id"):
+        logger.info("_generate_title_job: no default model for user %s, skipping", user_id)
+        return
+
+    model_id = user_res.data["default_model_id"]
+    model_res = (
+        client.table("llm_models")
+        .select("model_id, provider")
+        .eq("id", model_id)
+        .single()
+        .execute()
+    )
+    if not model_res.data:
+        return
+
+    model_name: str = model_res.data["model_id"]
+    provider: str = model_res.data["provider"]
+
+    key_res = (
+        client.table("user_api_keys")
+        .select("key_ciphertext, key_nonce")
+        .eq("user_id", user_id)
+        .eq("provider", provider)
+        .single()
+        .execute()
+    )
+    if not key_res.data:
+        logger.info("_generate_title_job: no BYOK key for provider %s, skipping", provider)
+        return
+
+    try:
+        master_key = load_master_key()
+        ciphertext = _to_bytes(key_res.data["key_ciphertext"])
+        nonce = _to_bytes(key_res.data["key_nonce"])
+        api_key = decrypt_api_key(ciphertext, nonce, master_key, user_id)
+    except Exception as exc:
+        logger.warning("_generate_title_job: key decryption failed: %s", exc)
+        return
+
+    # Generate title
+    try:
+        title = call_llm(
+            messages=[
+                {"role": "user", "content": f"{TITLE_PROMPT}\n\nMessage: {user_message}"},
+            ],
+            model=model_name,
+            api_key=api_key,
+            max_tokens=30,
+        )
+    except Exception as exc:
+        logger.warning("_generate_title_job: LLM call failed: %s", exc)
+        return
+
+    title = title.strip().strip('"').strip("'")[:100]  # Clean and cap at 100 chars
+    if not title:
+        return
+
+    # Update conversation title
+    try:
+        client.table("conversations").update({"title": title}).eq("id", conversation_id).eq("user_id", user_id).execute()
+        logger.info("_generate_title_job: set title for conversation %s: %s", conversation_id, title)
+    except Exception as exc:
+        logger.error("_generate_title_job: failed to update title: %s", exc)
+
+
+# ---------------------------------------------------------------------------
 # Pydantic models
 # ---------------------------------------------------------------------------
+
+
+class CreateConversationRequest(BaseModel):
+    company_id: str
+    project_id: Optional[str] = None
+    title: Optional[str] = None
+    active_agent_id: Optional[str] = None
+
+
+class UpdateConversationRequest(BaseModel):
+    title: Optional[str] = None
+    active_agent_id: Optional[str] = None
 
 
 class StoreMessageRequest(BaseModel):
@@ -520,7 +647,266 @@ class StoreMessageRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Endpoints
+# CRUD Endpoints — KIN-380
+# ---------------------------------------------------------------------------
+
+
+async def _verify_company_ownership(company_id: str, user_id: str, client) -> None:
+    """Verify the company belongs to the requesting user."""
+    loop = asyncio.get_running_loop()
+    result = await loop.run_in_executor(
+        None,
+        lambda: client
+            .table("companies")
+            .select("id")
+            .eq("id", company_id)
+            .eq("user_id", user_id)
+            .single()
+            .execute(),
+    )
+    if not result.data:
+        raise AuthorizationError("Company does not belong to the requesting user")
+
+
+@router.post("", status_code=201)
+async def create_conversation(
+    body: CreateConversationRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """
+    Create a new conversation.
+
+    Verifies company ownership. If project_id provided, verifies the project belongs to user
+    and the company. Sets user_id from auth.
+
+    Raises:
+        AuthorizationError (403): company_id or project_id does not belong to the user.
+        ValidationError (400): DB returned no data after insert.
+    """
+    client = get_supabase_client()
+    await _verify_company_ownership(body.company_id, current_user.user_id, client)
+
+    loop = asyncio.get_running_loop()
+
+    # If project_id provided, verify project ownership and company match
+    if body.project_id:
+        proj_res = await loop.run_in_executor(
+            None,
+            lambda: client.table("projects")
+                .select("id, company_id")
+                .eq("id", body.project_id)
+                .eq("user_id", current_user.user_id)
+                .single()
+                .execute(),
+        )
+        if not proj_res.data:
+            raise NotFoundError("Project not found")
+        if proj_res.data["company_id"] != body.company_id:
+            raise ValidationError("Project does not belong to the specified company")
+
+    row = {
+        "user_id": current_user.user_id,
+        "company_id": body.company_id,
+        "project_id": body.project_id,
+        "title": body.title,
+        "active_agent_id": body.active_agent_id,
+    }
+
+    result = await loop.run_in_executor(
+        None,
+        lambda: client.table("conversations").insert(row).execute(),
+    )
+    if not result.data:
+        logger.error(
+            "create_conversation: no data returned from insert",
+            extra={"user_id": current_user.user_id, "company_id": body.company_id},
+        )
+        raise ValidationError("Failed to create conversation")
+    return result.data[0]
+
+
+CONVERSATION_SELECT = (
+    "id, user_id, company_id, project_id, title, active_agent_id, "
+    "deleted_at, created_at, updated_at"
+)
+
+
+@router.get("")
+async def list_conversations(
+    company_id: Optional[str] = Query(default=None),
+    project_id: Optional[str] = Query(default=None),
+    agent_id: Optional[str] = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """
+    List the current user's conversations, ordered by most-recently-updated first.
+
+    Filters (all optional, combinable):
+      - company_id: conversations in this company
+      - project_id: conversations in this project
+      - agent_id: conversations with this agent active
+
+    Excludes soft-deleted conversations. Enriches each conversation with
+    project_name and agent_name for sidebar display.
+
+    Raises:
+        AuthorizationError (403): company_id does not belong to the user.
+    """
+    client = get_supabase_client()
+    loop = asyncio.get_running_loop()
+
+    if company_id:
+        await _verify_company_ownership(company_id, current_user.user_id, client)
+
+    # Build query
+    def _run_query():
+        q = (
+            client.table("conversations")
+            .select(CONVERSATION_SELECT)
+            .eq("user_id", current_user.user_id)
+            .is_("deleted_at", "null")
+            .order("updated_at", desc=True)
+            .limit(limit)
+        )
+        if company_id:
+            q = q.eq("company_id", company_id)
+        if project_id:
+            q = q.eq("project_id", project_id)
+        if agent_id:
+            q = q.eq("active_agent_id", agent_id)
+        return q.execute()
+
+    result = await loop.run_in_executor(None, _run_query)
+    conversations = result.data or []
+
+    # Enrich with project_name and agent_name for sidebar display
+    project_ids = {c["project_id"] for c in conversations if c.get("project_id")}
+    agent_ids = {c["active_agent_id"] for c in conversations if c.get("active_agent_id")}
+
+    project_names: dict = {}
+    agent_names: dict = {}
+
+    if project_ids:
+        proj_res = await loop.run_in_executor(
+            None,
+            lambda: client.table("projects")
+                .select("id, name")
+                .in_("id", list(project_ids))
+                .execute(),
+        )
+        project_names = {p["id"]: p["name"] for p in (proj_res.data or [])}
+
+    if agent_ids:
+        agent_res = await loop.run_in_executor(
+            None,
+            lambda: client.table("agent_definitions")
+                .select("id, name")
+                .in_("id", list(agent_ids))
+                .execute(),
+        )
+        agent_names = {a["id"]: a["name"] for a in (agent_res.data or [])}
+
+    for conv in conversations:
+        conv["project_name"] = project_names.get(conv.get("project_id"))
+        conv["agent_name"] = agent_names.get(conv.get("active_agent_id"))
+
+    return {"conversations": conversations}
+
+
+@router.get("/{conversation_id}")
+async def get_conversation(
+    conversation_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """
+    Get a single conversation by ID.
+
+    Raises:
+        NotFoundError (404): Conversation not found or not owned by current user.
+    """
+    loop = asyncio.get_running_loop()
+    client = get_supabase_client()
+    result = await loop.run_in_executor(
+        None,
+        lambda: client.table("conversations")
+            .select(CONVERSATION_SELECT)
+            .eq("id", conversation_id)
+            .eq("user_id", current_user.user_id)
+            .is_("deleted_at", "null")
+            .single()
+            .execute(),
+    )
+    if not result.data:
+        raise NotFoundError("Conversation not found")
+    return result.data
+
+
+@router.patch("/{conversation_id}")
+async def update_conversation(
+    conversation_id: str,
+    body: UpdateConversationRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """
+    Update a conversation's title or active agent.
+
+    Raises:
+        NotFoundError (404): Conversation not found or not owned by current user.
+    """
+    client = get_supabase_client()
+    loop = asyncio.get_running_loop()
+
+    updates: dict = {}
+    if body.title is not None:
+        updates["title"] = body.title
+    if body.active_agent_id is not None:
+        updates["active_agent_id"] = body.active_agent_id
+
+    updates["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    result = await loop.run_in_executor(
+        None,
+        lambda: client.table("conversations")
+            .update(updates)
+            .eq("id", conversation_id)
+            .eq("user_id", current_user.user_id)
+            .is_("deleted_at", "null")
+            .execute(),
+    )
+    if not result.data:
+        raise NotFoundError("Conversation not found")
+    return result.data[0]
+
+
+@router.delete("/{conversation_id}", status_code=204)
+async def delete_conversation(
+    conversation_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> None:
+    """
+    Soft-delete a conversation (sets deleted_at).
+
+    Raises:
+        NotFoundError (404): Conversation not found or not owned by current user.
+    """
+    loop = asyncio.get_running_loop()
+    client = get_supabase_client()
+    result = await loop.run_in_executor(
+        None,
+        lambda: client.table("conversations")
+            .update({"deleted_at": datetime.now(timezone.utc).isoformat()})
+            .eq("id", conversation_id)
+            .eq("user_id", current_user.user_id)
+            .is_("deleted_at", "null")
+            .execute(),
+    )
+    if not result.data:
+        raise NotFoundError("Conversation not found")
+
+
+# ---------------------------------------------------------------------------
+# Message + Proposal Endpoints
 # ---------------------------------------------------------------------------
 
 
