@@ -204,12 +204,15 @@ class TestFetchUserKey:
             result = fetch_user_key(mock_client, TEST_USER_ID, TEST_PROVIDER)
         assert result == TEST_API_KEY
 
-    def test_decrypt_failure_logs_and_returns_none(self, caplog):
-        """Corrupted ciphertext triggers InvalidTag → logged at ERROR → None returned."""
+    def test_decrypt_failure_logs_error_with_traceback_and_returns_none(self, caplog):
+        """
+        Corrupted ciphertext triggers InvalidTag → logged at ERROR with exc_info=True
+        (so the actual exception type/traceback appears in logs) → None returned.
+        KIN-400: previously logged `%s` on InvalidTag which produces an empty string.
+        """
         import logging
 
         with patch("app.services.user_keys.load_master_key", return_value=_MASTER_KEY_BYTES):
-            # Provide junk bytes that will never decrypt
             mock_client = _make_supabase_mock(
                 ciphertext_val=b"\x00" * 32,
                 nonce_val=b"\x01" * 12,
@@ -218,7 +221,27 @@ class TestFetchUserKey:
                 result = fetch_user_key(mock_client, TEST_USER_ID, TEST_PROVIDER)
 
         assert result is None
-        assert any("Failed to decrypt" in r.message for r in caplog.records)
+        error_records = [r for r in caplog.records if r.levelno == logging.ERROR]
+        assert error_records, "Expected an ERROR log record"
+        assert any("failed to decrypt" in r.message for r in error_records)
+        # exc_info=True ensures the actual exception class appears in the log output
+        assert any(r.exc_info is not None for r in error_records), (
+            "Expected exc_info to be set so the full traceback is logged (KIN-400)"
+        )
+
+    def test_no_key_saved_logs_warning(self, caplog):
+        """No row in DB → logs WARNING distinguishing 'key missing' from 'decrypt failed'."""
+        import logging
+
+        mock_client = _make_empty_supabase_mock()
+        with patch("app.services.user_keys.load_master_key", return_value=_MASTER_KEY_BYTES):
+            with caplog.at_level(logging.WARNING, logger="app.services.user_keys"):
+                result = fetch_user_key(mock_client, TEST_USER_ID, TEST_PROVIDER)
+
+        assert result is None
+        warning_records = [r for r in caplog.records if r.levelno == logging.WARNING]
+        assert warning_records, "Expected a WARNING log when no key row is found"
+        assert any("no" in r.message and "key" in r.message for r in warning_records)
 
     def test_missing_master_key_returns_none(self, caplog):
         """RuntimeError from load_master_key is swallowed → None."""
