@@ -73,6 +73,7 @@ class TestIngestionHappyPath:
                 run_ingestion(
                     db_session, document_id, kb_id, project_id, None,
                     b"fake-content", "test.txt", "text/plain",
+                    openai_key="sk-test", anthropic_key="test-anthropic-key",
                 )
             )
 
@@ -216,16 +217,17 @@ class TestIngestionRetry:
         # Mock Supabase GET to return a failed document
         with patch("app.api.routes.documents.get_supabase") as mock_get_sb:
             mock_sb = MagicMock()
-            # Document query uses .is_("deleted_at", "null") in the chain
-            mock_sb.table.return_value.select.return_value.eq.return_value.is_.return_value.single.return_value.execute.return_value = MagicMock(
-                data={
+            # Document query uses .is_("deleted_at", "null").limit(1) in the chain
+            mock_sb.table.return_value.select.return_value.eq.return_value.is_.return_value.limit.return_value.execute.return_value = MagicMock(
+                data=[{
                     "id": doc_id,
                     "status": "failed",
                     "error_stage": "embedding",
                     "error_message": "transient embedding error",
                     "retry_count": 3,
                     "knowledge_base_id": str(uuid4()),
-                }
+                    "tags": [],
+                }]
             )
             # KB ownership check uses .select().eq().single().execute() (no .is_)
             mock_sb.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
@@ -370,3 +372,479 @@ class TestIngestionFileSizeLimit:
         assert response.status_code == 413
         # Supabase insert should NOT have been called
         mock_sb.table.return_value.insert.assert_not_called()
+
+
+class TestOrphanedRowCleanup:
+    """Upload route cleans up pending document row on unexpected failure (KIN-408 RC-2)."""
+
+    def test_orphaned_row_deleted_on_unexpected_exception(self, client):
+        """
+        If fetch_user_key_async raises an unexpected (non-HTTP) exception after the
+        document row is inserted, the orphaned pending row is deleted before propagating.
+        """
+        kb_id = str(uuid4())
+
+        # Shared mocks — same instance returned for every table() call with that name
+        kb_mock = MagicMock()
+        kb_mock.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
+            data={"project_id": None, "agent_definition_id": str(uuid4()), "user_id": TEST_USER_ID}
+        )
+
+        doc_mock = MagicMock()
+        doc_mock.insert.return_value.execute.return_value = MagicMock(data=[{"id": "new-doc-id"}])
+        doc_mock.delete.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
+
+        def _table(name):
+            if name == "knowledge_bases":
+                return kb_mock
+            elif name == "knowledge_base_documents":
+                return doc_mock
+            return MagicMock()
+
+        with (
+            patch("app.api.routes.documents.get_supabase") as mock_get_sb,
+            patch(
+                "app.api.routes.documents.fetch_user_key_async",
+                side_effect=RuntimeError("unexpected key service error"),
+            ),
+        ):
+            mock_sb = MagicMock()
+            mock_sb.table.side_effect = _table
+            mock_sb.storage.from_.return_value.upload.return_value = None
+            mock_get_sb.return_value = mock_sb
+
+            # RuntimeError propagates through Starlette's test client
+            # (raise_server_exceptions=True default). Catch it and verify cleanup ran.
+            with pytest.raises(Exception):
+                client.post(
+                    "/api/v1/documents/upload",
+                    files={"file": ("test.txt", b"hello world", "text/plain")},
+                    data={"knowledge_base_id": kb_id},
+                )
+
+        doc_mock.delete.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# Tag suggestion — KIN-336
+# ---------------------------------------------------------------------------
+
+
+class TestTagSuggestion:
+    @pytest.fixture(autouse=True)
+    def _patch_enrichment_enabled(self):
+        """Ensure ENRICHMENT_ENABLED is True for tag tests."""
+        with patch(
+            "app.services.ingestion.tag_suggester.settings"
+        ) as mock_settings:
+            mock_settings.ENRICHMENT_ENABLED = True
+            mock_settings.CONVERSATION_COMPRESSION_MODEL = "claude-haiku-3-5"
+            self._mock_settings = mock_settings
+            yield
+
+    def test_tag_suggestion_happy_path(self):
+        """LLM returns comma-separated tags → parsed into list, lowercased."""
+        from app.services.ingestion.tag_suggester import suggest_tags
+
+        with patch(
+            "app.services.ingestion.tag_suggester.call_llm",
+            return_value="Strategy, Leadership, Decision-Making",
+        ):
+            tags = suggest_tags("Some document text about strategic leadership.", anthropic_key="test-key")
+
+        assert tags == ["strategy", "leadership", "decision-making"]
+
+    def test_tag_suggestion_failure_returns_empty_list(self):
+        """LLM call raises → returns empty list, no exception propagated."""
+        from app.services.ingestion.tag_suggester import suggest_tags
+
+        with patch(
+            "app.services.ingestion.tag_suggester.call_llm",
+            side_effect=RuntimeError("LLM unavailable"),
+        ):
+            tags = suggest_tags("Some document text.", anthropic_key="test-key")
+
+        assert tags == []
+
+    def test_tag_suggestion_no_key_returns_empty_list(self):
+        """No Anthropic key → returns empty list without calling LLM."""
+        from app.services.ingestion.tag_suggester import suggest_tags
+
+        tags = suggest_tags("Some document text.", anthropic_key=None)
+
+        assert tags == []
+
+    def test_tag_suggestion_disabled_returns_empty_list(self):
+        """ENRICHMENT_ENABLED=False → returns empty list without calling LLM."""
+        from app.services.ingestion.tag_suggester import suggest_tags
+
+        self._mock_settings.ENRICHMENT_ENABLED = False
+        tags = suggest_tags("Some document text.", anthropic_key="test-key")
+
+        assert tags == []
+
+    def test_tag_suggestion_caps_at_five(self):
+        """If LLM returns more than 5 tags, only first 5 are kept."""
+        from app.services.ingestion.tag_suggester import suggest_tags
+
+        with patch(
+            "app.services.ingestion.tag_suggester.call_llm",
+            return_value="a, b, c, d, e, f, g",
+        ):
+            tags = suggest_tags("Some document text.", anthropic_key="test-key")
+
+        assert len(tags) == 5
+        assert tags == ["a", "b", "c", "d", "e"]
+
+    def test_tag_suggestion_empty_response(self):
+        """LLM returns empty string → returns empty list."""
+        from app.services.ingestion.tag_suggester import suggest_tags
+
+        with patch(
+            "app.services.ingestion.tag_suggester.call_llm",
+            return_value="",
+        ):
+            tags = suggest_tags("Some document text.", anthropic_key="test-key")
+
+        assert tags == []
+
+
+# ---------------------------------------------------------------------------
+# Pipeline tag integration — KIN-336
+# ---------------------------------------------------------------------------
+
+
+class TestPipelineTagIntegration:
+    def test_tags_stored_after_extraction(self, db_session, mock_embedding_service):
+        """Pipeline stores AI-suggested tags in the document row."""
+        from app.services.ingestion.pipeline import run_ingestion
+
+        document_id = uuid4()
+        kb_id = uuid4()
+        project_id = uuid4()
+        sample_text = "Hello world. " * 100
+
+        with (
+            patch("app.services.ingestion.pipeline.extract_text", return_value=sample_text),
+            patch("app.services.ingestion.pipeline.generate_summary", return_value=None),
+            patch("app.services.ingestion.pipeline.suggest_tags", return_value=["strategy", "leadership"]),
+            patch("app.services.ingestion.pipeline._store_extracted_text", new_callable=AsyncMock),
+            patch("asyncio.sleep", new_callable=AsyncMock),
+        ):
+            _run(
+                run_ingestion(
+                    db_session, document_id, kb_id, project_id, None,
+                    b"fake-content", "test.txt", "text/plain",
+                    openai_key="sk-test", anthropic_key="test-anthropic-key",
+                )
+            )
+
+        update_calls = db_session.table.return_value.update.call_args_list
+        tag_updates = [c.args[0].get("tags") for c in update_calls if "tags" in c.args[0]]
+        assert ["strategy", "leadership"] in tag_updates
+
+    def test_tag_failure_does_not_block_ingestion(self, db_session, mock_embedding_service):
+        """If tag suggestion returns empty, pipeline still completes."""
+        from app.services.ingestion.pipeline import run_ingestion
+
+        document_id = uuid4()
+        kb_id = uuid4()
+        project_id = uuid4()
+        sample_text = "Hello world. " * 100
+
+        with (
+            patch("app.services.ingestion.pipeline.extract_text", return_value=sample_text),
+            patch("app.services.ingestion.pipeline.generate_summary", return_value=None),
+            patch("app.services.ingestion.pipeline.suggest_tags", return_value=[]),
+            patch("app.services.ingestion.pipeline._store_extracted_text", new_callable=AsyncMock),
+            patch("asyncio.sleep", new_callable=AsyncMock),
+        ):
+            _run(
+                run_ingestion(
+                    db_session, document_id, kb_id, project_id, None,
+                    b"fake-content", "test.txt", "text/plain",
+                    openai_key="sk-test", anthropic_key="test-anthropic-key",
+                )
+            )
+
+        update_calls = db_session.table.return_value.update.call_args_list
+        statuses = [c.args[0].get("status") for c in update_calls if "status" in c.args[0]]
+        assert "completed" in statuses
+
+
+# ---------------------------------------------------------------------------
+# Stage resumption — KIN-336
+# ---------------------------------------------------------------------------
+
+
+class TestStageResumption:
+    def test_resume_from_chunking_skips_extraction(self, db_session, mock_embedding_service):
+        """run_ingestion_from_stage with start_stage='chunking' skips extract_text."""
+        from app.services.ingestion.pipeline import run_ingestion_from_stage
+
+        document_id = uuid4()
+        kb_id = uuid4()
+        project_id = uuid4()
+        extracted_text = "Hello world. " * 100
+
+        with (
+            patch("app.services.ingestion.pipeline.extract_text") as mock_extract,
+            patch("app.services.ingestion.pipeline.generate_summary", return_value=None),
+            patch("app.services.ingestion.pipeline.suggest_tags", return_value=[]),
+            patch("asyncio.sleep", new_callable=AsyncMock),
+        ):
+            _run(
+                run_ingestion_from_stage(
+                    db_session, document_id, kb_id, project_id, None,
+                    start_stage="chunking",
+                    extracted_text=extracted_text,
+                )
+            )
+            mock_extract.assert_not_called()
+
+        # Verify pipeline completed
+        update_calls = db_session.table.return_value.update.call_args_list
+        statuses = [c.args[0].get("status") for c in update_calls if "status" in c.args[0]]
+        assert "chunking" in statuses
+        assert "completed" in statuses
+
+    def test_resume_from_extracting_runs_full_pipeline(self, db_session, mock_embedding_service):
+        """run_ingestion_from_stage with start_stage='extracting' runs full pipeline."""
+        from app.services.ingestion.pipeline import run_ingestion_from_stage
+
+        document_id = uuid4()
+        kb_id = uuid4()
+        project_id = uuid4()
+        sample_text = "Hello world. " * 100
+
+        with (
+            patch("app.services.ingestion.pipeline.extract_text", return_value=sample_text),
+            patch("app.services.ingestion.pipeline.generate_summary", return_value=None),
+            patch("app.services.ingestion.pipeline.suggest_tags", return_value=[]),
+            patch("app.services.ingestion.pipeline._store_extracted_text", new_callable=AsyncMock),
+            patch("asyncio.sleep", new_callable=AsyncMock),
+        ):
+            _run(
+                run_ingestion_from_stage(
+                    db_session, document_id, kb_id, project_id, None,
+                    start_stage="extracting",
+                    file_content=b"fake-content",
+                    filename="test.txt",
+                    content_type="text/plain",
+                )
+            )
+
+        update_calls = db_session.table.return_value.update.call_args_list
+        statuses = [c.args[0].get("status") for c in update_calls if "status" in c.args[0]]
+        assert "extracting" in statuses
+        assert "completed" in statuses
+
+    def test_resume_from_chunking_requires_text(self):
+        """run_ingestion_from_stage raises ValueError if extracted_text missing for chunking."""
+        from app.services.ingestion.pipeline import run_ingestion_from_stage
+
+        with pytest.raises(ValueError, match="extracted_text required"):
+            _run(
+                run_ingestion_from_stage(
+                    MagicMock(), uuid4(), uuid4(), None, None,
+                    start_stage="chunking",
+                    extracted_text=None,
+                )
+            )
+
+
+# ---------------------------------------------------------------------------
+# Retry endpoint — KIN-336
+# ---------------------------------------------------------------------------
+
+
+class TestRetryEndpoint:
+    def _mock_supabase_for_retry(self, doc_status="failed", error_stage="embedding",
+                                  user_id=TEST_USER_ID, storage_uri="doc-id/test.txt"):
+        """Build a Supabase mock configured for retry endpoint tests."""
+        mock_sb = MagicMock()
+
+        # Document query (select → eq → is_ → single → execute)
+        mock_sb.table.return_value.select.return_value.eq.return_value.is_.return_value.single.return_value.execute.return_value = MagicMock(
+            data={
+                "id": str(uuid4()),
+                "status": doc_status,
+                "error_stage": error_stage,
+                "storage_uri": storage_uri,
+                "knowledge_base_id": str(uuid4()),
+                "file_type": "text/plain",
+                "title": "test.txt",
+            }
+        )
+
+        # KB ownership check (select → eq → single → execute — no .is_)
+        mock_sb.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
+            data={
+                "user_id": user_id,
+                "project_id": str(uuid4()),
+                "agent_definition_id": None,
+            }
+        )
+
+        # Chunk delete (delete → eq → execute)
+        mock_sb.table.return_value.delete.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
+
+        # Status reset (update → eq → execute)
+        mock_sb.table.return_value.update.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
+
+        # Storage download
+        mock_sb.storage.from_.return_value.download.return_value = b"extracted text content"
+
+        return mock_sb
+
+    def test_retry_resets_failed_document(self, client):
+        """POST /retry on a failed doc resets status and dispatches pipeline."""
+        doc_id = str(uuid4())
+        with (
+            patch("app.api.routes.documents.get_supabase") as mock_get_sb,
+            patch("app.api.routes.documents.run_ingestion_from_stage", new_callable=AsyncMock),
+            patch("app.api.routes.documents.fetch_user_key_async", new_callable=AsyncMock, return_value="sk-test"),
+        ):
+            mock_sb = self._mock_supabase_for_retry()
+            mock_get_sb.return_value = mock_sb
+
+            response = client.post(f"/api/v1/documents/{doc_id}/retry")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "pending"
+        assert "Retry initiated" in data["message"]
+
+    def test_retry_non_failed_returns_409(self, client):
+        """POST /retry on a completed doc returns 409."""
+        doc_id = str(uuid4())
+        with patch("app.api.routes.documents.get_supabase") as mock_get_sb:
+            mock_sb = self._mock_supabase_for_retry(doc_status="completed")
+            mock_get_sb.return_value = mock_sb
+
+            response = client.post(f"/api/v1/documents/{doc_id}/retry")
+
+        assert response.status_code == 409
+
+    def test_retry_not_found_returns_404(self, client):
+        """POST /retry on a nonexistent doc returns 404."""
+        doc_id = str(uuid4())
+        with patch("app.api.routes.documents.get_supabase") as mock_get_sb:
+            mock_sb = MagicMock()
+            mock_sb.table.return_value.select.return_value.eq.return_value.is_.return_value.single.return_value.execute.return_value = MagicMock(
+                data=None
+            )
+            mock_get_sb.return_value = mock_sb
+
+            response = client.post(f"/api/v1/documents/{doc_id}/retry")
+
+        assert response.status_code == 404
+
+    def test_retry_access_denied_returns_403(self, client):
+        """POST /retry by a non-owner returns 403."""
+        doc_id = str(uuid4())
+        with patch("app.api.routes.documents.get_supabase") as mock_get_sb:
+            mock_sb = self._mock_supabase_for_retry(user_id="different-user-id")
+            mock_get_sb.return_value = mock_sb
+
+            response = client.post(f"/api/v1/documents/{doc_id}/retry")
+
+        assert response.status_code == 403
+
+    def test_retry_fallback_to_full_extraction_when_text_unavailable(self, client):
+        """When extracted text download fails, retry falls back to file download."""
+        doc_id = str(uuid4())
+        with (
+            patch("app.api.routes.documents.get_supabase") as mock_get_sb,
+            patch("app.api.routes.documents.run_ingestion_from_stage", new_callable=AsyncMock),
+            patch("app.api.routes.documents.fetch_user_key_async", new_callable=AsyncMock, return_value="sk-test"),
+        ):
+            mock_sb = self._mock_supabase_for_retry(error_stage="chunking")
+            # First download (extracted text) fails, second (file) succeeds
+            mock_sb.storage.from_.return_value.download.side_effect = [
+                RuntimeError("text not found"),
+                b"file-bytes-for-extraction",
+            ]
+            mock_get_sb.return_value = mock_sb
+
+            response = client.post(f"/api/v1/documents/{doc_id}/retry")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "extracting" in data["message"]  # fell back to full extraction
+
+    def test_retry_500_when_no_storage_available(self, client):
+        """When neither text nor file is available, retry returns 500."""
+        doc_id = str(uuid4())
+        with patch("app.api.routes.documents.get_supabase") as mock_get_sb:
+            mock_sb = self._mock_supabase_for_retry(
+                error_stage="chunking", storage_uri=None
+            )
+            # Text download fails
+            mock_sb.storage.from_.return_value.download.side_effect = RuntimeError("not found")
+            mock_get_sb.return_value = mock_sb
+
+            response = client.post(f"/api/v1/documents/{doc_id}/retry")
+
+        assert response.status_code == 500
+
+
+# ---------------------------------------------------------------------------
+# Document status with tags — KIN-336
+# ---------------------------------------------------------------------------
+
+
+class TestDocumentStatusTags:
+    def test_document_status_includes_tags(self, client):
+        """GET /documents/{id} returns tags in response."""
+        doc_id = str(uuid4())
+        with patch("app.api.routes.documents.get_supabase") as mock_get_sb:
+            mock_sb = MagicMock()
+            mock_sb.table.return_value.select.return_value.eq.return_value.is_.return_value.limit.return_value.execute.return_value = MagicMock(
+                data=[{
+                    "id": doc_id,
+                    "status": "completed",
+                    "error_stage": None,
+                    "error_message": None,
+                    "retry_count": 0,
+                    "knowledge_base_id": str(uuid4()),
+                    "tags": ["strategy", "leadership"],
+                }]
+            )
+            mock_sb.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
+                data={"user_id": TEST_USER_ID}
+            )
+            mock_get_sb.return_value = mock_sb
+
+            response = client.get(f"/api/v1/documents/{doc_id}")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["tags"] == ["strategy", "leadership"]
+
+    def test_document_status_empty_tags(self, client):
+        """GET /documents/{id} returns empty tags when none set."""
+        doc_id = str(uuid4())
+        with patch("app.api.routes.documents.get_supabase") as mock_get_sb:
+            mock_sb = MagicMock()
+            mock_sb.table.return_value.select.return_value.eq.return_value.is_.return_value.limit.return_value.execute.return_value = MagicMock(
+                data=[{
+                    "id": doc_id,
+                    "status": "completed",
+                    "error_stage": None,
+                    "error_message": None,
+                    "retry_count": 0,
+                    "knowledge_base_id": str(uuid4()),
+                    "tags": None,
+                }]
+            )
+            mock_sb.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
+                data={"user_id": TEST_USER_ID}
+            )
+            mock_get_sb.return_value = mock_sb
+
+            response = client.get(f"/api/v1/documents/{doc_id}")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["tags"] == []

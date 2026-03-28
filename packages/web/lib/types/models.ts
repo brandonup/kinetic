@@ -121,8 +121,6 @@ export interface AgentDefinition {
   instructions: string;
   type: AgentType;
   visibility: AgentVisibility;
-  knowledge_base_id: string | null;
-  mcp_enabled: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -151,6 +149,8 @@ export interface Framework {
   example_application: string | null;
   related_frameworks: string[];
   source_posts: Record<string, unknown>[] | null;
+  type: string | null;
+  do_not_use_when: string[];
   created_at: string;
   updated_at: string;
 }
@@ -164,7 +164,6 @@ export interface CreateAgentRequest {
   instructions: string;
   type: AgentType;
   visibility: AgentVisibility;
-  mcp_enabled: boolean;
 }
 
 export interface UpdateAgentInstanceRequest {
@@ -176,22 +175,26 @@ export interface CreateFrameworkRequest {
   name: string;
   when_to_apply: string[];
   principles: string[];
-  confidence: "high" | "medium";
   framework_id?: string;
   category?: string;
   description?: string;
   example_application?: string;
   steps?: string[];
   related_frameworks?: string[];
+  type?: string;
+  do_not_use_when?: string[];
 }
 
 export interface UpdateFrameworkRequest {
   name?: string;
   when_to_apply?: string[];
   category?: string;
+  description?: string;
   example_application?: string;
-  confidence?: "high" | "medium";
   principles?: string[];
+  steps?: string[];
+  type?: string;
+  do_not_use_when?: string[];
 }
 
 export interface UploadFrameworksResponse {
@@ -236,12 +239,32 @@ export interface DocumentStatusResponse {
   error_message: string | null;
   retry_count: number;
   tags: string[];
+  is_retryable: boolean;
 }
 
 export interface DocumentRetryResponse {
   document_id: string;
   status: string;
   message: string;
+}
+
+// Conversation types (KIN-380)
+export interface Conversation {
+  id: string;
+  user_id: string;
+  company_id: string;
+  project_id: string | null;
+  title: string | null;
+  active_agent_id: string | null;
+  deleted_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Sidebar-optimized conversation with resolved parent name */
+export interface ConversationListItem extends Conversation {
+  project_name: string | null;
+  agent_name: string | null;
 }
 
 // Chat message types (KIN-337)
