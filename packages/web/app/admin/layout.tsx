@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { label: "Users", href: "/admin/users", activePrefix: "/admin/users" },
   { label: "LLM Models", href: "/admin/models", activePrefix: "/admin/models" },
   { label: "RAG Debug", href: "/admin/rag-debug", activePrefix: "/admin/rag-debug" },
+  { label: "Request Trace", href: "/admin/request-trace", activePrefix: "/admin/request-trace" },
   { label: "Back to App", href: "/projects", activePrefix: null },
 ];
 
@@ -43,11 +44,15 @@ export default function AdminLayout({
           return;
         }
 
-        // Use JWT claim for admin check — no round-trip to a data endpoint.
-        // app_metadata.role is set server-side and cannot be spoofed by the client.
-        const role = session.user.app_metadata?.role;
+        // Query public.users.role — app_metadata.role is not set for OAuth users.
+        // Consistent with middleware.ts admin check.
+        const { data: userRow } = await supabase
+          .from("users")
+          .select("role")
+          .eq("id", session.user.id)
+          .single();
         if (mounted) {
-          if (role === "admin") {
+          if (userRow?.role === "admin") {
             setIsAdmin(true);
           } else {
             router.push("/projects");
