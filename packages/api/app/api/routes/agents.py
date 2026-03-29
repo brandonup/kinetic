@@ -20,12 +20,14 @@ import re
 from datetime import datetime, timezone
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from pydantic import BaseModel
 
 from app.auth.deps import CurrentUser, get_current_user
 from app.core.errors import AuthorizationError, NotFoundError, ValidationError
 from app.db.supabase_client import get_supabase
+from app.services.background import TaskDispatcher
+from app.services.framework_embeddings import embed_framework_triggers
 
 logger = logging.getLogger(__name__)
 
@@ -107,6 +109,11 @@ def _slug(name: str) -> str:
 def get_supabase_client():
     """Return the service-role Supabase client. Defined as a module-level function so tests can patch it."""
     return get_supabase()
+
+
+def get_task_dispatcher(background_tasks: BackgroundTasks) -> TaskDispatcher:
+    """Return a TaskDispatcher. Defined at module level so tests can patch it."""
+    return TaskDispatcher(background_tasks)
 
 
 # ---------------------------------------------------------------------------
@@ -335,6 +342,7 @@ async def update_instance(
 async def upload_frameworks(
     agent_id: str,
     body: UploadFrameworksRequest,
+    background_tasks: BackgroundTasks,
     current_user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     """
@@ -385,6 +393,7 @@ async def upload_frameworks(
     added = 0
     updated = 0
     failed: list[dict] = []
+    embedding_jobs: list[tuple[str, list[str]]] = []  # (framework_db_id, triggers)
 
     # Step 4: Process each item
     for item in body.frameworks:
@@ -429,6 +438,8 @@ async def upload_frameworks(
                         .execute(),
                 )
                 updated += 1
+                if "when_to_apply" in update_dict:
+                    embedding_jobs.append((existing[fw_id], update_dict["when_to_apply"]))
             except Exception as exc:
                 logger.error("upload_frameworks: update failed", extra={"framework_id": fw_id, "error": str(exc)})
                 failed.append({"framework_id": fw_id, "error": str(exc)})
@@ -448,14 +459,28 @@ async def upload_frameworks(
                 if field in item:
                     row[field] = item[field]
             try:
-                await loop.run_in_executor(
+                insert_result = await loop.run_in_executor(
                     None,
                     lambda r=row: client.table("frameworks").insert(r).execute(),
                 )
                 added += 1
+                if insert_result.data:
+                    embedding_jobs.append((insert_result.data[0]["id"], when_to_apply))
             except Exception as exc:
                 logger.error("upload_frameworks: insert failed", extra={"framework_id": fw_id_label, "error": str(exc)})
                 failed.append({"framework_id": fw_id_label, "error": str(exc)})
+
+    # Step 5: Dispatch embedding jobs for all added/updated frameworks
+    if embedding_jobs:
+        dispatcher = get_task_dispatcher(background_tasks)
+        for fw_db_id, triggers in embedding_jobs:
+            dispatcher.dispatch(
+                embed_framework_triggers,
+                fw_db_id,
+                agent_id,
+                triggers,
+                current_user.user_id,
+            )
 
     retained = len(existing) - updated
     return {"added": added, "updated": updated, "retained": retained, "failed": failed}
@@ -465,6 +490,7 @@ async def upload_frameworks(
 async def create_framework(
     agent_id: str,
     body: CreateFrameworkRequest,
+    background_tasks: BackgroundTasks,
     current_user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     """
@@ -538,6 +564,16 @@ async def create_framework(
             extra={"agent_id": agent_id, "user_id": current_user.user_id},
         )
         raise ValidationError("Failed to create framework")
+
+    # Step 6: Dispatch trigger embedding job
+    get_task_dispatcher(background_tasks).dispatch(
+        embed_framework_triggers,
+        result.data[0]["id"],
+        agent_id,
+        body.when_to_apply,
+        current_user.user_id,
+    )
+
     return result.data[0]
 
 
@@ -546,6 +582,7 @@ async def update_framework(
     agent_id: str,
     framework_db_id: str,  # frameworks.id (UUID PK) — NOT the semantic framework_id text column
     body: UpdateFrameworkRequest,
+    background_tasks: BackgroundTasks,
     current_user: CurrentUser = Depends(get_current_user),
 ) -> dict:
     """
@@ -633,6 +670,17 @@ async def update_framework(
     )
     if not update_result.data:
         raise NotFoundError("Framework not found after update")
+
+    # Dispatch trigger embedding job only if when_to_apply was updated
+    if "when_to_apply" in updates:
+        get_task_dispatcher(background_tasks).dispatch(
+            embed_framework_triggers,
+            framework_db_id,
+            agent_id,
+            updates["when_to_apply"],
+            current_user.user_id,
+        )
+
     return update_result.data[0]
 
 
@@ -1112,3 +1160,59 @@ async def delete_framework(
     # Step 4: 404 if nothing was deleted
     if not delete_result.data:
         raise NotFoundError("Framework not found")
+
+
+class DeleteAllFrameworksResponse(BaseModel):
+    agent_id: str
+    deleted_count: int
+
+
+@router.delete("/{agent_id}/frameworks", response_model=DeleteAllFrameworksResponse)
+async def delete_all_frameworks(
+    agent_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> DeleteAllFrameworksResponse:
+    """
+    Hard-delete ALL frameworks for an agent definition. Owner only.
+
+    Trigger embeddings are removed automatically via ON DELETE CASCADE.
+
+    Raises:
+        NotFoundError (404): Agent not found.
+        AuthorizationError (403): Current user is not the owner.
+    """
+    loop = asyncio.get_running_loop()
+    client = get_supabase_client()
+
+    # Step 1: Fetch agent — 404 if not found
+    agent_result = await loop.run_in_executor(
+        None,
+        lambda: client
+            .table("agent_definitions")
+            .select(_AGENT_FIELDS)
+            .eq("id", agent_id)
+            .single()
+            .execute(),
+    )
+    agent = agent_result.data
+    if not agent:
+        raise NotFoundError("Agent not found")
+
+    # Step 2: Must be owner
+    if agent["owner_id"] != current_user.user_id:
+        raise AuthorizationError("You do not own this agent")
+
+    # Step 3: DELETE all frameworks for this agent
+    delete_result = await loop.run_in_executor(
+        None,
+        lambda: client
+            .table("frameworks")
+            .delete()
+            .eq("agent_definition_id", agent_id)
+            .execute(),
+    )
+
+    deleted_count = len(delete_result.data) if delete_result.data else 0
+    return DeleteAllFrameworksResponse(
+        agent_id=agent_id, deleted_count=deleted_count,
+    )

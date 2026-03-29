@@ -25,6 +25,7 @@ TEST_INSTANCE_ID = str(uuid4())
 OTHER_USER_ID = str(uuid4())
 
 PATCH_TARGET = "app.api.routes.agents.get_supabase_client"
+PATCH_DISPATCHER = "app.api.routes.agents.get_task_dispatcher"
 
 
 def _agent_row(
@@ -42,8 +43,6 @@ def _agent_row(
         "instructions": instructions,
         "type": agent_type,
         "visibility": visibility,
-        "knowledge_base_id": None,
-        "mcp_enabled": False,
         "created_at": "2026-01-01T00:00:00+00:00",
         "updated_at": "2026-01-01T00:00:00+00:00",
     }
@@ -142,7 +141,7 @@ class TestCreateAgent:
 
     def test_create_allows_empty_instructions_for_private(self, client):
         """KIN-365: instructions defaults to "" — private agents can be created without instructions."""
-        row = _agent_row(instructions="")
+        row = _agent_row(instructions="", name="Draft Agent")
         mock_db = MagicMock()
         mock_db.table.return_value.insert.return_value.execute.return_value = MagicMock(
             data=[row]
@@ -562,7 +561,7 @@ class TestFrameworkMutations:
             data=[fw_row]
         )
 
-        with patch(PATCH_TARGET, return_value=mock_db):
+        with patch(PATCH_TARGET, return_value=mock_db), patch(PATCH_DISPATCHER):
             response = client.post(
                 f"/api/v1/agents/{TEST_AGENT_ID}/frameworks",
                 json={
@@ -726,7 +725,7 @@ class TestFrameworkMutations:
             data=[{"id": str(uuid4()), "framework_id": "new-fw"}]
         )
 
-        with patch(PATCH_TARGET, return_value=mock_db):
+        with patch(PATCH_TARGET, return_value=mock_db), patch(PATCH_DISPATCHER):
             response = client.post(
                 f"/api/v1/agents/{TEST_AGENT_ID}/frameworks/upload",
                 json={
@@ -774,7 +773,7 @@ class TestFrameworkMutations:
             data=[{"id": str(uuid4()), "framework_id": "valid-fw"}]
         )
 
-        with patch(PATCH_TARGET, return_value=mock_db):
+        with patch(PATCH_TARGET, return_value=mock_db), patch(PATCH_DISPATCHER):
             response = client.post(
                 f"/api/v1/agents/{TEST_AGENT_ID}/frameworks/upload",
                 json={
@@ -826,3 +825,69 @@ class TestFrameworkMutations:
                 },
             )
         assert response.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Delete-all frameworks — KIN-415
+# ---------------------------------------------------------------------------
+
+
+class TestDeleteAllFrameworks:
+    def test_delete_all_returns_count(self, client):
+        """Owner deletes all frameworks — returns deleted_count."""
+        agent = _agent_row()
+        fw1 = _framework_row(fw_id=str(uuid4()), agent_id=TEST_AGENT_ID)
+        fw2 = _framework_row(fw_id=str(uuid4()), agent_id=TEST_AGENT_ID)
+        mock_db = MagicMock()
+
+        mock_db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+            MagicMock(data=agent)
+        )
+        mock_db.table.return_value.delete.return_value.eq.return_value.execute.return_value = (
+            MagicMock(data=[fw1, fw2])
+        )
+
+        with patch(PATCH_TARGET, return_value=mock_db):
+            response = client.delete(f"/api/v1/agents/{TEST_AGENT_ID}/frameworks")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["deleted_count"] == 2
+        assert data["agent_id"] == TEST_AGENT_ID
+
+    def test_delete_all_empty_returns_zero(self, client):
+        """No frameworks to delete — returns deleted_count: 0."""
+        agent = _agent_row()
+        mock_db = MagicMock()
+
+        mock_db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+            MagicMock(data=agent)
+        )
+        mock_db.table.return_value.delete.return_value.eq.return_value.execute.return_value = (
+            MagicMock(data=[])
+        )
+
+        with patch(PATCH_TARGET, return_value=mock_db):
+            response = client.delete(f"/api/v1/agents/{TEST_AGENT_ID}/frameworks")
+        assert response.status_code == 200
+        assert response.json()["deleted_count"] == 0
+
+    def test_delete_all_403_non_owner(self, client):
+        """Non-owner cannot delete all frameworks — returns 403."""
+        agent = _agent_row(owner_id=OTHER_USER_ID, visibility="public")
+        mock_db = MagicMock()
+        mock_db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+            MagicMock(data=agent)
+        )
+        with patch(PATCH_TARGET, return_value=mock_db):
+            response = client.delete(f"/api/v1/agents/{TEST_AGENT_ID}/frameworks")
+        assert response.status_code == 403
+
+    def test_delete_all_404_agent_not_found(self, client):
+        """Nonexistent agent returns 404."""
+        mock_db = MagicMock()
+        mock_db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = (
+            MagicMock(data=None)
+        )
+        with patch(PATCH_TARGET, return_value=mock_db):
+            response = client.delete(f"/api/v1/agents/{str(uuid4())}/frameworks")
+        assert response.status_code == 404
