@@ -263,7 +263,7 @@ async def generate(
     _active_agent_id = active_agent_id
     _model_name = model_name
     _sequence = current_count + 1
-
+    _debug_prompt = list(messages)  # snapshot before generator mutates
     async def event_generator():
         from app.services.llm_client import stream_llm
 
@@ -282,6 +282,7 @@ async def generate(
                 "sequence": _sequence,
                 "agent_definition_id": _active_agent_id,
                 "model": _model_name,
+                "debug_prompt": _debug_prompt,
             }
             _loop = asyncio.get_running_loop()
             ai_insert_res = await _loop.run_in_executor(
