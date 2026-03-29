@@ -1,0 +1,69 @@
+{
+  "$schema": "sprint-snapshot-v1",
+  "sprint": {
+    "number": 5,
+    "name": "Active Memory + MCP (in progress)",
+    "startDate": "2026-03-23",
+    "endDate": "2026-03-24"
+  },
+  "velocity": {
+    "planned": 18,
+    "completed": 13,
+    "carryover": 2,
+    "totalPoints": 42,
+    "completedPoints": 30
+  },
+  "estimates": {
+    "coveragePercent": 72,
+    "byAgent": {
+      "dinesh":   { "total": 6,  "estimated": 5, "coveragePercent": 83 },
+      "bighead":  { "total": 7,  "estimated": 5, "coveragePercent": 71 },
+      "jian":     { "total": 3,  "estimated": 2, "coveragePercent": 67 },
+      "gilfoyle": { "total": 2,  "estimated": 0, "coveragePercent": 0 },
+      "jared":    { "total": 2,  "estimated": 0, "coveragePercent": 0 }
+    }
+  },
+  "cycleTime": {
+    "averageDays": 1.1,
+    "medianDays": 1.0,
+    "p90Days": 1.8,
+    "byAgent": {
+      "dinesh":  { "averageDays": 1.0, "ticketCount": 6 },
+      "bighead": { "averageDays": 1.2, "ticketCount": 7 }
+    }
+  },
+  "reviews": {
+    "totalReviews": 11,
+    "rejections": 9,
+    "rejectionRate": 81.8,
+    "byAgent": {
+      "dinesh":  { "reviews": 4, "rejections": 4, "rejectionRate": 100, "maxRounds": 2 },
+      "bighead": { "reviews": 7, "rejections": 5, "rejectionRate": 71.4, "maxRounds": 3 }
+    }
+  },
+  "defects": {
+    "total": 46,
+    "byCategory": {
+      "acl-leak":        6,
+      "error-swallow":   9,
+      "api-contract":    7,
+      "spec-gap":        7,
+      "schema-mismatch": 2,
+      "rls-bypass":      1,
+      "async-supabase":  1,
+      "test-missing":    3,
+      "other":           10
+    },
+    "bySeverity": { "critical": 15, "important": 30, "minor": 1 },
+    "defectsPerTicket": 2.7
+  },
+  "agentActivity": {
+    "dinesh":  { "completed": 6, "wipPeak": 3 },
+    "bighead": { "completed": 7, "wipPeak": 2 }
+  },
+  "processHealth": {
+    "decisionTicketLagHours": 1.75,
+    "handoffCompliancePercent": 80
+  },
+  "notes": "Defect data sourced from defect log (2026-03-23/24): 11 tickets reviewed, 46 defects logged. Rejection rate spike (82%) driven by complex async code — BYOK key handling in background jobs, bytea column mis-parsing (bytes.fromhex on bytea), IDOR/ownership gaps on agent/company path params, absent MCP rate limiting, RLS policy using non-existent JWT claim. Dinesh WIP overload at sprint start (KIN-309, KIN-311, KIN-319 all In Progress simultaneously). Error-swallow now 10+ lifetime occurrences — enforcement mechanism needed beyond documentation."
+}

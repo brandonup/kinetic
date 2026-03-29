@@ -2,13 +2,12 @@
 Unified LLM client using LiteLLM for multi-provider support.
 
 Provides a single interface for Anthropic, OpenAI, Google, and Groq via LiteLLM.
-Supports BYOK (Bring Your Own Key): pass `api_key` to route user-supplied keys.
-When `api_key` is omitted, LiteLLM uses platform-owned keys from env (for embedding
-and pipeline calls like framework reranking and conversation compression).
+All calls use BYOK (Bring Your Own Key): pass `api_key` to route user-supplied keys.
+There are no platform-owned keys — every call must receive an explicit api_key.
 
 Ported from FounderPanel with Kinetic-specific changes:
 - `api_key` param added to all call surfaces (BYOK support)
-- Platform keys sourced from PLATFORM_OPENAI_KEY / PLATFORM_ANTHROPIC_KEY
+- No global key configuration — all keys passed per-call
 - get_model_for_use_case removed (Kinetic uses per-query user model selection)
 """
 
@@ -29,13 +28,9 @@ except ModuleNotFoundError as exc:
 logger = logging.getLogger(__name__)
 
 if litellm is not None:
-    # Configure LiteLLM with platform-owned keys.
-    # BYOK keys are never stored here — they are passed per-call via api_key param.
-    litellm.api_key = settings.PLATFORM_OPENAI_KEY
-    if settings.PLATFORM_ANTHROPIC_KEY:
-        litellm.anthropic_key = settings.PLATFORM_ANTHROPIC_KEY
-    # For Google/Gemini, LiteLLM looks for GEMINI_API_KEY environment variable.
-    # Platform Gemini key (if added in future) would go here.
+    # No global key configuration — all LLM keys are BYOK, passed per-call
+    # via the api_key parameter. LiteLLM's global key slots are intentionally
+    # left empty. For Google/Gemini, LiteLLM looks for GEMINI_API_KEY env var.
 
     # Suppress LiteLLM's verbose logging
     litellm.suppress_debug_info = True

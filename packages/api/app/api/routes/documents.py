@@ -29,7 +29,7 @@ from pydantic import BaseModel
 
 from app.auth.deps import CurrentUser, get_current_user
 from app.core.config import settings
-from app.db.supabase_client import get_supabase
+from app.db.supabase_client import create_supabase, get_supabase
 from app.services.background import TaskDispatcher
 from app.services.ingestion.pipeline import run_ingestion, run_ingestion_from_stage
 from app.services.user_keys import fetch_user_key_async
@@ -173,10 +173,14 @@ async def upload_document(
             )
         anthropic_key = await fetch_user_key_async(supabase, current_user.user_id, "anthropic")
 
+        # Create a dedicated Supabase client for the background pipeline.
+        # The singleton (get_supabase) shares one httpx HTTP/2 connection pool —
+        # concurrent executor threads (pipeline + status polls) cause EAGAIN.
+        pipeline_supabase = create_supabase()
         dispatcher = TaskDispatcher(background_tasks)
         dispatcher.dispatch(
             run_ingestion,
-            supabase,
+            pipeline_supabase,
             document_id,
             knowledge_base_id,
             project_id,
@@ -431,11 +435,12 @@ async def retry_document(
         )
     anthropic_key = await fetch_user_key_async(supabase, current_user.user_id, "anthropic")
 
-    # Dispatch retry pipeline
+    # Dispatch retry pipeline — fresh client to avoid HTTP/2 contention
+    pipeline_supabase = create_supabase()
     dispatcher = TaskDispatcher(background_tasks)
     dispatcher.dispatch(
         run_ingestion_from_stage,
-        supabase,
+        pipeline_supabase,
         document_id,
         knowledge_base_id,
         project_id,

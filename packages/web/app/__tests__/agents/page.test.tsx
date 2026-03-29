@@ -58,8 +58,6 @@ function makeAgent(overrides: Partial<{
     instructions: "Be helpful.",
     type: "custom",
     visibility: "private",
-    knowledge_base_id: null,
-    mcp_enabled: false,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
     ...overrides,
@@ -170,7 +168,7 @@ describe("AgentsPage", () => {
     expect(screen.queryByText(/you haven't created any agents yet/i)).toBeInTheDocument();
   });
 
-  it("navigates to agent profile page when card is clicked", async () => {
+  it("navigates to agent settings when Settings button is clicked", async () => {
     const user = userEvent.setup();
     const agent = makeAgent({ id: "agent-123", name: "Clickable Agent" });
     mockProfileAndAgents([agent]);
@@ -181,8 +179,100 @@ describe("AgentsPage", () => {
       expect(screen.getByText("Clickable Agent")).toBeInTheDocument();
     });
 
-    await user.click(screen.getByText("Clickable Agent"));
+    await user.click(screen.getByTestId("agent-settings-agent-123"));
     expect(mockPush).toHaveBeenCalledWith("/agents/agent-123");
+  });
+
+  it("navigates to agent chat when Chat button is clicked", async () => {
+    const user = userEvent.setup();
+    const agent = makeAgent({ id: "agent-123", name: "Chat Agent" });
+    mockProfileAndAgents([agent]);
+
+    render(<AgentsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Chat Agent")).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByTestId("agent-chat-agent-123"));
+    expect(mockPush).toHaveBeenCalledWith("/agents/agent-123/chat");
+  });
+
+  it("shows delete button only for owned agents", async () => {
+    const myAgent = makeAgent({ id: "my-1", name: "My Bot" });
+    const otherAgent = makeAgent({ id: "other-1", owner_id: OTHER_USER_ID, name: "Other Bot", visibility: "public" });
+    mockProfileAndAgents([myAgent, otherAgent]);
+
+    render(<AgentsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("My Bot")).toBeInTheDocument();
+      expect(screen.getByText("Other Bot")).toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId("agent-delete-my-1")).toBeInTheDocument();
+    expect(screen.queryByTestId("agent-delete-other-1")).not.toBeInTheDocument();
+  });
+
+  it("opens delete confirmation dialog and deletes agent", async () => {
+    const user = userEvent.setup();
+    const agent = makeAgent({ id: "del-1", name: "Doomed Agent" });
+    let deleted = false;
+
+    // Use URL-routing mock to handle async refetch without leaking
+    mockApiFetch.mockImplementation((url: string, opts?: { method?: string }) => {
+      if (url === "/api/v1/profile") return mockOk(makeProfile());
+      if (url === "/api/v1/agents/del-1" && opts?.method === "DELETE") {
+        deleted = true;
+        return Promise.resolve({ ok: true, status: 204 });
+      }
+      if (url === "/api/v1/agents") return mockOk(deleted ? [] : [agent]);
+      return mockOk([]);
+    });
+
+    render(<AgentsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Doomed Agent")).toBeInTheDocument();
+    });
+
+    // Click delete button
+    await user.click(screen.getByTestId("agent-delete-del-1"));
+
+    // Confirmation dialog should appear
+    await waitFor(() => {
+      expect(screen.getByText(/delete doomed agent/i)).toBeInTheDocument();
+    });
+
+    // Confirm deletion
+    await user.click(screen.getByRole("button", { name: /^delete$/i }));
+
+    // Should have called DELETE endpoint and refetched (showing empty)
+    await waitFor(() => {
+      const deleteCall = mockApiFetch.mock.calls.find(
+        (c: unknown[]) => c[0] === "/api/v1/agents/del-1" && (c[1] as { method?: string })?.method === "DELETE"
+      );
+      expect(deleteCall).toBeDefined();
+    });
+  });
+
+  it("filters agents by search query", async () => {
+    const user = userEvent.setup();
+    const a1 = makeAgent({ id: "a1", name: "Strategy Bot" });
+    const a2 = makeAgent({ id: "a2", name: "Code Helper" });
+    mockProfileAndAgents([a1, a2]);
+
+    render(<AgentsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Strategy Bot")).toBeInTheDocument();
+      expect(screen.getByText("Code Helper")).toBeInTheDocument();
+    });
+
+    await user.type(screen.getByTestId("agent-search"), "Strategy");
+
+    expect(screen.getByText("Strategy Bot")).toBeInTheDocument();
+    expect(screen.queryByText("Code Helper")).not.toBeInTheDocument();
   });
 
   it("opens create modal when New Agent button is clicked", async () => {

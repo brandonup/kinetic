@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kinetic — Three Ideas for Tim</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #0a0a0f;
+    color: #e4e4e7;
+    padding: 60px 40px;
+    line-height: 1.5;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 80px;
+  }
+  .header h1 {
+    font-size: 2.4rem;
+    font-weight: 700;
+    background: linear-gradient(135deg, #818cf8, #a78bfa, #c084fc);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 12px;
+  }
+  .header p {
+    color: #71717a;
+    font-size: 1.05rem;
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  .visual-section {
+    max-width: 960px;
+    margin: 0 auto 100px;
+  }
+
+  .section-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #818cf8;
+    margin-bottom: 8px;
+  }
+  .section-title {
+    font-size: 1.6rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .section-subtitle {
+    color: #a1a1aa;
+    font-size: 0.95rem;
+    margin-bottom: 36px;
+    max-width: 680px;
+  }
+
+  /* ── Visual 1: Context Stack ── */
+  .stack-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    position: relative;
+  }
+  .stack-layer {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 14px 24px;
+    border: 1px solid #27272a;
+    border-bottom: none;
+    background: #111118;
+    transition: all 0.2s;
+  }
+  .stack-layer:first-child { border-radius: 12px 12px 0 0; }
+  .stack-layer:last-child { border-radius: 0 0 12px 12px; border-bottom: 1px solid #27272a; }
+  .stack-layer:hover { background: #18181f; border-color: #3f3f46; }
+  .stack-layer:hover + .stack-layer { border-top-color: #3f3f46; }
+
+  .layer-num {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .layer-name {
+    font-weight: 500;
+    font-size: 0.95rem;
+    min-width: 180px;
+  }
+  .layer-desc {
+    color: #71717a;
+    font-size: 0.85rem;
+    flex: 1;
+  }
+  .layer-tag {
+    font-size: 0.7rem;
+    font-weight: 500;
+    padding: 3px 10px;
+    border-radius: 100px;
+    white-space: nowrap;
+  }
+
+  /* Color coding */
+  .layer-user .layer-num { background: #1e1b4b; color: #a5b4fc; }
+  .layer-user .layer-tag { background: #1e1b4b; color: #a5b4fc; }
+  .layer-company .layer-num { background: #172554; color: #93c5fd; }
+  .layer-company .layer-tag { background: #172554; color: #93c5fd; }
+  .layer-project .layer-num { background: #052e16; color: #86efac; }
+  .layer-project .layer-tag { background: #052e16; color: #86efac; }
+  .layer-agent .layer-num { background: #3b0764; color: #d8b4fe; }
+  .layer-agent .layer-tag { background: #3b0764; color: #d8b4fe; }
+  .layer-conv .layer-num { background: #431407; color: #fdba74; }
+  .layer-conv .layer-tag { background: #431407; color: #fdba74; }
+
+  .stack-callout {
+    margin-top: 24px;
+    padding: 20px 24px;
+    background: linear-gradient(135deg, #1e1b4b22, #3b076422);
+    border: 1px solid #27272a;
+    border-radius: 12px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .stack-callout-icon {
+    font-size: 1.4rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .stack-callout-text {
+    font-size: 0.9rem;
+    color: #a1a1aa;
+    line-height: 1.6;
+  }
+  .stack-callout-text strong { color: #e4e4e7; }
+
+  /* ── Visual 2: Definition vs Instance ── */
+  .split-diagram {
+    display: grid;
+    grid-template-columns: 1fr 60px 1fr;
+    gap: 0;
+    align-items: start;
+  }
+
+  .split-card {
+    background: #111118;
+    border: 1px solid #27272a;
+    border-radius: 16px;
+    padding: 32px;
+    position: relative;
+  }
+  .split-card h3 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .split-card .card-meta {
+    font-size: 0.8rem;
+    color: #71717a;
+    margin-bottom: 24px;
+  }
+
+  .card-items {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .card-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 0.88rem;
+  }
+  .card-item-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+  }
+
+  .def-card { border-color: #3b0764; }
+  .def-card h3 { color: #d8b4fe; }
+  .def-card .card-item { background: #3b076422; }
+  .def-card .card-item-icon { background: #3b0764; color: #d8b4fe; }
+
+  .inst-card { border-color: #1e3a5f; }
+  .inst-card h3 { color: #93c5fd; }
+  .inst-card .card-item { background: #17255422; }
+  .inst-card .card-item-icon { background: #172554; color: #93c5fd; }
+
+  .split-arrow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 300px;
+    color: #3f3f46;
+  }
+  .arrow-line {
+    width: 2px;
+    flex: 1;
+    background: linear-gradient(to bottom, transparent, #3f3f46, transparent);
+  }
+  .arrow-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #52525b;
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    padding: 12px 0;
+  }
+
+  .instance-rows {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .instance-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    background: #17255418;
+    border-radius: 8px;
+    font-size: 0.82rem;
+  }
+  .instance-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.65rem;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .avatar-1 { background: #1e3a5f; color: #93c5fd; }
+  .avatar-2 { background: #3b0764; color: #d8b4fe; }
+  .avatar-3 { background: #052e16; color: #86efac; }
+
+  .marketplace-callout {
+    margin-top: 24px;
+    padding: 20px 24px;
+    background: linear-gradient(135deg, #3b076418, #1e3a5f18);
+    border: 1px solid #27272a;
+    border-radius: 12px;
+  }
+  .marketplace-callout p {
+    font-size: 0.88rem;
+    color: #a1a1aa;
+    line-height: 1.6;
+  }
+  .marketplace-callout strong { color: #e4e4e7; }
+
+  /* ── Visual 3: Corpus to Agent Pipeline ── */
+  .pipeline {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    position: relative;
+  }
+
+  .pipeline-step {
+    flex: 1;
+    padding: 28px 24px;
+    background: #111118;
+    border: 1px solid #27272a;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  .pipeline-step:first-child { border-radius: 16px 0 0 16px; }
+  .pipeline-step:last-child { border-radius: 0 16px 16px 0; }
+  .pipeline-step:not(:last-child) { border-right: none; }
+
+  .step-num {
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #52525b;
+    margin-bottom: 12px;
+  }
+  .step-icon {
+    font-size: 1.8rem;
+    margin-bottom: 14px;
+  }
+  .step-title {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .step-desc {
+    font-size: 0.82rem;
+    color: #71717a;
+    line-height: 1.5;
+    flex: 1;
+  }
+  .step-output {
+    margin-top: 16px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  .step-1 { border-color: #431407; }
+  .step-1 .step-title { color: #fdba74; }
+  .step-1 .step-output { background: #43140722; color: #fdba74; }
+
+  .step-2 { border-color: #3b0764; }
+  .step-2 .step-title { color: #d8b4fe; }
+  .step-2 .step-output { background: #3b076422; color: #d8b4fe; }
+
+  .step-3 { border-color: #052e16; }
+  .step-3 .step-title { color: #86efac; }
+  .step-3 .step-output { background: #052e1622; color: #86efac; }
+
+  .step-4 { border-color: #1e3a5f; }
+  .step-4 .step-title { color: #93c5fd; }
+  .step-4 .step-output { background: #17255422; color: #93c5fd; }
+
+  .pipeline-arrow {
+    position: absolute;
+    right: -12px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+    width: 24px;
+    height: 24px;
+    background: #0a0a0f;
+    border: 2px solid #3f3f46;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #71717a;
+    font-size: 0.7rem;
+  }
+
+  .pipeline-callout {
+    margin-top: 24px;
+    padding: 20px 24px;
+    background: linear-gradient(135deg, #05091a, #0f0a1e);
+    border: 1px solid #27272a;
+    border-radius: 12px;
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+  }
+  .pipeline-callout p {
+    font-size: 0.88rem;
+    color: #a1a1aa;
+    line-height: 1.6;
+  }
+  .pipeline-callout strong { color: #e4e4e7; }
+
+  .divider {
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(to right, transparent, #27272a, transparent);
+    margin: 20px 0;
+  }
+
+  @media (max-width: 768px) {
+    body { padding: 30px 16px; }
+    .split-diagram { grid-template-columns: 1fr; gap: 20px; }
+    .split-arrow { display: none; }
+    .pipeline { flex-direction: column; }
+    .pipeline-step { border-radius: 12px !important; border: 1px solid #27272a !important; }
+    .pipeline-arrow { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Kinetic</h1>
+  <p>A context-rich AI workspace where knowledge workers build custom AI personas grounded in real expertise.</p>
+</div>
+
+<!-- ── VISUAL 1: The 9-Layer Context Stack ── -->
+<div class="visual-section">
+  <div class="section-label">Visual 1</div>
+  <div class="section-title">Every query gets 9 layers of context</div>
+  <div class="section-subtitle">Most AI tools start cold every time. Kinetic stacks persistent context so the AI already knows who you are, what you're working on, and how your expert thinks.</div>
+
+  <div class="stack-container">
+    <div class="stack-layer layer-user">
+      <div class="layer-num">1</div>
+      <div class="layer-name">User Profile</div>
+      <div class="layer-desc">Your role, background, working style</div>
+      <div class="layer-tag">Persistent</div>
+    </div>
+    <div class="stack-layer layer-company">
+      <div class="layer-num">2</div>
+      <div class="layer-name">Company Context</div>
+      <div class="layer-desc">Industry, positioning, key details</div>
+      <div class="layer-tag">Persistent</div>
+    </div>
+    <div class="stack-layer layer-project">
+      <div class="layer-num">3</div>
+      <div class="layer-name">Project Instructions</div>
+      <div class="layer-desc">Goals, constraints, domain rules</div>
+      <div class="layer-tag">Per project</div>
+    </div>
+    <div class="stack-layer layer-project">
+      <div class="layer-num">4</div>
+      <div class="layer-name">Active Memory</div>
+      <div class="layer-desc">Accumulated facts and preferences the AI remembers</div>
+      <div class="layer-tag">Grows over time</div>
+    </div>
+    <div class="stack-layer layer-project">
+      <div class="layer-num">5</div>
+      <div class="layer-name">Knowledge Base</div>
+      <div class="layer-desc">Your documents, retrieved by relevance (RAG)</div>
+      <div class="layer-tag">Per project</div>
+    </div>
+    <div class="stack-layer layer-agent">
+      <div class="layer-num">6</div>
+      <div class="layer-name">Agent Identity</div>
+      <div class="layer-desc">The expert's worldview, principles, voice</div>
+      <div class="layer-tag">Per agent</div>
+    </div>
+    <div class="stack-layer layer-agent">
+      <div class="layer-num">7</div>
+      <div class="layer-name">Frameworks</div>
+      <div class="layer-desc">Named reasoning tools auto-selected per query</div>
+      <div class="layer-tag">AI-selected</div>
+    </div>
+    <div class="stack-layer layer-conv">
+      <div class="layer-num">8</div>
+      <div class="layer-name">Conversation History</div>
+      <div class="layer-desc">What you've discussed, compressed intelligently</div>
+      <div class="layer-tag">Per session</div>
+    </div>
+    <div class="stack-layer layer-conv">
+      <div class="layer-num">9</div>
+      <div class="layer-name">Current Message</div>
+      <div class="layer-desc">What you're asking right now</div>
+      <div class="layer-tag">Real-time</div>
+    </div>
+  </div>
+
+  <div class="stack-callout">
+    <div class="stack-callout-icon">&#x1f4a1;</div>
+    <div class="stack-callout-text">
+      <strong>Tim's connection:</strong> This is how a "Nate B. Jones Advisor Agent" would actually work. Nate's thinking becomes layers 6 + 7 (identity + frameworks). The company's specific context lives in layers 2 + 5. Every query gets all of it — no cold start, no re-explaining.
+    </div>
+  </div>
+</div>
+
+<!-- ── VISUAL 2: Definition vs Instance ── -->
+<div class="visual-section">
+  <div class="section-label">Visual 2</div>
+  <div class="section-title">One blueprint, many users — the template model</div>
+  <div class="section-subtitle">An agent's core expertise (Definition) is created once and shared. Each user gets their own personalized Instance with private memory and overrides.</div>
+
+  <div class="split-diagram">
+    <div class="split-card def-card">
+      <h3>Agent Definition</h3>
+      <div class="card-meta">The shared blueprint &mdash; created once</div>
+      <div class="card-items">
+        <div class="card-item">
+          <div class="card-item-icon">&#x1f9e0;</div>
+          <span>System Prompt (identity + voice)</span>
+        </div>
+        <div class="card-item">
+          <div class="card-item-icon">&#x1f4da;</div>
+          <span>Knowledge Base (corpus)</span>
+        </div>
+        <div class="card-item">
+          <div class="card-item-icon">&#x2699;</div>
+          <span>Frameworks (reasoning tools)</span>
+        </div>
+        <div class="card-item">
+          <div class="card-item-icon">&#x1f310;</div>
+          <span>Visibility (private / public)</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="split-arrow">
+      <div class="arrow-line"></div>
+      <div class="arrow-label">spawns</div>
+      <div class="arrow-line"></div>
+    </div>
+
+    <div class="split-card inst-card">
+      <h3>Agent Instance</h3>
+      <div class="card-meta">Per user &mdash; personalized automatically</div>
+      <div class="card-items">
+        <div class="card-item">
+          <div class="card-item-icon">&#x1f4dd;</div>
+          <span>Active Memory (private to this user)</span>
+        </div>
+        <div class="card-item">
+          <div class="card-item-icon">&#x1f527;</div>
+          <span>Framework Overrides</span>
+        </div>
+      </div>
+
+      <div class="instance-rows">
+        <div class="instance-row">
+          <div class="instance-avatar avatar-1">NJ</div>
+          <span>Nate's instance &mdash; pump industry context</span>
+        </div>
+        <div class="instance-row">
+          <div class="instance-avatar avatar-2">TK</div>
+          <span>Tim's instance &mdash; marketing context</span>
+        </div>
+        <div class="instance-row">
+          <div class="instance-avatar avatar-3">SM</div>
+          <span>Sarah's instance &mdash; ops context</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="marketplace-callout">
+    <p><strong>Tim's connection:</strong> This is the architecture behind "sell templates" and "2-sided marketplace." A Definition is the template. An Instance is what each buyer gets — personalized to their context without changing the original. "Open Brain for HR" = one Definition, thousands of Instances.</p>
+  </div>
+</div>
+
+<!-- ── VISUAL 3: Corpus-to-Agent Pipeline ── -->
+<div class="visual-section">
+  <div class="section-label">Visual 3</div>
+  <div class="section-title">Upload thinking, get a working agent</div>
+  <div class="section-subtitle">The pipeline that turns raw expertise (books, articles, transcripts) into a context-grounded AI persona — removing the technical setup barrier.</div>
+
+  <div class="pipeline">
+    <div class="pipeline-step step-1">
+      <div class="step-num">Step 1</div>
+      <div class="step-icon">&#x1f4c4;</div>
+      <div class="step-title">Upload Corpus</div>
+      <div class="step-desc">Drop in the expert's raw materials — books, blog posts, transcripts, frameworks, notes.</div>
+      <div class="step-output">&#x2192; Raw documents indexed</div>
+      <div class="pipeline-arrow">&#x25b6;</div>
+    </div>
+
+    <div class="pipeline-step step-2">
+      <div class="step-num">Step 2</div>
+      <div class="step-icon">&#x2728;</div>
+      <div class="step-title">AI Extracts Identity</div>
+      <div class="step-desc">AI reads the corpus and generates the agent's name, voice, principles, and system prompt.</div>
+      <div class="step-output">&#x2192; System prompt drafted</div>
+      <div class="pipeline-arrow">&#x25b6;</div>
+    </div>
+
+    <div class="pipeline-step step-3">
+      <div class="step-num">Step 3</div>
+      <div class="step-icon">&#x1f9e9;</div>
+      <div class="step-title">Frameworks Extracted</div>
+      <div class="step-desc">Named reasoning tools are pulled from the corpus — decision models, mental models, evaluation criteria.</div>
+      <div class="step-output">&#x2192; Reasoning toolkit built</div>
+      <div class="pipeline-arrow">&#x25b6;</div>
+    </div>
+
+    <div class="pipeline-step step-4">
+      <div class="step-num">Step 4</div>
+      <div class="step-icon">&#x1f916;</div>
+      <div class="step-title">Agent Ready</div>
+      <div class="step-desc">A working AI persona that thinks like the expert — accessible in Kinetic or via MCP in any AI client.</div>
+      <div class="step-output">&#x2192; Live agent, usable anywhere</div>
+    </div>
+  </div>
+
+  <div class="pipeline-callout">
+    <div class="stack-callout-icon">&#x1f4a1;</div>
+    <p><strong>Tim's connection:</strong> This is exactly the "wrapper for open brains" — Kinetic removes the technical gap. No one configures vector databases or writes system prompts. They upload the thinking, review what the AI generates, and they have a working agent. The "consulting to make output useful" is the frameworks layer — named reasoning tools that fire automatically based on the question.</p>
+  </div>
+</div>
+
+</body>
+</html>

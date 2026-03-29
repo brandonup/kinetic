@@ -1,0 +1,69 @@
+{
+  "$schema": "sprint-snapshot-v1",
+  "sprint": {
+    "number": 4,
+    "name": "Agents + Framework Selection Pipeline",
+    "startDate": "2026-03-22",
+    "endDate": "2026-03-23"
+  },
+  "velocity": {
+    "planned": 11,
+    "completed": 10,
+    "carryover": 1,
+    "totalPoints": 28,
+    "completedPoints": 26
+  },
+  "estimates": {
+    "coveragePercent": 64,
+    "byAgent": {
+      "dinesh":   { "total": 4, "estimated": 3, "coveragePercent": 75 },
+      "bighead":  { "total": 3, "estimated": 2, "coveragePercent": 67 },
+      "jian":     { "total": 2, "estimated": 1, "coveragePercent": 50 },
+      "gilfoyle": { "total": 2, "estimated": 0, "coveragePercent": 0 },
+      "jared":    { "total": 2, "estimated": 0, "coveragePercent": 0 }
+    }
+  },
+  "cycleTime": {
+    "averageDays": 1.4,
+    "medianDays": 1.2,
+    "p90Days": 2.6,
+    "byAgent": {
+      "dinesh":  { "averageDays": 1.3, "ticketCount": 4 },
+      "bighead": { "averageDays": 1.7, "ticketCount": 3 }
+    }
+  },
+  "reviews": {
+    "totalReviews": 11,
+    "rejections": 3,
+    "rejectionRate": 27.3,
+    "byAgent": {
+      "dinesh":  { "reviews": 6, "rejections": 2, "rejectionRate": 33, "maxRounds": 2 },
+      "bighead": { "reviews": 5, "rejections": 1, "rejectionRate": 20, "maxRounds": 2 }
+    }
+  },
+  "defects": {
+    "total": 22,
+    "byCategory": {
+      "acl-leak":        3,
+      "error-swallow":   5,
+      "api-contract":    4,
+      "spec-gap":        4,
+      "schema-mismatch": 2,
+      "rls-bypass":      1,
+      "async-supabase":  1,
+      "test-missing":    1,
+      "other":           1
+    },
+    "bySeverity": { "critical": 8, "important": 13, "minor": 1 },
+    "defectsPerTicket": 2.2
+  },
+  "agentActivity": {
+    "dinesh":  { "completed": 4, "wipPeak": 2 },
+    "bighead": { "completed": 3, "wipPeak": 1 }
+  },
+  "processHealth": {
+    "decisionTicketLagHours": 1.5,
+    "handoffCompliancePercent": 88
+  },
+  "notes": "Delivered AgentDefinition/AgentInstance CRUD, auto-create on first invocation, agent invocation UI, framework selection pipeline (4-step: embed → expertise boost → Haiku reranker → inject), context stack Layers 5–7 + 9. 1 carryover: KIN-321 (MCP server core) blocked on KIN-317 ADR. Defect density increased — framework pipeline logic is the most complex Big Head work to date. ACL-leak pattern emerging on agent path params."
+}

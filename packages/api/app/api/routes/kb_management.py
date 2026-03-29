@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 
 from app.auth.deps import CurrentUser, get_current_user
+from app.core.config import settings
 from app.db.supabase_client import get_supabase
 
 logger = logging.getLogger(__name__)
@@ -82,6 +83,11 @@ class DocumentListItem(BaseModel):
     tags: list[str] = []
     file_size_bytes: int | None = None
     created_at: str
+
+
+class DeleteAllDocumentsResponse(BaseModel):
+    knowledge_base_id: str
+    deleted_count: int
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +174,94 @@ async def list_documents(
     documents = result.data or []
 
     return {"documents": documents}
+
+
+@router.delete(
+    "/api/v1/knowledge-bases/{kb_id}/documents",
+    response_model=DeleteAllDocumentsResponse,
+)
+async def delete_all_documents(
+    kb_id: UUID,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> DeleteAllDocumentsResponse:
+    """
+    Hard-delete all documents in a KB.
+
+    Chunks are removed automatically via ON DELETE CASCADE.
+    Storage files are cleaned eagerly (non-fatal).
+    Rejects if any document is actively ingesting (409).
+    """
+    from app.core.constants import ACTIVE_INGESTION_STATUSES
+
+    client = get_supabase()
+    loop = asyncio.get_running_loop()
+    await _verify_kb_ownership(client, str(kb_id), current_user.user_id)
+
+    # Fetch all non-deleted documents
+    docs_result = await loop.run_in_executor(
+        None,
+        lambda: client.table("knowledge_base_documents")
+        .select("id, status, storage_uri")
+        .eq("knowledge_base_id", str(kb_id))
+        .is_("deleted_at", "null")
+        .execute(),
+    )
+    documents = docs_result.data or []
+
+    if not documents:
+        return DeleteAllDocumentsResponse(
+            knowledge_base_id=str(kb_id), deleted_count=0
+        )
+
+    # Guard: reject if any document is actively ingesting
+    active_docs = [d for d in documents if d["status"] in ACTIVE_INGESTION_STATUSES]
+    if active_docs:
+        active_ids = [d["id"] for d in active_docs]
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete all: {len(active_ids)} document(s) are still processing ({', '.join(active_ids[:5])}). Wait for them to complete or fail.",
+        )
+
+    # Collect storage paths before soft-delete
+    storage_paths: list[str] = []
+    for d in documents:
+        doc_id = d["id"]
+        if d.get("storage_uri"):
+            storage_paths.append(d["storage_uri"])
+        storage_paths.append(f"{doc_id}/extracted.txt")
+
+    # Hard-delete all documents — scope matches pre-flight fetch (same deleted_at filter)
+    # Chunks removed automatically via ON DELETE CASCADE
+    delete_result = await loop.run_in_executor(
+        None,
+        lambda: client.table("knowledge_base_documents")
+        .delete()
+        .eq("knowledge_base_id", str(kb_id))
+        .is_("deleted_at", "null")
+        .execute(),
+    )
+    deleted_count = len(delete_result.data) if delete_result.data else 0
+
+    if deleted_count == 0:
+        logger.error("delete_all_documents: no rows deleted for KB %s — possible race condition", kb_id)
+        raise HTTPException(
+            status_code=500,
+            detail="Unexpected state: documents were not found at delete time (possible race condition).",
+        )
+
+    # Eager storage cleanup (non-fatal) — will be handled by cleanup job once it exists
+    for path in storage_paths:
+        try:
+            await loop.run_in_executor(
+                None,
+                lambda p=path: client.storage.from_(settings.SUPABASE_STORAGE_BUCKET).remove([p]),
+            )
+        except Exception as exc:
+            logger.warning("Storage cleanup failed for %s (non-fatal): %s", path, exc)
+
+    return DeleteAllDocumentsResponse(
+        knowledge_base_id=str(kb_id), deleted_count=deleted_count
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -303,19 +397,53 @@ async def delete_folder(
         if not target_check.data:
             raise HTTPException(status_code=400, detail="Target folder not found in this knowledge base.")
 
-    # Reassign documents before deleting folder (C2 — check result, don't swallow)
-    reassign_res = await loop.run_in_executor(
-        None,
-        lambda: client.table("knowledge_base_documents")
-        .update({"folder_id": new_folder_id})
-        .eq("folder_id", str(folder_id))
-        .execute(),
-    )
-    # Supabase UPDATE returns data=[] if no matching rows — acceptable (folder may be empty).
-    # An actual error would raise an exception from the client, not return silently.
-    if reassign_res.data is None:
-        logger.error("delete_folder: document reassignment returned None for folder %s", folder_id)
-        raise HTTPException(status_code=500, detail="Failed to reassign documents.")
+    if new_folder_id:
+        # Reassign documents to target folder before deleting this folder
+        reassign_res = await loop.run_in_executor(
+            None,
+            lambda: client.table("knowledge_base_documents")
+            .update({"folder_id": new_folder_id})
+            .eq("folder_id", str(folder_id))
+            .execute(),
+        )
+        # Supabase UPDATE returns data=[] if no matching rows — acceptable (folder may be empty).
+        # An actual error would raise an exception from the client, not return silently.
+        if reassign_res.data is None:
+            logger.error("delete_folder: document reassignment returned None for folder %s", folder_id)
+            raise HTTPException(status_code=500, detail="Failed to reassign documents.")
+    else:
+        # No target folder — fetch docs to guard against active ingestion, then hard-delete
+        from app.core.constants import ACTIVE_INGESTION_STATUSES
+
+        folder_docs_result = await loop.run_in_executor(
+            None,
+            lambda: client.table("knowledge_base_documents")
+            .select("id, status")
+            .eq("folder_id", str(folder_id))
+            .is_("deleted_at", "null")
+            .execute(),
+        )
+        folder_docs = folder_docs_result.data or []
+
+        active_docs = [d for d in folder_docs if d["status"] in ACTIVE_INGESTION_STATUSES]
+        if active_docs:
+            active_ids = [d["id"] for d in active_docs]
+            raise HTTPException(
+                status_code=409,
+                detail=f"Cannot delete folder: {len(active_ids)} document(s) are still processing ({', '.join(active_ids[:5])}). Wait for them to complete or fail.",
+            )
+
+        # Hard-delete — chunks cascade via ON DELETE CASCADE
+        delete_docs_res = await loop.run_in_executor(
+            None,
+            lambda: client.table("knowledge_base_documents")
+            .delete()
+            .eq("folder_id", str(folder_id))
+            .execute(),
+        )
+        if delete_docs_res.data is None:
+            logger.error("delete_folder: document deletion returned None for folder %s", folder_id)
+            raise HTTPException(status_code=500, detail="Failed to delete documents.")
 
     # Delete the folder
     await loop.run_in_executor(

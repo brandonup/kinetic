@@ -2,7 +2,7 @@
 Embedding service with batching, retries, and rate limit handling.
 
 Ported from FounderPanel services/ingestion/embedding_service.py with Kinetic changes:
-- Uses settings.PLATFORM_OPENAI_KEY (not OPENAI_API_KEY — that is a BYOK user key)
+- Uses user BYOK OpenAI key passed via api_key param (no platform key)
 - Model sourced from settings.EMBEDDING_MODEL (default: text-embedding-3-large, 3072 dims)
 - Batch size, retry params pulled from settings
 """
@@ -23,15 +23,22 @@ logger = logging.getLogger(__name__)
 class EmbeddingService:
     """Create embeddings with batching and per-batch retries."""
 
+    # Per-request timeout in seconds. Generous to allow large batches,
+    # but prevents indefinite hangs that block the entire pipeline.
+    DEFAULT_REQUEST_TIMEOUT: int = 120
+
     def __init__(
         self,
+        api_key: Optional[str] = None,
         model: Optional[str] = None,
         batch_size: Optional[int] = None,
         max_retries: Optional[int] = None,
         min_wait: Optional[int] = None,
         max_wait: Optional[int] = None,
         sleep_between_batches: Optional[float] = None,
+        request_timeout: Optional[int] = None,
     ) -> None:
+        self._api_key = api_key
         self.model = model or settings.EMBEDDING_MODEL
         self.batch_size = batch_size or settings.EMBEDDING_BATCH_SIZE
         self.max_retries = max_retries or settings.EMBEDDING_MAX_RETRIES
@@ -42,6 +49,7 @@ class EmbeddingService:
             if sleep_between_batches is not None
             else settings.EMBEDDING_SLEEP_BETWEEN_BATCHES
         )
+        self.request_timeout = request_timeout or self.DEFAULT_REQUEST_TIMEOUT
         # Lazy-init: created on first embed call so __init__ never makes network calls
         self._client = None
         self._openai_module = None
@@ -63,7 +71,7 @@ class EmbeddingService:
             List of embedding vectors matching len(texts).
 
         Raises:
-            RuntimeError: If PLATFORM_OPENAI_KEY is not configured.
+            RuntimeError: If no OpenAI API key was provided.
             openai.RateLimitError et al.: Re-raised after max_retries exhausted.
         """
         if not texts:
@@ -92,11 +100,15 @@ class EmbeddingService:
         if self._client is None:
             import openai  # type: ignore[import]
 
-            if not settings.PLATFORM_OPENAI_KEY:
+            if not self._api_key:
                 raise RuntimeError(
-                    "PLATFORM_OPENAI_KEY not configured — required for document embedding."
+                    "No OpenAI API key provided for embedding. "
+                    "Add your OpenAI key in Settings."
                 )
-            self._client = openai.OpenAI(api_key=settings.PLATFORM_OPENAI_KEY)
+            self._client = openai.OpenAI(
+                api_key=self._api_key,
+                timeout=self.request_timeout,
+            )
             self._openai_module = openai
         return self._client, self._openai_module
 

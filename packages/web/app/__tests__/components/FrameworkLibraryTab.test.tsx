@@ -11,7 +11,7 @@
  * for interactions. No real HTTP calls.
  */
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
@@ -62,10 +62,20 @@ function makeFramework(overrides: Partial<{
     example_application: null,
     related_frameworks: [],
     source_posts: null,
+    type: null,
+    do_not_use_when: [],
     created_at: "2026-03-23T10:00:00.000Z",
     updated_at: "2026-03-23T10:00:00.000Z",
     ...overrides,
   };
+}
+
+function mockFetchInstance(overrides: { pinned: string[]; excluded: string[] } = { pinned: [], excluded: [] }) {
+  return Promise.resolve({
+    ok: true,
+    status: 200,
+    json: () => Promise.resolve({ framework_overrides: overrides }),
+  });
 }
 
 function mockFetchFrameworks(frameworks: ReturnType<typeof makeFramework>[]) {
@@ -115,12 +125,32 @@ function mockFetchUploadSummary(summary: {
 
 /**
  * Simulate a file upload on the hidden file input.
- * userEvent.upload skips display:none elements; fireEvent.change bypasses that check.
+ *
+ * userEvent.upload and fireEvent.change both fail for display:none inputs: user-event's
+ * pointer mechanics use elementFromPoint(0,0) which returns a different visible element,
+ * and jsdom's Object.defineProperties getter on fileInput.files is unreliable in React's
+ * synthetic event layer. The reliable workaround is to invoke the React onChange prop
+ * directly via __reactProps (React 17+ stores current props on DOM nodes under that key).
+ * This bypasses DOM simulation entirely and calls handleUpload with a mock event where
+ * e.target.files[0] is our file.
  */
 function uploadFile(file: File) {
   const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-  Object.defineProperty(fileInput, "files", { value: [file], configurable: true });
-  fireEvent.change(fileInput);
+
+  // React 17+ stores the current props on the DOM node under __reactProps$<hash>
+  const propsKey = Object.keys(fileInput).find((k) => k.startsWith('__reactProps'));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const onChange: ((e: unknown) => void) | undefined = propsKey ? (fileInput as any)[propsKey]?.onChange : undefined;
+  if (!onChange) throw new Error('uploadFile: React onChange not found on file input — is the input mounted?');
+
+  const fakeFileList = {
+    0: file,
+    length: 1,
+    item: (i: number) => (i === 0 ? file : null),
+    [Symbol.iterator]: function* () { yield file; },
+  };
+
+  onChange({ target: { files: fakeFileList } });
 }
 
 // ---------------------------------------------------------------------------
@@ -154,11 +184,10 @@ describe("FrameworkLibraryTab — KIN-319", () => {
       expect(screen.getByRole("button", { name: /Add manually/i })).toBeInTheDocument();
     });
 
-    it("renders framework rows with name, category, confidence, trigger count, and origin", async () => {
+    it("renders framework rows with name, category, trigger count, and origin", async () => {
       const fw = makeFramework({
         name: "First Principles Thinking",
         category: "reasoning",
-        confidence: "high",
         when_to_apply: ["trigger A", "trigger B"],
         origin: "extracted",
       });
@@ -171,7 +200,6 @@ describe("FrameworkLibraryTab — KIN-319", () => {
       });
       // "reasoning" appears twice: category filter button + table cell badge
       expect(screen.getAllByText("reasoning").length).toBeGreaterThan(0);
-      expect(screen.getByText("high")).toBeInTheDocument();
       // trigger count = when_to_apply.length = 2
       expect(screen.getByText("2")).toBeInTheDocument();
       expect(screen.getByText("extracted")).toBeInTheDocument();
@@ -297,9 +325,11 @@ describe("FrameworkLibraryTab — KIN-319", () => {
     it("Confirm calls DELETE endpoint and removes row from table", async () => {
       const fw = makeFramework({ id: "fw-del", name: "To Delete" });
 
-      mockApiFetch
-        .mockImplementationOnce(() => mockFetchFrameworks([fw]))
-        .mockImplementationOnce(() => mockFetch204());
+      mockApiFetch.mockImplementation((url: string, opts?: RequestInit) => {
+        if (opts?.method === "DELETE") return mockFetch204();
+        if (url.includes("/instance")) return mockFetchInstance();
+        return mockFetchFrameworks([fw]);
+      });
 
       render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
 
@@ -352,11 +382,13 @@ describe("FrameworkLibraryTab — KIN-320 (edit, add, upload)", () => {
       const fw = makeFramework({
         name: "First Principles Thinking",
         category: "reasoning",
-        confidence: "medium",
         when_to_apply: ["when facing a novel problem"],
         example_application: "Use when reframing difficult decisions",
       });
-      mockApiFetch.mockImplementation(() => mockFetchFrameworks([fw]));
+      mockApiFetch.mockImplementation((url: string) => {
+        if (url.includes("/instance")) return mockFetchInstance();
+        return mockFetchFrameworks([fw]);
+      });
 
       render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
 
@@ -367,23 +399,21 @@ describe("FrameworkLibraryTab — KIN-320 (edit, add, upload)", () => {
       expect(screen.getByRole("heading", { name: /Edit "First Principles Thinking"/i })).toBeInTheDocument();
       // Name input populated
       expect(screen.getByDisplayValue("First Principles Thinking")).toBeInTheDocument();
-      // Trigger phrase input populated
+      // When to apply input populated
       expect(screen.getByDisplayValue("when facing a novel problem")).toBeInTheDocument();
       // Category input populated
       expect(screen.getByDisplayValue("reasoning")).toBeInTheDocument();
-      // Example application populated
-      expect(screen.getByDisplayValue("Use when reframing difficult decisions")).toBeInTheDocument();
-      // Confidence select shows "medium"
-      expect(screen.getByRole("combobox")).toHaveValue("medium");
     });
 
     it("save with changed name calls PATCH /frameworks/:id with updated name", async () => {
       const fw = makeFramework({ id: "fw-edit", name: "Original Name" });
       const updated = { ...fw, name: "Updated Name" };
 
-      mockApiFetch
-        .mockImplementationOnce(() => mockFetchFrameworks([fw]))
-        .mockImplementationOnce(() => mockFetchFramework(updated));
+      mockApiFetch.mockImplementation((url: string, opts?: RequestInit) => {
+        if (opts?.method === "PATCH" && url.includes("fw-edit")) return mockFetchFramework(updated);
+        if (url.includes("/instance")) return mockFetchInstance();
+        return mockFetchFrameworks([fw]);
+      });
 
       render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
 
@@ -415,9 +445,11 @@ describe("FrameworkLibraryTab — KIN-320 (edit, add, upload)", () => {
       });
       const updated = { ...fw, when_to_apply: ["modified trigger"] };
 
-      mockApiFetch
-        .mockImplementationOnce(() => mockFetchFrameworks([fw]))
-        .mockImplementationOnce(() => mockFetchFramework(updated));
+      mockApiFetch.mockImplementation((url: string, opts?: RequestInit) => {
+        if (opts?.method === "PATCH" && url.includes("fw-trigger")) return mockFetchFramework(updated);
+        if (url.includes("/instance")) return mockFetchInstance();
+        return mockFetchFrameworks([fw]);
+      });
 
       render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
 
@@ -444,36 +476,6 @@ describe("FrameworkLibraryTab — KIN-320 (edit, add, upload)", () => {
         expect(patchCall).toBeDefined();
         const body = JSON.parse(patchCall![1].body as string);
         expect(body.when_to_apply).toEqual(["modified trigger"]);
-      });
-    });
-
-    it("confidence select reflects current value and sends PATCH when changed", async () => {
-      const fw = makeFramework({ id: "fw-conf", confidence: "medium" });
-      const updated = { ...fw, confidence: "high" as const };
-
-      mockApiFetch
-        .mockImplementationOnce(() => mockFetchFrameworks([fw]))
-        .mockImplementationOnce(() => mockFetchFramework(updated));
-
-      render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
-
-      await waitFor(() => screen.getByText("First Principles Thinking"));
-      await userEvent.click(screen.getByRole("button", { name: /^Edit$/i }));
-
-      const select = screen.getByRole("combobox");
-      expect(select).toHaveValue("medium");
-
-      await userEvent.selectOptions(select, "high");
-      await userEvent.click(screen.getByRole("button", { name: /^Save changes$/i }));
-
-      await waitFor(() => {
-        const patchCall = mockApiFetch.mock.calls.find(
-          ([url, opts]: [string, RequestInit]) =>
-            url.includes("fw-conf") && opts?.method === "PATCH"
-        );
-        expect(patchCall).toBeDefined();
-        const body = JSON.parse(patchCall![1].body as string);
-        expect(body.confidence).toBe("high");
       });
     });
 
@@ -543,9 +545,11 @@ describe("FrameworkLibraryTab — KIN-320 (edit, add, upload)", () => {
     it("successful create appends new framework row to table", async () => {
       const newFw = makeFramework({ id: "fw-new", name: "New Framework" });
 
-      mockApiFetch
-        .mockImplementationOnce(() => mockFetchFrameworks([]))
-        .mockImplementationOnce(() => mockFetchFramework(newFw));
+      mockApiFetch.mockImplementation((url: string, opts?: RequestInit) => {
+        if (opts?.method === "POST" && url.includes("/frameworks")) return mockFetchFramework(newFw);
+        if (url.includes("/instance")) return mockFetchInstance();
+        return mockFetchFrameworks([]);
+      });
 
       render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
 
@@ -603,10 +607,11 @@ describe("FrameworkLibraryTab — KIN-320 (edit, add, upload)", () => {
     it("valid JSON upload shows summary modal with correct counts", async () => {
       const summary = { added: 3, updated: 2, retained: 5, failed: [] };
 
-      mockApiFetch
-        .mockImplementationOnce(() => mockFetchFrameworks([]))
-        .mockImplementationOnce(() => mockFetchUploadSummary(summary))
-        .mockImplementation(() => mockFetchFrameworks([])); // re-fetch
+      // Route by method+URL so call ordering doesn't matter (handles StrictMode double-mount)
+      mockApiFetch.mockImplementation((url: string, opts?: RequestInit) => {
+        if (opts?.method === "POST" && url.includes("upload")) return mockFetchUploadSummary(summary);
+        return mockFetchFrameworks([]);
+      });
 
       render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
 
@@ -636,10 +641,10 @@ describe("FrameworkLibraryTab — KIN-320 (edit, add, upload)", () => {
         failed: [{ framework_id: "fw-xyz", error: "when_to_apply is required" }],
       };
 
-      mockApiFetch
-        .mockImplementationOnce(() => mockFetchFrameworks([]))
-        .mockImplementationOnce(() => mockFetchUploadSummary(summary))
-        .mockImplementation(() => mockFetchFrameworks([]));
+      mockApiFetch.mockImplementation((url: string, opts?: RequestInit) => {
+        if (opts?.method === "POST" && url.includes("upload")) return mockFetchUploadSummary(summary);
+        return mockFetchFrameworks([]);
+      });
 
       render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
 
@@ -662,11 +667,17 @@ describe("FrameworkLibraryTab — KIN-320 (edit, add, upload)", () => {
     it("'OK' closes modal and refreshes the framework table", async () => {
       const summary = { added: 1, updated: 0, retained: 0, failed: [] };
       const uploaded = makeFramework({ id: "fw-uploaded", name: "Uploaded Framework" });
+      let uploadDone = false;
 
-      mockApiFetch
-        .mockImplementationOnce(() => mockFetchFrameworks([]))
-        .mockImplementationOnce(() => mockFetchUploadSummary(summary))
-        .mockImplementation(() => mockFetchFrameworks([uploaded])); // re-fetch returns new row
+      mockApiFetch.mockImplementation((url: string, opts?: RequestInit) => {
+        if (opts?.method === "POST" && url.includes("upload")) {
+          uploadDone = true;
+          return mockFetchUploadSummary(summary);
+        }
+        // After upload completes, re-fetch returns the new row
+        if (uploadDone) return mockFetchFrameworks([uploaded]);
+        return mockFetchFrameworks([]);
+      });
 
       render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
 
@@ -696,10 +707,10 @@ describe("FrameworkLibraryTab — KIN-320 (edit, add, upload)", () => {
     it("upload modal is informational only — shows OK, no Cancel or Undo", async () => {
       const summary = { added: 2, updated: 0, retained: 0, failed: [] };
 
-      mockApiFetch
-        .mockImplementationOnce(() => mockFetchFrameworks([]))
-        .mockImplementationOnce(() => mockFetchUploadSummary(summary))
-        .mockImplementation(() => mockFetchFrameworks([]));
+      mockApiFetch.mockImplementation((url: string, opts?: RequestInit) => {
+        if (opts?.method === "POST" && url.includes("upload")) return mockFetchUploadSummary(summary);
+        return mockFetchFrameworks([]);
+      });
 
       render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
 
@@ -715,5 +726,255 @@ describe("FrameworkLibraryTab — KIN-320 (edit, add, upload)", () => {
       expect(screen.queryByRole("button", { name: /cancel/i })).not.toBeInTheDocument();
       expect(screen.queryByRole("button", { name: /undo/i })).not.toBeInTheDocument();
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// KIN-372: Pin / exclude toggles
+// ---------------------------------------------------------------------------
+
+describe("FrameworkLibraryTab — KIN-372 (pin/exclude)", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+  });
+
+  it("Pin and Exclude buttons render per framework row for owners", async () => {
+    const fw = makeFramework({ id: "fw-1", name: "First Principles" });
+
+    mockApiFetch.mockImplementation((url: string) => {
+      if (url.includes("/instance")) return mockFetchInstance();
+      return mockFetchFrameworks([fw]);
+    });
+
+    render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
+
+    await waitFor(() => screen.getByText("First Principles"));
+
+    expect(screen.getByRole("button", { name: /^Pin$/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Exclude$/i })).toBeInTheDocument();
+  });
+
+  it("Pin and Exclude buttons do NOT render for non-owners", async () => {
+    const fw = makeFramework({ id: "fw-1", name: "First Principles" });
+
+    mockApiFetch.mockImplementation((url: string) => {
+      if (url.includes("/instance")) return mockFetchInstance();
+      return mockFetchFrameworks([fw]);
+    });
+
+    render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={false} />);
+
+    await waitFor(() => screen.getByText("First Principles"));
+
+    expect(screen.queryByRole("button", { name: /^Pin$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Exclude$/i })).not.toBeInTheDocument();
+  });
+
+  it("pinned framework shows 'Pinned' badge and 'Unpin' button", async () => {
+    const fw = makeFramework({ id: "fw-pinned", name: "Pinned Framework" });
+
+    mockApiFetch.mockImplementation((url: string) => {
+      if (url.includes("/instance")) return mockFetchInstance({ pinned: [fw.framework_id], excluded: [] });
+      return mockFetchFrameworks([fw]);
+    });
+
+    render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
+
+    await waitFor(() => screen.getByText("Pinned Framework"));
+
+    expect(screen.getByText("Pinned")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Unpin$/i })).toBeInTheDocument();
+    // Exclude button still shows (not currently excluded)
+    expect(screen.getByRole("button", { name: /^Exclude$/i })).toBeInTheDocument();
+  });
+
+  it("excluded framework shows 'Excluded' badge, strikethrough name, and 'Include' button", async () => {
+    const fw = makeFramework({ id: "fw-excl", name: "Excluded Framework" });
+
+    mockApiFetch.mockImplementation((url: string) => {
+      if (url.includes("/instance")) return mockFetchInstance({ pinned: [], excluded: [fw.framework_id] });
+      return mockFetchFrameworks([fw]);
+    });
+
+    render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
+
+    await waitFor(() => screen.getByText("Excluded Framework"));
+
+    expect(screen.getByText("Excluded")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Include$/i })).toBeInTheDocument();
+    // Pin button still shows (not currently pinned)
+    expect(screen.getByRole("button", { name: /^Pin$/i })).toBeInTheDocument();
+    // Name has line-through style
+    const nameSpan = screen.getByText("Excluded Framework");
+    expect(nameSpan.className).toContain("line-through");
+  });
+
+  it("clicking Pin calls PATCH with framework_id in pinned array", async () => {
+    const fw = makeFramework({ id: "fw-topin", name: "Pin Me" });
+
+    mockApiFetch.mockImplementation((url: string, opts?: RequestInit) => {
+      if (opts?.method === "PATCH" && url.includes("/instance")) {
+        return mockFetchInstance({ pinned: [fw.framework_id], excluded: [] });
+      }
+      if (url.includes("/instance")) return mockFetchInstance();
+      return mockFetchFrameworks([fw]);
+    });
+
+    render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
+
+    await waitFor(() => screen.getByText("Pin Me"));
+    await userEvent.click(screen.getByRole("button", { name: /^Pin$/i }));
+
+    await waitFor(() => {
+      const patchCall = mockApiFetch.mock.calls.find(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (call: any[]) => call[0]?.includes("/instance") && call[1]?.method === "PATCH"
+      );
+      expect(patchCall).toBeDefined();
+      const body = JSON.parse(patchCall![1].body as string);
+      expect(body.framework_overrides.pinned).toContain(fw.framework_id);
+      expect(body.framework_overrides.excluded).not.toContain(fw.framework_id);
+    });
+  });
+
+  it("clicking Exclude calls PATCH with framework_id in excluded array", async () => {
+    const fw = makeFramework({ id: "fw-toexcl", name: "Exclude Me" });
+
+    mockApiFetch.mockImplementation((url: string, opts?: RequestInit) => {
+      if (opts?.method === "PATCH" && url.includes("/instance")) {
+        return mockFetchInstance({ pinned: [], excluded: [fw.framework_id] });
+      }
+      if (url.includes("/instance")) return mockFetchInstance();
+      return mockFetchFrameworks([fw]);
+    });
+
+    render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
+
+    await waitFor(() => screen.getByText("Exclude Me"));
+    await userEvent.click(screen.getByRole("button", { name: /^Exclude$/i }));
+
+    await waitFor(() => {
+      const patchCall = mockApiFetch.mock.calls.find(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (call: any[]) => call[0]?.includes("/instance") && call[1]?.method === "PATCH"
+      );
+      expect(patchCall).toBeDefined();
+      const body = JSON.parse(patchCall![1].body as string);
+      expect(body.framework_overrides.excluded).toContain(fw.framework_id);
+      expect(body.framework_overrides.pinned).not.toContain(fw.framework_id);
+    });
+  });
+
+  it("mutual exclusion: pinning an excluded framework removes it from excluded", async () => {
+    const fw = makeFramework({ id: "fw-switch", name: "Switch Me" });
+
+    mockApiFetch.mockImplementation((url: string, opts?: RequestInit) => {
+      if (opts?.method === "PATCH" && url.includes("/instance")) {
+        const body = JSON.parse(opts.body as string);
+        return mockFetchInstance(body.framework_overrides);
+      }
+      if (url.includes("/instance")) return mockFetchInstance({ pinned: [], excluded: [fw.framework_id] });
+      return mockFetchFrameworks([fw]);
+    });
+
+    render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
+
+    await waitFor(() => screen.getByText("Switch Me"));
+    // Framework starts excluded — Pin button should be visible
+    expect(screen.getByRole("button", { name: /^Pin$/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /^Pin$/i }));
+
+    await waitFor(() => {
+      const patchCall = mockApiFetch.mock.calls.find(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (call: any[]) => call[0]?.includes("/instance") && call[1]?.method === "PATCH"
+      );
+      expect(patchCall).toBeDefined();
+      const body = JSON.parse(patchCall![1].body as string);
+      expect(body.framework_overrides.pinned).toContain(fw.framework_id);
+      expect(body.framework_overrides.excluded).not.toContain(fw.framework_id);
+    });
+  });
+
+  it("mutual exclusion: excluding a pinned framework removes it from pinned", async () => {
+    const fw = makeFramework({ id: "fw-switch2", name: "Switch Two" });
+
+    mockApiFetch.mockImplementation((url: string, opts?: RequestInit) => {
+      if (opts?.method === "PATCH" && url.includes("/instance")) {
+        const body = JSON.parse(opts.body as string);
+        return mockFetchInstance(body.framework_overrides);
+      }
+      if (url.includes("/instance")) return mockFetchInstance({ pinned: [fw.framework_id], excluded: [] });
+      return mockFetchFrameworks([fw]);
+    });
+
+    render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
+
+    await waitFor(() => screen.getByText("Switch Two"));
+    // Framework starts pinned — Exclude button should be visible
+    expect(screen.getByRole("button", { name: /^Exclude$/i })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: /^Exclude$/i }));
+
+    await waitFor(() => {
+      const patchCall = mockApiFetch.mock.calls.find(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (call: any[]) => call[0]?.includes("/instance") && call[1]?.method === "PATCH"
+      );
+      expect(patchCall).toBeDefined();
+      const body = JSON.parse(patchCall![1].body as string);
+      expect(body.framework_overrides.excluded).toContain(fw.framework_id);
+      expect(body.framework_overrides.pinned).not.toContain(fw.framework_id);
+    });
+  });
+
+  it("Unpin clears framework from pinned array", async () => {
+    const fw = makeFramework({ id: "fw-unpin", name: "Unpin Me" });
+
+    mockApiFetch.mockImplementation((url: string, opts?: RequestInit) => {
+      if (opts?.method === "PATCH" && url.includes("/instance")) {
+        const body = JSON.parse(opts.body as string);
+        return mockFetchInstance(body.framework_overrides);
+      }
+      if (url.includes("/instance")) return mockFetchInstance({ pinned: [fw.framework_id], excluded: [] });
+      return mockFetchFrameworks([fw]);
+    });
+
+    render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
+
+    await waitFor(() => screen.getByText("Unpin Me"));
+    await userEvent.click(screen.getByRole("button", { name: /^Unpin$/i }));
+
+    await waitFor(() => {
+      const patchCall = mockApiFetch.mock.calls.find(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (call: any[]) => call[0]?.includes("/instance") && call[1]?.method === "PATCH"
+      );
+      expect(patchCall).toBeDefined();
+      const body = JSON.parse(patchCall![1].body as string);
+      expect(body.framework_overrides.pinned).not.toContain(fw.framework_id);
+    });
+  });
+
+  it("PATCH failure rolls back optimistic override and shows error toast", async () => {
+    const fw = makeFramework({ id: "fw-fail", name: "Fail Pin" });
+
+    mockApiFetch.mockImplementation((url: string, opts?: RequestInit) => {
+      if (opts?.method === "PATCH" && url.includes("/instance")) return mockFetchError();
+      if (url.includes("/instance")) return mockFetchInstance();
+      return mockFetchFrameworks([fw]);
+    });
+
+    render(<FrameworkLibraryTab agentId={AGENT_ID} isOwner={true} />);
+
+    await waitFor(() => screen.getByText("Fail Pin"));
+    await userEvent.click(screen.getByRole("button", { name: /^Pin$/i }));
+
+    // After error, badge should not persist — button should revert to "Pin"
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /^Pin$/i })).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Pinned")).not.toBeInTheDocument();
   });
 });

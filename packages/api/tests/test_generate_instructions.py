@@ -24,9 +24,9 @@ TEST_KB_ID = str(uuid4())
 OTHER_USER_ID = str(uuid4())
 
 PATCH_SUPABASE = "app.api.routes.agents.get_supabase_client"
-PATCH_LLM = "app.api.routes.agents.call_llm"
-PATCH_DECRYPT = "app.api.routes.agents.decrypt_api_key"
-PATCH_MASTER_KEY = "app.api.routes.agents.load_master_key"
+PATCH_LLM = "app.services.llm_client.call_llm"
+PATCH_DECRYPT = "app.services.encryption.decrypt_api_key"
+PATCH_MASTER_KEY = "app.services.encryption.load_master_key"
 
 ENDPOINT = f"/api/v1/agents/{TEST_AGENT_ID}/generate-instructions"
 
@@ -44,7 +44,6 @@ def _agent_row(owner_id: str = TEST_USER_ID, agent_type: str = "thought_leader")
         "instructions": "Existing instructions",
         "type": agent_type,
         "visibility": "private",
-        "mcp_enabled": False,
         "created_at": "2026-01-01T00:00:00+00:00",
         "updated_at": "2026-01-01T00:00:00+00:00",
     }
@@ -158,7 +157,9 @@ class TestGenerateInstructionsGating:
             })
             resp = client.post(ENDPOINT)
         assert resp.status_code == 400
-        assert "knowledge base" in resp.json()["detail"].lower()
+        body = resp.json()
+        msg = body.get("detail", "") or body.get("error", {}).get("message", "")
+        assert "knowledge base" in msg.lower()
 
     def test_no_docs_returns_400(self, client):
         """Agent has KB but no completed documents → 400."""
@@ -170,7 +171,9 @@ class TestGenerateInstructionsGating:
             })
             resp = client.post(ENDPOINT)
         assert resp.status_code == 400
-        assert "document" in resp.json()["detail"].lower()
+        body = resp.json()
+        msg = body.get("detail", "") or body.get("error", {}).get("message", "")
+        assert "document" in msg.lower()
 
     def test_no_api_key_returns_400(self, client):
         """User has no BYOK key configured → 400."""
@@ -180,7 +183,9 @@ class TestGenerateInstructionsGating:
             )
             resp = client.post(ENDPOINT)
         assert resp.status_code == 400
-        assert "api key" in resp.json()["detail"].lower()
+        body = resp.json()
+        msg = body.get("detail", "") or body.get("error", {}).get("message", "")
+        assert "api key" in msg.lower()
 
 
 class TestGenerateInstructionsSuccess:

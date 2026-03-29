@@ -29,16 +29,39 @@ Uses `raw_client` from conftest.py (no dependency overrides — MCP uses bearer 
 """
 
 import math
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
+
+from app.services.rag.framework_selection import FrameworkMatch
+
+
+# ---------------------------------------------------------------------------
+# Auto-patch: RAG and framework selection return empty/no-match by default.
+# Individual tests override these when testing L7/L8/L9 specifically.
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def _patch_pipeline_services(monkeypatch):
+    """Patch retrieve and select_framework to no-op for all MCP tests."""
+    async def _no_rag(*args, **kwargs):
+        return []
+
+    async def _no_framework(*args, **kwargs):
+        return FrameworkMatch(matched_framework_id=None, matched_framework_name=None, framework_text=None)
+
+    monkeypatch.setattr("app.api.routes.mcp.retrieve", _no_rag)
+    monkeypatch.setattr("app.api.routes.mcp.select_framework", _no_framework)
+
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
 PATCH_TARGET = "app.api.routes.mcp.get_supabase_client"
+PATCH_RETRIEVE = "app.api.routes.mcp.retrieve"
+PATCH_SELECT_FRAMEWORK = "app.api.routes.mcp.select_framework"
 
 MCP_USER_ID = str(uuid4())
 MCP_TOKEN_ID = str(uuid4())
@@ -87,18 +110,21 @@ def _make_db_mock(
     rate_limit_data=None,
 ):
     """
-    Build a Supabase mock that routes .table(name) calls to per-entity responses.
+    Build a Supabase mock that routes .table(name) and .rpc(name) calls to
+    per-entity responses.
 
     Chain patterns:
       mcp_tokens lookup:    .select().eq().is_().single().execute()
-      mcp_rate_limits:      .select().eq().eq().execute()  (user_id + date)
       projects:             .select().eq(id).eq(user_id).single().execute()
       companies (one-eq):   .select().eq(id).single().execute()  (via project's company_id)
       companies (two-eq):   .select().eq(id).eq(user_id).single().execute()  (explicit company_id)
       users/agents:         .select().eq().single().execute()
+      rate limit RPC:       .rpc("mcp_check_and_increment_rate_limit", ...).execute()
+                            → [{"allowed": bool, "request_count": int, "daily_cap": int}]
     """
     if rate_limit_data is None:
-        rate_limit_data = []  # empty = no row today = first request, proceed
+        # Default: first request today — allowed
+        rate_limit_data = [{"allowed": True, "request_count": 1, "daily_cap": 1000}]
 
     mock = MagicMock()
 
@@ -111,13 +137,6 @@ def _make_db_mock(
             )
             # last_used_at update (fire-and-forget): .update().eq().execute()
             chain.update.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
-        elif table_name == "mcp_rate_limits":
-            # Rate limit check: .select().eq().eq().execute()
-            chain.select.return_value.eq.return_value.eq.return_value.execute.return_value = MagicMock(
-                data=rate_limit_data
-            )
-            # Rate limit upsert: .upsert().execute()
-            chain.upsert.return_value.execute.return_value = MagicMock(data=[])
         elif table_name == "users":
             chain.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
                 data=user_data
@@ -142,7 +161,14 @@ def _make_db_mock(
             )
         return chain
 
+    def _rpc_side_effect(fn_name, params=None):
+        chain = MagicMock()
+        if fn_name == "mcp_check_and_increment_rate_limit":
+            chain.execute.return_value = MagicMock(data=rate_limit_data)
+        return chain
+
     mock.table.side_effect = _table_side_effect
+    mock.rpc.side_effect = _rpc_side_effect
     return mock
 
 
@@ -647,7 +673,8 @@ class TestMCPContextAssembly:
 
 class TestMCPRateLimit:
     def test_rate_limit_exceeded_returns_429(self, raw_client):
-        at_cap = [{"request_count": 1000, "daily_cap": 1000}]
+        """RPC returns allowed=False → cap exceeded, should 429."""
+        at_cap = [{"allowed": False, "request_count": 1001, "daily_cap": 1000}]
         mock_db = _make_db_mock(rate_limit_data=at_cap)
         with patch(PATCH_TARGET, return_value=mock_db):
             resp = raw_client.post(
@@ -658,8 +685,8 @@ class TestMCPRateLimit:
         assert resp.status_code == 429
 
     def test_first_request_today_succeeds(self, raw_client):
-        """No rate limit row for today → user's first request, should proceed."""
-        mock_db = _make_db_mock(rate_limit_data=[])
+        """RPC returns allowed=True → first request today, should proceed."""
+        mock_db = _make_db_mock()  # default = allowed, request_count=1
         with patch(PATCH_TARGET, return_value=mock_db):
             resp = raw_client.post(
                 "/api/v1/mcp/context",
@@ -675,8 +702,10 @@ class TestMCPRateLimit:
 
 
 class TestMCPEntityACL:
+    """KIN-324: access control — anti-enumeration: 404 for both not-found and not-authorized."""
+
     def test_project_not_owned_returns_404(self, raw_client):
-        """project_data=None simulates ownership filter returning no row."""
+        """project_data=None simulates ownership filter returning no row → 404."""
         mock_db = _make_db_mock(project_data=None)
         with patch(PATCH_TARGET, return_value=mock_db):
             resp = raw_client.post(
@@ -687,7 +716,7 @@ class TestMCPEntityACL:
         assert resp.status_code == 404
 
     def test_private_agent_not_owned_returns_404(self, raw_client):
-        """Private agent owned by a different user should be invisible."""
+        """Private agent owned by a different user → 404 (anti-enumeration, spec §6.2)."""
         other_owner = str(uuid4())
         private_agent = {**AGENT_ROW, "visibility": "private", "owner_id": other_owner}
         mock_db = _make_db_mock(agent_data=private_agent)
@@ -700,7 +729,7 @@ class TestMCPEntityACL:
         assert resp.status_code == 404
 
     def test_public_agent_not_owned_is_accessible(self, raw_client):
-        """Public agent owned by another user should be accessible to any MCP token holder."""
+        """Public agent owned by another user → 200 (spec §6.2: public = any auth'd user)."""
         other_owner = str(uuid4())
         public_agent = {**AGENT_ROW, "visibility": "public", "owner_id": other_owner}
         mock_db = _make_db_mock(agent_data=public_agent)
@@ -725,7 +754,7 @@ class TestMCPEntityACL:
         assert resp.status_code == 200
 
     def test_company_not_owned_returns_404(self, raw_client):
-        """company_data=None simulates company_id + user_id ownership filter returning no row."""
+        """company_data=None simulates ownership filter returning no row → 404."""
         mock_db = _make_db_mock(company_data=None)
         with patch(PATCH_TARGET, return_value=mock_db):
             resp = raw_client.post(
@@ -734,6 +763,7 @@ class TestMCPEntityACL:
                 headers={"Authorization": VALID_BEARER},
             )
         assert resp.status_code == 404
+
 
 
 # ---------------------------------------------------------------------------
@@ -767,10 +797,9 @@ class TestMCPRevocationExplicit:
 
 
 class TestMCPRateLimitHeaders:
-    @pytest.mark.skip(reason="Implementation gap — KIN-323: Retry-After header not set in RateLimitError response")
     def test_rate_limit_429_includes_retry_after_header(self, raw_client):
-        """KIN-329 requirement: 429 response must include Retry-After header."""
-        at_cap = [{"request_count": 1000, "daily_cap": 1000}]
+        """KIN-323: 429 response must include Retry-After header (seconds until UTC midnight)."""
+        at_cap = [{"allowed": False, "request_count": 1001, "daily_cap": 1000}]
         mock_db = _make_db_mock(rate_limit_data=at_cap)
         with patch(PATCH_TARGET, return_value=mock_db):
             resp = raw_client.post(
@@ -780,11 +809,12 @@ class TestMCPRateLimitHeaders:
             )
         assert resp.status_code == 429
         assert "Retry-After" in resp.headers
+        # Retry-After is seconds — must be a positive integer
+        assert int(resp.headers["Retry-After"]) > 0
 
-    @pytest.mark.skip(reason="Implementation gap — KIN-323: X-RateLimit-Remaining header not set")
     def test_rate_limit_429_includes_x_ratelimit_remaining_zero(self, raw_client):
-        """KIN-329 requirement: 429 response must include X-RateLimit-Remaining: 0."""
-        at_cap = [{"request_count": 1000, "daily_cap": 1000}]
+        """KIN-323: 429 response must include X-RateLimit-Remaining: 0."""
+        at_cap = [{"allowed": False, "request_count": 1001, "daily_cap": 1000}]
         mock_db = _make_db_mock(rate_limit_data=at_cap)
         with patch(PATCH_TARGET, return_value=mock_db):
             resp = raw_client.post(
@@ -795,22 +825,48 @@ class TestMCPRateLimitHeaders:
         assert resp.status_code == 429
         assert resp.headers.get("X-RateLimit-Remaining") == "0"
 
+    def test_rate_limit_429_includes_x_ratelimit_limit(self, raw_client):
+        """KIN-323: 429 response must include X-RateLimit-Limit with the daily cap."""
+        at_cap = [{"allowed": False, "request_count": 1001, "daily_cap": 1000}]
+        mock_db = _make_db_mock(rate_limit_data=at_cap)
+        with patch(PATCH_TARGET, return_value=mock_db):
+            resp = raw_client.post(
+                "/api/v1/mcp/context",
+                json={"query": QUERY, "company_id": COMPANY_ID},
+                headers={"Authorization": VALID_BEARER},
+            )
+        assert resp.status_code == 429
+        assert resp.headers.get("X-RateLimit-Limit") == "1000"
+
+    def test_rate_limit_429_includes_x_ratelimit_reset(self, raw_client):
+        """KIN-323: 429 response must include X-RateLimit-Reset (Unix timestamp)."""
+        at_cap = [{"allowed": False, "request_count": 1001, "daily_cap": 1000}]
+        mock_db = _make_db_mock(rate_limit_data=at_cap)
+        with patch(PATCH_TARGET, return_value=mock_db):
+            resp = raw_client.post(
+                "/api/v1/mcp/context",
+                json={"query": QUERY, "company_id": COMPANY_ID},
+                headers={"Authorization": VALID_BEARER},
+            )
+        assert resp.status_code == 429
+        assert "X-RateLimit-Reset" in resp.headers
+        assert int(resp.headers["X-RateLimit-Reset"]) > 0
+
 
 # ---------------------------------------------------------------------------
-# TestMCPRateLimitAdvanced — pending KIN-323
+# TestMCPRateLimitAdvanced — KIN-323
 # Per-user cap override and UTC midnight counter reset.
 # ---------------------------------------------------------------------------
 
 
 class TestMCPRateLimitAdvanced:
-    @pytest.mark.skip(reason="Pending KIN-323 — users.mcp_daily_limit schema gap: column not in db-schema-spec.md §1")
     def test_per_user_cap_override_respected(self, raw_client):
-        """A user with mcp_daily_limit=500 should 429 on the 501st request.
+        """A user with daily_cap=500 should 429 when RPC returns allowed=False.
 
-        Blocked by: schema gap (users.mcp_daily_limit not in canonical schema).
-        KIN-323 must reconcile users.mcp_daily_limit vs mcp_rate_limits.daily_cap.
+        Per-user cap is stored in mcp_rate_limits.daily_cap (default 1000,
+        admin-configurable per db-schema-spec.md §21).
         """
-        at_custom_cap = [{"request_count": 500, "daily_cap": 500}]
+        at_custom_cap = [{"allowed": False, "request_count": 501, "daily_cap": 500}]
         mock_db = _make_db_mock(rate_limit_data=at_custom_cap)
         with patch(PATCH_TARGET, return_value=mock_db):
             resp = raw_client.post(
@@ -819,12 +875,14 @@ class TestMCPRateLimitAdvanced:
                 headers={"Authorization": VALID_BEARER},
             )
         assert resp.status_code == 429
+        # Verify custom cap reflected in response
+        assert resp.headers.get("X-RateLimit-Limit") == "500"
 
-    @pytest.mark.skip(reason="Pending KIN-323 — UTC midnight reset requires mocking date.today()")
     def test_counter_resets_at_utc_midnight(self, raw_client):
-        """After UTC midnight, a user who was at cap can make requests again."""
-        after_midnight_mock = _make_db_mock(rate_limit_data=[])
-        with patch(PATCH_TARGET, return_value=after_midnight_mock):
+        """After UTC midnight, RPC returns allowed=True for first request of new day."""
+        first_request_new_day = [{"allowed": True, "request_count": 1, "daily_cap": 1000}]
+        mock_db = _make_db_mock(rate_limit_data=first_request_new_day)
+        with patch(PATCH_TARGET, return_value=mock_db):
             resp = raw_client.post(
                 "/api/v1/mcp/context",
                 json={"query": QUERY, "company_id": COMPANY_ID},
@@ -840,9 +898,32 @@ class TestMCPRateLimitAdvanced:
 
 
 class TestMCPContextAssemblyWithRAG:
-    @pytest.mark.skip(reason="Pending KIN-322 — L8 (project KB RAG) not yet implemented")
-    def test_project_scope_assembles_l8(self, raw_client):
-        """project_id only: assembled layers should include L8 (project KB RAG)."""
+    """KIN-322: L7 (framework), L8 (project KB RAG), L9 (agent KB RAG) layer assembly.
+
+    The autouse _patch_pipeline_services fixture patches retrieve → [] and
+    select_framework → no-match by default. Tests override via monkeypatch.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _mock_user_key(self, monkeypatch):
+        """Provide a fake BYOK key so RAG/framework paths execute."""
+        async def _fake_fetch(*args, **kwargs):
+            return "sk-test"
+        monkeypatch.setattr("app.api.routes.mcp.fetch_user_key_async", _fake_fetch)
+
+    def test_project_scope_assembles_l8(self, raw_client, monkeypatch):
+        """project_id + RAG hit: assembled layers should include L8."""
+        fake_chunk = MagicMock(
+            chunk_id="c1", document_id="d1", document_title="Doc One",
+            document_type="pdf", text="RAG chunk content", chunk_index=0,
+            section_path=None, page_range=None, similarity_score=0.85,
+            token_count=10, scope="project_kb",
+        )
+
+        async def _fake_retrieve(*args, **kwargs):
+            return [fake_chunk]
+
+        monkeypatch.setattr("app.api.routes.mcp.retrieve", _fake_retrieve)
         mock_db = _make_db_mock()
         with patch(PATCH_TARGET, return_value=mock_db):
             resp = raw_client.post(
@@ -851,11 +932,24 @@ class TestMCPContextAssemblyWithRAG:
                 headers={"Authorization": VALID_BEARER},
             )
         assert resp.status_code == 200
-        assert "L8" in resp.json()["metadata"]["layers_assembled"]
+        data = resp.json()
+        assert "L8" in data["metadata"]["layers_assembled"]
+        assert len(data["metadata"]["sources"]) == 1
+        assert data["metadata"]["sources"][0]["scope"] == "project_kb"
 
-    @pytest.mark.skip(reason="Pending KIN-322 — L9 (agent KB RAG) not yet implemented")
-    def test_agent_scope_assembles_l9(self, raw_client):
-        """agent_id only: assembled layers should include L9 (agent KB RAG)."""
+    def test_agent_scope_assembles_l9(self, raw_client, monkeypatch):
+        """agent_id + RAG hit: assembled layers should include L9."""
+        fake_chunk = MagicMock(
+            chunk_id="c2", document_id="d2", document_title="Agent Doc",
+            document_type="md", text="Agent RAG content", chunk_index=0,
+            section_path=None, page_range=None, similarity_score=0.78,
+            token_count=8, scope="agent_kb",
+        )
+
+        async def _fake_retrieve(*args, **kwargs):
+            return [fake_chunk]
+
+        monkeypatch.setattr("app.api.routes.mcp.retrieve", _fake_retrieve)
         mock_db = _make_db_mock()
         with patch(PATCH_TARGET, return_value=mock_db):
             resp = raw_client.post(
@@ -864,11 +958,23 @@ class TestMCPContextAssemblyWithRAG:
                 headers={"Authorization": VALID_BEARER},
             )
         assert resp.status_code == 200
-        assert "L9" in resp.json()["metadata"]["layers_assembled"]
+        data = resp.json()
+        assert "L9" in data["metadata"]["layers_assembled"]
+        assert len(data["metadata"]["sources"]) == 1
+        assert data["metadata"]["sources"][0]["scope"] == "agent_kb"
 
-    @pytest.mark.skip(reason="Pending KIN-322 — L7 (framework selection) not yet implemented")
-    def test_agent_scope_assembles_l7_on_framework_match(self, raw_client):
-        """agent_id with a matching framework: L7 included and matched_framework_id set."""
+    def test_agent_scope_assembles_l7_on_framework_match(self, raw_client, monkeypatch):
+        """agent_id + framework match: L7 included and matched_framework_id set."""
+        fw_match = FrameworkMatch(
+            matched_framework_id=str(uuid4()),
+            matched_framework_name="SWOT Analysis",
+            framework_text="Framework: SWOT Analysis\nDescription: Strategic planning tool.",
+        )
+
+        async def _fake_select(*args, **kwargs):
+            return fw_match
+
+        monkeypatch.setattr("app.api.routes.mcp.select_framework", _fake_select)
         mock_db = _make_db_mock()
         with patch(PATCH_TARGET, return_value=mock_db):
             resp = raw_client.post(
@@ -879,11 +985,15 @@ class TestMCPContextAssemblyWithRAG:
         assert resp.status_code == 200
         data = resp.json()
         assert "L7" in data["metadata"]["layers_assembled"]
-        assert data["metadata"].get("matched_framework_id") is not None
+        assert data["metadata"]["matched_framework_id"] == fw_match.matched_framework_id
+        assert data["metadata"]["matched_framework_name"] == "SWOT Analysis"
+        assert "SWOT Analysis" in data["context"]
 
-    @pytest.mark.skip(reason="Pending KIN-322 — framework no-match path not yet implemented")
     def test_agent_scope_omits_l7_on_no_framework_match(self, raw_client):
-        """agent_id with no matching framework: L7 omitted, matched_framework_id null."""
+        """agent_id + no framework match: L7 omitted, matched_framework_id null.
+
+        Uses the default autouse fixture which returns no-match.
+        """
         mock_db = _make_db_mock()
         with patch(PATCH_TARGET, return_value=mock_db):
             resp = raw_client.post(
@@ -894,11 +1004,13 @@ class TestMCPContextAssemblyWithRAG:
         assert resp.status_code == 200
         data = resp.json()
         assert "L7" not in data["metadata"]["layers_assembled"]
-        assert data["metadata"].get("matched_framework_id") is None
+        assert data["metadata"]["matched_framework_id"] is None
 
-    @pytest.mark.skip(reason="Pending KIN-322 — RAG integration not yet implemented")
     def test_rag_miss_returns_empty_sources(self, raw_client):
-        """When all chunks fall below similarity threshold, sources list is empty."""
+        """RAG returns no chunks (all below threshold): sources list is empty.
+
+        Uses the default autouse fixture which returns [].
+        """
         mock_db = _make_db_mock()
         with patch(PATCH_TARGET, return_value=mock_db):
             resp = raw_client.post(
@@ -908,3 +1020,107 @@ class TestMCPContextAssemblyWithRAG:
             )
         assert resp.status_code == 200
         assert resp.json()["metadata"]["sources"] == []
+
+
+# ---------------------------------------------------------------------------
+# TestMCPLastUsedAt — last_used_at update is scheduled on successful auth
+# ---------------------------------------------------------------------------
+
+
+class TestMCPLastUsedAt:
+    """KIN-321: after valid token auth, last_used_at is updated via fire-and-forget."""
+
+    def test_last_used_at_update_is_scheduled_on_successful_auth(self, raw_client):
+        """
+        A successful auth must schedule a last_used_at update on the token row.
+
+        Implementation fires this as run_in_executor (fire-and-forget) — the update
+        does not block the response. We verify by confirming the mcp_tokens table was
+        accessed at least twice: once for the SELECT lookup, once for the UPDATE.
+
+        A short sleep is required because run_in_executor submits to a thread pool;
+        the mock lambda is trivial so 50 ms is far more than needed.
+        """
+        import time
+
+        mock_db = _make_db_mock()
+        with patch(PATCH_TARGET, return_value=mock_db):
+            resp = raw_client.post(
+                "/api/v1/mcp/context",
+                json={"query": QUERY, "company_id": COMPANY_ID},
+                headers={"Authorization": VALID_BEARER},
+            )
+        assert resp.status_code == 200
+
+        # Give the fire-and-forget thread pool task a moment to execute
+        time.sleep(0.05)
+
+        # mcp_tokens accessed once for SELECT (auth lookup) + once for UPDATE (last_used_at)
+        mcp_token_calls = [
+            c for c in mock_db.table.call_args_list
+            if c.args and c.args[0] == "mcp_tokens"
+        ]
+        assert len(mcp_token_calls) >= 2, (
+            f"Expected ≥2 mcp_tokens accesses (SELECT + UPDATE), "
+            f"got {len(mcp_token_calls)}. Fire-and-forget update may not have run."
+        )
+
+    def test_last_used_at_not_updated_on_failed_auth(self, raw_client):
+        """A failed auth (invalid token) must NOT schedule a last_used_at update."""
+        import time
+
+        mock_db = _make_db_mock(token_data=None)
+        with patch(PATCH_TARGET, return_value=mock_db):
+            resp = raw_client.post(
+                "/api/v1/mcp/context",
+                json={"query": QUERY, "company_id": COMPANY_ID},
+                headers={"Authorization": VALID_BEARER},
+            )
+        assert resp.status_code == 401
+
+        time.sleep(0.05)
+
+        # Only the SELECT should have been called; no UPDATE after a failed auth
+        mcp_token_calls = [
+            c for c in mock_db.table.call_args_list
+            if c.args and c.args[0] == "mcp_tokens"
+        ]
+        assert len(mcp_token_calls) == 1, (
+            f"Expected exactly 1 mcp_tokens access (SELECT only) on failed auth, "
+            f"got {len(mcp_token_calls)}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# TestMCPRateLimitFailOpen — RPC error must not block context assembly
+# ---------------------------------------------------------------------------
+
+
+class TestMCPRateLimitFailOpen:
+    """KIN-323: rate limit RPC error must fail open — context assembly proceeds."""
+
+    def test_rate_limit_rpc_error_fails_open(self, raw_client):
+        """
+        If mcp_check_and_increment_rate_limit raises an unexpected exception,
+        the request must proceed (fail-open). A 500 here would block all MCP
+        traffic whenever the rate limit DB is degraded.
+
+        Implementation: the except block in _check_rate_limit logs and returns
+        without raising, so the endpoint continues.
+        """
+        def _rpc_side_effect(fn_name, params=None):
+            if fn_name == "mcp_check_and_increment_rate_limit":
+                raise RuntimeError("DB connection timeout")
+            return MagicMock()
+
+        mock_db = _make_db_mock()
+        mock_db.rpc.side_effect = _rpc_side_effect
+
+        with patch(PATCH_TARGET, return_value=mock_db):
+            resp = raw_client.post(
+                "/api/v1/mcp/context",
+                json={"query": QUERY, "company_id": COMPANY_ID},
+                headers={"Authorization": VALID_BEARER},
+            )
+        # Must succeed (fail-open) — rate limit error should not block the request
+        assert resp.status_code == 200

@@ -1,5 +1,5 @@
 """
-Tests for KIN-263: Project CRUD
+Tests for KIN-263: Project CRUD + KIN-370: Project Knowledge Base
 
 Covers:
   - Create project (TestCreateProject)
@@ -7,9 +7,10 @@ Covers:
   - Get single project (TestGetProject)
   - Update project (TestUpdateProject)
   - Delete project (TestDeleteProject)
+  - Project Knowledge Base GET/POST (TestProjectKnowledgeBase)
 
 All Supabase calls are mocked. Uses client fixture from conftest.py.
-Schema ref: docs/db-schema-spec.md §4 (projects)
+Schema ref: docs/db-schema-spec.md §4 (projects), §10 (knowledge_bases)
 Spec ref: docs/specs/kin-257-projects-conversations-spec.md §Part 1
 """
 
@@ -329,3 +330,120 @@ class TestDeleteProject:
         with patch(PATCH_TARGET, return_value=mock_db):
             response = client.delete(f"/api/v1/projects/{TEST_PROJECT_ID}")
         assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Project Knowledge Base — KIN-370
+# ---------------------------------------------------------------------------
+
+TEST_KB_ID = str(uuid4())
+
+
+def _make_kb_mock_db(project_data, kb_data, insert_data=None):
+    """
+    Build a mock Supabase client that routes table("projects") and table("knowledge_bases")
+    to separate mock chains. Each chain supports .select().eq().eq().single().execute()
+    and .select().eq().execute() patterns.
+    """
+    mock_db = MagicMock()
+
+    project_mock = MagicMock()
+    project_mock.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
+        data=project_data
+    )
+
+    kb_mock = MagicMock()
+    kb_mock.select.return_value.eq.return_value.execute.return_value = MagicMock(
+        data=kb_data
+    )
+    if insert_data is not None:
+        kb_mock.insert.return_value.execute.return_value = MagicMock(data=insert_data)
+
+    def table_router(table_name):
+        if table_name == "projects":
+            return project_mock
+        if table_name == "knowledge_bases":
+            return kb_mock
+        return MagicMock()
+
+    mock_db.table.side_effect = table_router
+    return mock_db
+
+
+class TestProjectKnowledgeBase:
+    """GET /api/v1/projects/{id}/knowledge-base and POST .../knowledge-base"""
+
+    # -- GET: KB found --
+    def test_get_kb_returns_200(self, client):
+        mock_db = _make_kb_mock_db(
+            project_data={"id": TEST_PROJECT_ID},
+            kb_data=[{"id": TEST_KB_ID}],
+        )
+        with patch(PATCH_TARGET, return_value=mock_db):
+            response = client.get(f"/api/v1/projects/{TEST_PROJECT_ID}/knowledge-base")
+        assert response.status_code == 200
+        assert response.json() == {"id": TEST_KB_ID}
+
+    # -- GET: project not found / not owned --
+    def test_get_kb_project_not_found_returns_404(self, client):
+        mock_db = _make_kb_mock_db(
+            project_data=None,
+            kb_data=[],
+        )
+        with patch(PATCH_TARGET, return_value=mock_db):
+            response = client.get(f"/api/v1/projects/{TEST_PROJECT_ID}/knowledge-base")
+        assert response.status_code == 404
+
+    # -- GET: project exists but no KB --
+    def test_get_kb_no_kb_returns_404(self, client):
+        mock_db = _make_kb_mock_db(
+            project_data={"id": TEST_PROJECT_ID},
+            kb_data=[],
+        )
+        with patch(PATCH_TARGET, return_value=mock_db):
+            response = client.get(f"/api/v1/projects/{TEST_PROJECT_ID}/knowledge-base")
+        assert response.status_code == 404
+
+    # -- POST: create new KB --
+    def test_create_kb_returns_201(self, client):
+        mock_db = _make_kb_mock_db(
+            project_data={"id": TEST_PROJECT_ID},
+            kb_data=[],
+            insert_data=[{"id": TEST_KB_ID}],
+        )
+        with patch(PATCH_TARGET, return_value=mock_db):
+            response = client.post(f"/api/v1/projects/{TEST_PROJECT_ID}/knowledge-base")
+        assert response.status_code == 201
+        assert response.json() == {"id": TEST_KB_ID}
+
+    # -- POST: idempotent (existing KB) returns 200 --
+    def test_create_kb_idempotent_returns_200(self, client):
+        mock_db = _make_kb_mock_db(
+            project_data={"id": TEST_PROJECT_ID},
+            kb_data=[{"id": TEST_KB_ID}],
+        )
+        with patch(PATCH_TARGET, return_value=mock_db):
+            response = client.post(f"/api/v1/projects/{TEST_PROJECT_ID}/knowledge-base")
+        assert response.status_code == 200
+        assert response.json() == {"id": TEST_KB_ID}
+
+    # -- POST: project not found --
+    def test_create_kb_project_not_found_returns_404(self, client):
+        mock_db = _make_kb_mock_db(
+            project_data=None,
+            kb_data=[],
+        )
+        with patch(PATCH_TARGET, return_value=mock_db):
+            response = client.post(f"/api/v1/projects/{TEST_PROJECT_ID}/knowledge-base")
+        assert response.status_code == 404
+
+    # -- POST: insert failure --
+    def test_create_kb_insert_failure_returns_400(self, client):
+        mock_db = _make_kb_mock_db(
+            project_data={"id": TEST_PROJECT_ID},
+            kb_data=[],
+            insert_data=[],
+        )
+        with patch(PATCH_TARGET, return_value=mock_db):
+            response = client.post(f"/api/v1/projects/{TEST_PROJECT_ID}/knowledge-base")
+        assert response.status_code == 400

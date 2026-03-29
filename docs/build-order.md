@@ -83,7 +83,7 @@ Before writing any net-new code, Dinesh and Big Head must port these components 
 | Component | Owner | Notes |
 |---|---|---|
 | LLM client abstraction (LiteLLM) | Big Head | Swap Qdrant → pgvector throughout |
-| Auth service (magic link + OAuth) | Dinesh | Adapt user model for Kinetic schema |
+| Auth service (Google OAuth) | Dinesh | Adapt user model for Kinetic schema |
 | Model settings (admin model library) | Dinesh | Add `embedding` + `reranking` categories |
 | RAG pipeline (ingestion + retrieval) | Big Head | Qdrant → pgvector; update chunk schema |
 | Chat service + SSE proxy | Big Head | Adapt for 9-layer context stack |
@@ -115,11 +115,11 @@ Before writing any net-new code, Dinesh and Big Head must port these components 
 |---|---|---|---|---|
 | **Gilfoyle** | Write `docs/db-schema-spec.md` for all MVP entities | Complex | `writing-plans`, `data:sql-queries` | Canonical schema for all agents. No implementation starts without this. Covers: User, Company, Project, Conversation, Message, AgentDefinition, AgentInstance, KnowledgeBase, Document, Chunk, Framework, ActiveMemoryEntry, McpToken |
 | **Gilfoyle** | ADR: Infrastructure choices (Supabase, pgvector, FastAPI, Next.js, LiteLLM, BackgroundTasks) | Standard | `writing-plans` | Locks stack. References FounderPanel precedents. |
-| **Dinesh** | Port: Auth service from FounderPanel (magic link + OAuth) | Standard | `writing-plans` | Adapt User model to Kinetic schema. No password flows. |
+| **Dinesh** | Port: Auth service from FounderPanel (Google OAuth) | Standard | `writing-plans` | Adapt User model to Kinetic schema. No password flows. |
 | **Dinesh** | Port: Frontend scaffold (Next.js App Router, shadcn, admin shell) | Standard | `writing-plans`, `frontend-design`, `design:ux-writing` | App Router only. Remove FounderPanel-specific routes. Apply dark/teak theme per PRD design direction. |
 | **Big Head** | Port: LLM client abstraction (LiteLLM) | Standard | `writing-plans`, `data:sql-queries` | Swap any Qdrant references → pgvector stubs. Verify all 4 providers (Anthropic, OpenAI, Google, Groq) route through it. |
 | **Big Head** | Port: Document ingestion pipeline | Complex | `writing-plans`, `data:sql-queries` | Extract → fixed-size chunk (~500 tokens, ~50 overlap) → embed (`text-embedding-3-large`, platform key) → pgvector index. Auto-retry 3x with backoff. Stage tracking per document. |
-| **Jìan** | Auth test coverage | Standard | `writing-plans`, `data:data-validation` | Registration, magic link flow, OAuth callback, session validation, admin vs user role enforcement |
+| **Jìan** | Auth test coverage | Standard | `writing-plans`, `data:data-validation` | Registration, Google OAuth callback, session validation, admin vs user role enforcement |
 | **Jared** | Projects + Conversations spec | Standard | `product-management:feature-spec`, `anthropic-skills:user-story` | Ship by end of W1 so Sprint 2 can start implementation |
 
 **Dependencies in:** None — this is the root sprint.

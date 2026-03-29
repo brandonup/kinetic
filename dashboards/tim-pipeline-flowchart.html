@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kinetic — Context Infrastructure</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #ffffff;
+    color: #1a1a1a;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 48px 32px;
+  }
+
+  .slide {
+    width: 100%;
+    max-width: 1100px;
+  }
+
+  /* ── Header ── */
+  .slide-header {
+    margin-bottom: 48px;
+  }
+  .slide-header h1 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    color: #111;
+    margin-bottom: 6px;
+    letter-spacing: -0.02em;
+  }
+  .slide-header p {
+    font-size: 0.95rem;
+    color: #666;
+    font-weight: 400;
+  }
+
+  /* ── Diagram ── */
+  .diagram {
+    display: grid;
+    grid-template-columns: 1fr 32px 1fr 32px 1fr 32px 1fr;
+    align-items: stretch;
+    gap: 0;
+  }
+
+  /* ── Column ── */
+  .col {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .col-header {
+    padding: 20px 24px;
+    border-radius: 8px 8px 0 0;
+    text-align: center;
+    min-height: 120px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .col-step {
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    opacity: 0.7;
+    margin-bottom: 6px;
+  }
+  .col-title {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .col-subtitle {
+    font-size: 0.72rem;
+    font-weight: 400;
+    opacity: 0.65;
+  }
+
+  .col-body {
+    padding: 20px 24px 24px;
+    border-radius: 0 0 8px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex: 1;
+  }
+
+  .col-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.55);
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 500;
+  }
+  .col-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+    background: rgba(255,255,255,0.6);
+  }
+
+  /* ── Color themes ── */
+  .col-capture .col-header { background: #1B4F72; color: #fff; }
+  .col-capture .col-body { background: #D4E6F1; }
+  .col-capture .col-icon { color: #1B4F72; }
+
+  .col-store .col-header { background: #1A5276; color: #fff; }
+  .col-store .col-body { background: #D6EAF8; }
+  .col-store .col-icon { color: #1A5276; }
+
+  .col-reason .col-header { background: #154360; color: #fff; }
+  .col-reason .col-body { background: #AED6F1; }
+  .col-reason .col-icon { color: #154360; }
+
+  .col-access .col-header { background: #0E2F44; color: #fff; }
+  .col-access .col-body { background: #85C1E9; }
+  .col-access .col-icon { color: #0E2F44; }
+
+  /* ── Arrow ── */
+  .arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding-top: 0;
+    color: #bbb;
+  }
+  .arrow svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  /* ── Footer tagline ── */
+  .slide-footer {
+    margin-top: 40px;
+    padding-top: 24px;
+    border-top: 1px solid #e5e5e5;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .footer-left {
+    font-size: 0.82rem;
+    color: #999;
+  }
+  .footer-right {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #333;
+  }
+
+  @media (max-width: 800px) {
+    .diagram {
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+    .arrow {
+      transform: rotate(90deg);
+      padding-top: 0;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="slide">
+
+  <div class="slide-header">
+    <h1>Build your AI brain. Own your data. Use it everywhere.</h1>
+    <p>Four layers that capture your context, store it, and put it to work — in any tool you already use.</p>
+  </div>
+
+  <div class="diagram">
+
+    <!-- Col 1: Capture -->
+    <div class="col col-capture">
+      <div class="col-header">
+        <div class="col-step">Capture</div>
+        <div class="col-title">Ingest context where it already lives</div>
+        <div class="col-subtitle">Input layer</div>
+      </div>
+      <div class="col-body">
+        <div class="col-item"><div class="col-icon">&#x1f4dd;</div> Notion</div>
+        <div class="col-item"><div class="col-icon">&#x2709;</div> Email</div>
+        <div class="col-item"><div class="col-icon">&#x1f4ad;</div> Thoughts on the go</div>
+      </div>
+    </div>
+
+    <!-- Arrow -->
+    <div class="arrow">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="12" x2="20" y2="12"/><polyline points="14 6 20 12 14 18"/></svg>
+    </div>
+
+    <!-- Col 2: Store -->
+    <div class="col col-store">
+      <div class="col-header">
+        <div class="col-step">Store</div>
+        <div class="col-title">Persist in infrastructure you own</div>
+        <div class="col-subtitle">Persistence layer</div>
+      </div>
+      <div class="col-body">
+        <div class="col-item"><div class="col-icon">&#x1f5c4;</div> Postgres</div>
+        <div class="col-item"><div class="col-icon">&#x1f50d;</div> Vector embeddings</div>
+        <div class="col-item"><div class="col-icon">&#x1f3f7;</div> Structured metadata</div>
+      </div>
+    </div>
+
+    <!-- Arrow -->
+    <div class="arrow">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="12" x2="20" y2="12"/><polyline points="14 6 20 12 14 18"/></svg>
+    </div>
+
+    <!-- Col 3: Reason -->
+    <div class="col col-reason">
+      <div class="col-header">
+        <div class="col-step">Delegate</div>
+        <div class="col-title">Turn your context into action</div>
+        <div class="col-subtitle">Agentic layer</div>
+      </div>
+      <div class="col-body">
+        <div class="col-item"><div class="col-icon">&#x2699;</div> Automate admin tasks</div>
+        <div class="col-item"><div class="col-icon">&#x1f4c8;</div> Optimize sales outreach</div>
+        <div class="col-item"><div class="col-icon">&#x1f4a1;</div> Produce strategic insights</div>
+      </div>
+    </div>
+
+    <!-- Arrow -->
+    <div class="arrow">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="12" x2="20" y2="12"/><polyline points="14 6 20 12 14 18"/></svg>
+    </div>
+
+    <!-- Col 4: Access -->
+    <div class="col col-access">
+      <div class="col-header">
+        <div class="col-step">Access</div>
+        <div class="col-title">Use your brain anywhere via MCP</div>
+        <div class="col-subtitle">Output layer</div>
+      </div>
+      <div class="col-body">
+        <div class="col-item"><div class="col-icon">&#x1f4ac;</div> Slack</div>
+        <div class="col-item"><div class="col-icon">&#x2728;</div> Claude</div>
+        <div class="col-item"><div class="col-icon">&#x1f3a5;</div> Zoom meetings</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="slide-footer">
+    <div class="footer-left">Kinetic</div>
+    <div class="footer-right">Not retrieval. Extraction.</div>
+  </div>
+
+</div>
+
+</body>
+</html>

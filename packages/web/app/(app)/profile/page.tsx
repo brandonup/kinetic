@@ -1,21 +1,30 @@
 "use client";
 
 /**
- * User Profile Settings Page — KIN-261
+ * User Profile Settings Page — KIN-261, KIN-325
  *
  * Sections:
  *  1. Name + bio (PATCH /api/v1/profile)
  *  2. API keys per provider (GET/POST/DELETE /api/v1/profile/api-keys)
  *  3. Default model selector (PATCH /api/v1/profile/default-model)
  *  4. Linked Upload button (UI-only in Sprint 2; backend wired Sprint 5)
+ *  5. MCP Tokens (GET/POST/PATCH /api/v1/mcp/tokens) — KIN-325
  *
- * Schema ref: docs/db-schema-spec.md §1 (users), §2 (user_api_keys)
+ * Schema ref: docs/db-schema-spec.md §1 (users), §2 (user_api_keys), §18 (mcp_tokens)
  * All snake_case from API is mapped to camelCase in local state manually.
  */
 
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -31,6 +40,9 @@ import { apiFetch, parseApiError } from "@/lib/api";
 import type {
   ApiKeyEntry,
   ApiKeyProvider,
+  CreateMcpTokenResponse,
+  McpToken,
+  McpTokenListResponse,
   ModelConfiguration,
   UserProfile,
 } from "@/lib/types/models";
@@ -69,6 +81,17 @@ export default function ProfilePage() {
 
   // Models state
   const [models, setModels] = useState<ModelConfiguration[]>([]);
+  const [modelsError, setModelsError] = useState(false);
+
+  // MCP tokens state — KIN-325
+  const [mcpTokens, setMcpTokens] = useState<McpToken[]>([]);
+  const [showGenerateForm, setShowGenerateForm] = useState(false);
+  const [generateLabel, setGenerateLabel] = useState("");
+  const [generatingToken, setGeneratingToken] = useState(false);
+  const [newToken, setNewToken] = useState<CreateMcpTokenResponse | null>(null);
+  const [tokenCopied, setTokenCopied] = useState(false);
+  const [revokeConfirmId, setRevokeConfirmId] = useState<string | null>(null);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
 
   // Linked upload state
   const [uploadState, setUploadState] = useState<"idle" | "loading" | "review" | "error">("idle");
@@ -84,10 +107,11 @@ export default function ProfilePage() {
 
   async function loadAll() {
     try {
-      const [profileRes, keysRes, modelsRes] = await Promise.all([
+      const [profileRes, keysRes, modelsRes, mcpRes] = await Promise.all([
         apiFetch("/api/v1/profile"),
         apiFetch("/api/v1/profile/api-keys"),
         apiFetch("/api/v1/admin/models"),
+        apiFetch("/api/v1/mcp/tokens"),
       ]);
 
       if (profileRes.ok) {
@@ -114,6 +138,14 @@ export default function ProfilePage() {
           (m: ModelConfiguration) => m.category === "generation" && m.enabled
         );
         setModels(generationModels);
+        setModelsError(false);
+      } else {
+        setModelsError(true);
+      }
+
+      if (mcpRes.ok) {
+        const data: McpTokenListResponse = await mcpRes.json();
+        setMcpTokens(data.tokens);
       }
     } catch {
       // Silent fail on load — user sees empty state
@@ -244,6 +276,71 @@ export default function ProfilePage() {
     setUploadState("idle");
   }
 
+  async function generateToken() {
+    const label = generateLabel.trim();
+    if (!label) return;
+    setGeneratingToken(true);
+    try {
+      const res = await apiFetch("/api/v1/mcp/tokens", {
+        method: "POST",
+        body: JSON.stringify({ name: label }),
+      });
+      if (res.ok) {
+        const data: CreateMcpTokenResponse = await res.json();
+        // Add masked entry to the list immediately
+        setMcpTokens((prev) => [
+          ...prev,
+          { id: data.id, name: data.name, last_used_at: null, created_at: data.created_at },
+        ]);
+        setNewToken(data);
+        setGenerateLabel("");
+        setShowGenerateForm(false);
+      } else {
+        const msg = await parseApiError(res);
+        toast({ title: "Failed to generate token", description: msg, variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Failed to generate token", variant: "destructive" });
+    } finally {
+      setGeneratingToken(false);
+    }
+  }
+
+  async function revokeToken(id: string) {
+    setRevokingId(id);
+    try {
+      const res = await apiFetch(`/api/v1/mcp/tokens/${id}/revoke`, { method: "PATCH" });
+      if (res.ok) {
+        // Optimistic removal
+        setMcpTokens((prev) => prev.filter((t) => t.id !== id));
+        setRevokeConfirmId(null);
+        toast({ title: "Token revoked" });
+      } else {
+        const msg = await parseApiError(res);
+        toast({ title: "Failed to revoke token", description: msg, variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Failed to revoke token", variant: "destructive" });
+    } finally {
+      setRevokingId(null);
+    }
+  }
+
+  function formatLastUsed(ts: string | null): string {
+    if (!ts) return "Never";
+    return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  }
+
+  async function copyToken(token: string) {
+    try {
+      await navigator.clipboard.writeText(token);
+      setTokenCopied(true);
+      setTimeout(() => setTokenCopied(false), 2000);
+    } catch {
+      toast({ title: "Copy failed — please copy manually", variant: "destructive" });
+    }
+  }
+
   const hasAnyKey = Object.keys(apiKeys).length > 0;
 
   // A model is selectable only if the user has a configured key for that provider
@@ -304,6 +401,78 @@ export default function ProfilePage() {
               disabled={!profileLoaded}
             />
           </div>
+        </section>
+
+        <Separator />
+
+        {/* ── Linked Upload (Auto-fill) ── */}
+        <section className="space-y-3">
+          <div>
+            <h2 className="text-base font-medium text-foreground">Auto-fill from Document</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Upload a PDF, DOCX, or TXT to auto-fill your name and bio. Requires an API key.
+            </p>
+          </div>
+
+          <input
+            type="file"
+            ref={fileInputRef}
+            accept=".pdf,.docx,.doc,.txt"
+            className="hidden"
+            onChange={handleFileSelect}
+          />
+
+          {uploadState === "review" ? (
+            <div className="space-y-3 rounded-md border border-border p-3">
+              <p className="text-xs text-muted-foreground font-medium">Review extracted fields</p>
+              <div className="space-y-1.5">
+                <Label htmlFor="review-name">Name</Label>
+                <Input
+                  id="review-name"
+                  value={reviewName}
+                  onChange={(e) => setReviewName(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="review-bio">Bio</Label>
+                <Textarea
+                  id="review-bio"
+                  value={reviewBio}
+                  onChange={(e) => setReviewBio(e.target.value)}
+                  rows={3}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button size="sm" onClick={handleUseExtracted}>
+                  Use this
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setUploadState("idle")}>
+                  Discard
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="inline-block">
+                  <Button
+                    variant="outline"
+                    disabled={!hasAnyKey || uploadState === "loading"}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    {uploadState === "loading" ? "Extracting…" : "Upload document"}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              {!hasAnyKey && (
+                <TooltipContent>Add an API key to enable auto-fill</TooltipContent>
+              )}
+            </Tooltip>
+          )}
+
+          {uploadState === "error" && uploadError && (
+            <p className="text-sm text-destructive">{uploadError}</p>
+          )}
         </section>
 
         <Separator />
@@ -416,103 +585,242 @@ export default function ProfilePage() {
             </p>
           </div>
 
-          <select
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground disabled:opacity-50"
-            value={defaultModelId ?? ""}
-            onChange={(e) => {
-              if (e.target.value) void setDefaultModel(e.target.value);
-            }}
-          >
-            <option value="">Select a model…</option>
-            {models.map((model) => {
-              const enabled = isModelEnabled(model);
-              return (
-                <option
-                  key={model.id}
-                  value={model.id}
-                  disabled={!enabled}
-                  title={enabled ? undefined : "Add an API key to enable"}
-                >
-                  {model.display_name}
-                  {!enabled ? " (add API key to enable)" : ""}
-                </option>
-              );
-            })}
-          </select>
+          {modelsError ? (
+            <p className="text-sm text-destructive">
+              Failed to load models. Try refreshing the page.
+            </p>
+          ) : models.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No generation models available. An admin must add and enable models in the{" "}
+              <a href="/admin/models" className="underline text-foreground hover:text-foreground/80">
+                LLM Models
+              </a>{" "}
+              settings first.
+            </p>
+          ) : (
+            <select
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground disabled:opacity-50"
+              value={defaultModelId ?? ""}
+              onChange={(e) => {
+                if (e.target.value) void setDefaultModel(e.target.value);
+              }}
+            >
+              <option value="">Select a model…</option>
+              {models.map((model) => {
+                const enabled = isModelEnabled(model);
+                return (
+                  <option
+                    key={model.id}
+                    value={model.id}
+                    disabled={!enabled}
+                    title={enabled ? undefined : "Add an API key to enable"}
+                  >
+                    {model.display_name}
+                    {!enabled ? " (add API key to enable)" : ""}
+                  </option>
+                );
+              })}
+            </select>
+          )}
         </section>
 
         <Separator />
 
-        {/* ── Linked Upload ── */}
-        <section className="space-y-3">
-          <div>
-            <h2 className="text-base font-medium text-foreground">Auto-fill from Document</h2>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              Upload a PDF, DOCX, or TXT to auto-fill your name and bio. Requires an API key.
-            </p>
+        {/* ── MCP Tokens ── */}
+        <section className="space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-base font-medium text-foreground">MCP Tokens</h2>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Bearer tokens for connecting Claude Desktop, Cursor, and other MCP clients.
+              </p>
+            </div>
+            {!showGenerateForm && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0"
+                onClick={() => setShowGenerateForm(true)}
+              >
+                Generate new token
+              </Button>
+            )}
           </div>
 
-          <input
-            type="file"
-            ref={fileInputRef}
-            accept=".pdf,.docx,.doc,.txt"
-            className="hidden"
-            onChange={handleFileSelect}
-          />
-
-          {uploadState === "review" ? (
-            <div className="space-y-3 rounded-md border border-border p-3">
-              <p className="text-xs text-muted-foreground font-medium">Review extracted fields</p>
-              <div className="space-y-1.5">
-                <Label htmlFor="review-name">Name</Label>
-                <Input
-                  id="review-name"
-                  value={reviewName}
-                  onChange={(e) => setReviewName(e.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="review-bio">Bio</Label>
-                <Textarea
-                  id="review-bio"
-                  value={reviewBio}
-                  onChange={(e) => setReviewBio(e.target.value)}
-                  rows={3}
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button size="sm" onClick={handleUseExtracted}>
-                  Use this
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => setUploadState("idle")}>
-                  Discard
-                </Button>
-              </div>
+          {/* Inline generate form */}
+          {showGenerateForm && (
+            <div className="flex items-center gap-2 rounded-md border border-border px-4 py-3">
+              <Input
+                className="flex-1 h-8 text-sm"
+                placeholder="Label, e.g. Claude Desktop, Cursor"
+                value={generateLabel}
+                onChange={(e) => setGenerateLabel(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") void generateToken();
+                  if (e.key === "Escape") {
+                    setShowGenerateForm(false);
+                    setGenerateLabel("");
+                  }
+                }}
+                maxLength={64}
+                autoFocus
+              />
+              <Button
+                size="sm"
+                disabled={!generateLabel.trim() || generatingToken}
+                onClick={() => void generateToken()}
+              >
+                {generatingToken ? "Generating…" : "Generate"}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setShowGenerateForm(false);
+                  setGenerateLabel("");
+                }}
+              >
+                Cancel
+              </Button>
             </div>
-          ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-block">
-                  <Button
-                    variant="outline"
-                    disabled={!hasAnyKey || uploadState === "loading"}
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    {uploadState === "loading" ? "Extracting…" : "Upload document"}
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              {!hasAnyKey && (
-                <TooltipContent>Add an API key to enable auto-fill</TooltipContent>
-              )}
-            </Tooltip>
           )}
 
-          {uploadState === "error" && uploadError && (
-            <p className="text-sm text-destructive">{uploadError}</p>
+          {/* Token list */}
+          {mcpTokens.length > 0 && (
+            <div className="rounded-md border border-border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/40">
+                    <th className="text-left px-4 py-2 font-medium text-muted-foreground">Label</th>
+                    <th className="text-left px-4 py-2 font-medium text-muted-foreground">Created</th>
+                    <th className="text-left px-4 py-2 font-medium text-muted-foreground">Last used</th>
+                    <th className="px-4 py-2" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {mcpTokens.map((token) => (
+                    <tr key={token.id} className="border-b border-border last:border-0">
+                      <td className="px-4 py-3">
+                        <div className="font-medium text-foreground">{token.name}</div>
+                        <div className="text-xs text-muted-foreground font-mono mt-0.5">mcp_••••••••</div>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {new Date(token.created_at).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {formatLastUsed(token.last_used_at)}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => setRevokeConfirmId(token.id)}
+                        >
+                          Revoke
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {mcpTokens.length === 0 && !showGenerateForm && (
+            <p className="text-sm text-muted-foreground">No tokens yet.</p>
           )}
         </section>
       </div>
+
+      {/* ── One-time token modal ── */}
+      {newToken && (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              setNewToken(null);
+              setTokenCopied(false);
+            }
+          }}
+        >
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Token generated</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-3 py-2">
+              <p className="text-sm text-destructive font-medium">
+                Copy this token now. You won&apos;t be able to see it again.
+              </p>
+              <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2">
+                <code className="flex-1 text-xs font-mono break-all text-foreground select-all">
+                  {newToken.token}
+                </code>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={() => void copyToken(newToken.token)}
+                >
+                  {tokenCopied ? "Copied!" : "Copy"}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Token label: <span className="font-medium text-foreground">{newToken.name}</span>
+              </p>
+            </div>
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button variant="outline" size="sm">
+                  Done
+                </Button>
+              </DialogClose>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* ── Revoke confirm dialog ── */}
+      {revokeConfirmId && (
+        <Dialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setRevokeConfirmId(null);
+          }}
+        >
+          <DialogContent className="max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Revoke token?</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground py-2">
+              Revoke &ldquo;
+              {mcpTokens.find((t) => t.id === revokeConfirmId)?.name ?? "this token"}
+              &rdquo;? Any client using this token will immediately lose access.
+            </p>
+            <DialogFooter>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setRevokeConfirmId(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={revokingId === revokeConfirmId}
+                onClick={() => void revokeToken(revokeConfirmId)}
+              >
+                {revokingId === revokeConfirmId ? "Revoking…" : "Revoke"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </TooltipProvider>
   );
 }

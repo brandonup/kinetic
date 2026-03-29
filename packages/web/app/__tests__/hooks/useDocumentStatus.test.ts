@@ -180,4 +180,33 @@ describe("useDocumentStatus", () => {
     });
     expect(result.current.data).toBeNull();
   });
+
+  it("stops polling on 404 (document deleted)", async () => {
+    // KIN-398: after a delete, status polling returns 404.
+    // The hook must stop polling instead of looping indefinitely.
+    mockApiFetch
+      .mockReturnValueOnce(
+        Promise.resolve({ ok: false, status: 404, text: () => Promise.resolve("Document not found.") }),
+      )
+      .mockReturnValue(
+        Promise.resolve({ ok: false, status: 404, text: () => Promise.resolve("Document not found.") }),
+      );
+
+    const { result } = renderHook(() =>
+      useDocumentStatus(DOC_ID, { intervalMs: 1000 }),
+    );
+
+    // Wait for initial 404 fetch
+    await waitFor(() => {
+      expect(mockApiFetch).toHaveBeenCalledTimes(1);
+    });
+
+    // Advance past multiple poll intervals — should NOT fetch again
+    await act(async () => {
+      vi.advanceTimersByTime(5000);
+    });
+
+    expect(mockApiFetch.mock.calls.length).toBe(1);
+    expect(result.current.data).toBeNull();
+  });
 });

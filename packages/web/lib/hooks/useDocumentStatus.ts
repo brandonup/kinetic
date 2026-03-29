@@ -44,7 +44,13 @@ export function useDocumentStatus(
   const [data, setData] = useState<DocumentStatusResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Reset notFound state when the document ID changes.
+  useEffect(() => {
+    setNotFound(false);
+  }, [documentId]);
 
   const fetchStatus = useCallback(async () => {
     if (!documentId) return;
@@ -54,6 +60,11 @@ export function useDocumentStatus(
       if (!res.ok) {
         const text = await res.text();
         console.error("[useDocumentStatus] HTTP %d: %s", res.status, text);
+        if (res.status === 404) {
+          // Document was deleted — stop polling.
+          setNotFound(true);
+          return;
+        }
         setError(text || "Failed to fetch document status");
         return;
       }
@@ -87,7 +98,7 @@ export function useDocumentStatus(
   useEffect(() => {
     if (!enabled || !documentId) return;
 
-    const shouldPoll = data === null || PROCESSING_STATUSES.has(data.status);
+    const shouldPoll = !notFound && (data === null || PROCESSING_STATUSES.has(data.status));
 
     if (shouldPoll) {
       if (!intervalRef.current) {
@@ -106,7 +117,7 @@ export function useDocumentStatus(
         intervalRef.current = null;
       }
     };
-  }, [data, enabled, documentId, fetchStatus, intervalMs]);
+  }, [data, notFound, enabled, documentId, fetchStatus, intervalMs]);
 
   return { data, loading, error, refetch: fetchStatus };
 }

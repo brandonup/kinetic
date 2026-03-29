@@ -1,0 +1,70 @@
+{
+  "$schema": "sprint-snapshot-v1",
+  "sprint": {
+    "number": 1,
+    "name": "Cycle 1",
+    "startDate": "2026-03-16",
+    "endDate": "2026-03-19"
+  },
+  "velocity": {
+    "planned": 24,
+    "completed": 22,
+    "carryover": 2,
+    "totalPoints": 49,
+    "completedPoints": 45
+  },
+  "estimates": {
+    "coveragePercent": 27.6,
+    "byAgent": {
+      "dinesh":   { "total": 21, "estimated": 9, "coveragePercent": 43 },
+      "bighead":  { "total": 13, "estimated": 5, "coveragePercent": 38 },
+      "jian":     { "total": 21, "estimated": 7, "coveragePercent": 33 },
+      "gilfoyle": { "total": 16, "estimated": 0, "coveragePercent": 0 },
+      "jared":    { "total": 3,  "estimated": 0, "coveragePercent": 0 },
+      "bachman":  { "total": 1,  "estimated": 0, "coveragePercent": 0 }
+    }
+  },
+  "cycleTime": {
+    "averageDays": 1.8,
+    "medianDays": 1.5,
+    "p90Days": 3.2,
+    "byAgent": {
+      "dinesh":  { "averageDays": 1.5, "ticketCount": 21 },
+      "bighead": { "averageDays": 2.4, "ticketCount": 13 }
+    }
+  },
+  "reviews": {
+    "totalReviews": 16,
+    "rejections": 5,
+    "rejectionRate": 31.25,
+    "byAgent": {
+      "dinesh":  { "reviews": 18, "rejections": 5, "rejectionRate": 28, "maxRounds": 2 },
+      "bighead": { "reviews": 12, "rejections": 4, "rejectionRate": 33, "maxRounds": 3 }
+    }
+  },
+  "defects": {
+    "total": 12,
+    "byCategory": {
+      "acl-leak":        2,
+      "error-swallow":   1,
+      "api-contract":    2,
+      "spec-gap":        2,
+      "schema-mismatch": 0,
+      "rls-bypass":      0,
+      "async-supabase":  1,
+      "test-missing":    0,
+      "other":           4
+    },
+    "bySeverity": { "critical": 4, "important": 8, "minor": 0 },
+    "defectsPerTicket": 0.7
+  },
+  "agentActivity": {
+    "dinesh":  { "completed": 21, "wipPeak": 3 },
+    "bighead": { "completed": 13, "wipPeak": 1 }
+  },
+  "processHealth": {
+    "decisionTicketLagHours": 1.75,
+    "handoffCompliancePercent": 87
+  },
+  "notes": "Defect log coverage partial — 13 defects documented from 4 of 16 reviews (log started 2026-03-21). Sprint velocity includes 52 catch-up close-out tickets outside cycle scope; completion rate and estimates reflect the 24-ticket cycle scope only. Carryover tickets (KIN-201, KIN-202) are 100% Big Head, both from mid-sprint scope additions."
+}

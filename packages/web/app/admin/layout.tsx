@@ -46,11 +46,12 @@ export default function AdminLayout({
 
         // Query public.users.role — app_metadata.role is not set for OAuth users.
         // Consistent with middleware.ts admin check.
-        const { data: userRow } = await supabase
+        const { data: userRow, error } = await supabase
           .from("users")
           .select("role")
           .eq("id", session.user.id)
           .single();
+        console.log("[admin-layout] role query result:", { userRow, error, userId: session.user.id });
         if (mounted) {
           if (userRow?.role === "admin") {
             setIsAdmin(true);
@@ -58,7 +59,8 @@ export default function AdminLayout({
             router.push("/projects");
           }
         }
-      } catch {
+      } catch (err) {
+        console.error("[admin-layout] checkAdminAccess error:", err);
         if (!mounted) return;
         router.push("/projects");
       } finally {

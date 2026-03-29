@@ -1,0 +1,261 @@
+{
+  "source": "nate_b_jones",
+  "extraction_date": "2026-03-23",
+  "curation_date": "2026-03-24",
+  "curation_criteria": "ICP-relevant frameworks only. Cut: ai-prompting, ai-architecture (non-business), ai-evaluation (non-business), ai-governance (non-strategic). ICP: tech founders, AI consultants, SMB leaders navigating tech disruption.",
+  "total_frameworks": 5,
+  "total_from_source": 383,
+  "frameworks": [
+    {
+      "name": "Middleware Trap Diagnostic",
+      "type": "diagnostic",
+      "description": "Apply this framework when a user needs to assess whether their stack position is structurally durable or borrowed time. Challenge their assumption that domain expertise is a moat before they've stress-tested it against the three-layer taxonomy. Push them to prove they own either the layer below or the customer relationship above \u2014 then reframe their position through the hyperscaler's lens: do they generate tokens, or block margin?",
+      "when_to_apply": [
+        "Our main model provider just announced features that overlap with our core product and I need to assess how exposed we are",
+        "I'm evaluating an AI startup for investment and need to determine if their defensibility is real or just a thin wrapper around someone else's capability",
+        "We build on top of a foundation model API and I need to present our board with an honest assessment of platform risk",
+        "Our differentiation story is 'domain expertise' but I'm not sure that holds up against what the big cloud providers are building",
+        "We need to decide whether to double down on our current stack position or pivot before a hyperscaler absorbs our layer"
+      ],
+      "principles": [
+        "If you don't own the layer below you or the customer relationship above you, you are borrowing time",
+        "Every dependency must be evaluated for both provider incentive and provider ability to absorb your functionality",
+        "Domain context claims must be stress-tested against the three-layer taxonomy before accepting them as moats",
+        "Analyze your position from the hyperscaler's perspective: do you generate more tokens for them, or sit between them and a customer they could serve directly?",
+        "The goal is to find positions where hyperscaler incentives align with your existence rather than your replacement"
+      ],
+      "steps": [
+        "Draw your stack: map every dependency your product requires \u2014 model, cloud, data sources, distribution channels. This matters because the author shows that even the best-run AI companies like Perplexity have hidden structural fragility \u2014 their core reasoning engine runs on a direct competitor's model, their deep research on another competitor's model, and their speed layer on a third provider building the same product. You cannot assess absorption risk until you see every dependency explicitly, and most companies undercount them.",
+        "For each dependency, ask two questions: Does the provider have the incentive and ability to absorb my functionality? Is the provider now building the context layer I thought was my moat? This matters because the author demonstrates that incentive alone is insufficient \u2014 you need both incentive and ability. Anthropic's Cowork plugins showed a model provider collapsing the entire tool stack above it (contract review, compliance checks, sales prep, legal intake), triggering a $285 billion market selloff precisely because investors recognized providers had both the incentive and the ability to absorb middleware functionality.",
+        "For each 'yes,' ask what you still own if that provider moves into your space \u2014 distinguish borrowed value (UX, integrations) from domain context, then classify that context using the three-layer test (structural, operational, or proprietary). This matters because the author shows that companies routinely mistake structural context (publicly available information like contract templates and clause libraries) for a defensible moat. The three-layer taxonomy forces you to distinguish what sounds like domain expertise from what actually survives platform consolidation \u2014 as the example application demonstrates, 'we understand legal workflows' collapses under scrutiny when the context is publicly available.",
+        "Check your remaining position against the four durable positions: proprietary context that can't rationally be platformized, infrastructure agents depend on, workflow depth with real switching costs, or trust and verification. This matters because the author identifies only four specific structural plays where hyperscaler incentives align with your existence rather than your replacement. Without checking against these positions, you may convince yourself that thin operational context (like 200 customer relationships) constitutes durability, when in fact the switching cost is low because customers haven't restructured their workflows around your tool.",
+        "Look at your position from the hyperscaler's perspective: does your existence generate more tokens for them, or do you sit between them and a customer they could serve directly at higher margin? This matters because the author frames the entire competitive landscape through the hyperscalers' $690 billion infrastructure bet that must show revenue realization by 2028 \u2014 their structural incentive is to absorb any layer that sits between them and high-value verticals. The Perplexity example is definitive: despite being one of the best-run AI companies in the world, its orchestration layer sits precisely where providers want to expand, making good execution on the wrong layer of the stack insufficient for survival."
+      ],
+      "confidence": "high",
+      "source_posts": [
+        {
+          "id": "189945797",
+          "title": "Most AI companies are renting their position. These 4 prompts tell you if yours is one of them.",
+          "date": "2026-03-19T13:04:27.195Z"
+        }
+      ],
+      "date": "2026-03-19T13:04:27.195Z",
+      "category": "competitive-positioning",
+      "example_application": "The company's entire product sits on top of OpenAI's API, adds a fine-tuned workflow for legal contract review, and sells to mid-market law firms. Walking through the stack: model dependency is total (OpenAI), cloud is AWS, distribution is direct sales. OpenAI has both incentive and ability to build a legal template layer \u2014 they've already shipped custom GPTs. The claimed moat is 'we understand legal workflows,' but under the three-layer test, the context is structural (publicly available contract templates and clause libraries), not proprietary. What survives if OpenAI moves? The customer relationships with 200 law firms and 18 months of their marked-up clause data. That's real but thin \u2014 it's operational context at best, and the switching cost is low because firms haven't restructured their workflows around the tool. From the hyperscaler's perspective, this company sits directly between OpenAI and a high-value vertical they'd love to serve at higher margin. Verdict: this is a rented position with a 12-18 month window before absorption risk becomes acute.",
+      "related_frameworks": [
+        "d-t-r-framework-distribution-tokenization-reward",
+        "four-durable-positions-framework",
+        "king-kong-test",
+        "three-layer-enterprise-context-taxonomy"
+      ],
+      "origin": "extracted",
+      "description_original": "A five-step structured test to determine whether an AI company's position is structurally durable or merely renting its place in the stack by mapping dependencies and evaluating each against hyperscaler absorption risk.",
+      "do_not_use_when": [
+        "The user is evaluating platform risk from a regulated industry incumbent (e.g., defense, healthcare) where hyperscaler access is structurally blocked, making absorption incentives irrelevant.",
+        "The user is a hyperscaler-adjacent team building internal tooling with no commercial stack position to defend, so competitive durability framing has no meaningful target.",
+        "The user is assessing a pre-revenue AI startup with no deployed product yet, where the framework's stress-tests assume an existing position that doesn't exist.",
+        "The user's concern is vendor lock-in for cost and reliability reasons, not competitive displacement \u2014 requiring a switching-cost analysis rather than a moat diagnostic."
+      ],
+      "steps_original": [
+        "Draw your stack: map every dependency your product requires \u2014 model, cloud, data sources, distribution channels",
+        "For each dependency, ask two questions: Does the provider have the incentive and ability to absorb my functionality? Is the provider now building the context layer I thought was my moat?",
+        "For each 'yes,' ask what you still own if that provider moves into your space \u2014 distinguish borrowed value (UX, integrations) from domain context, then classify that context using the three-layer test (structural, operational, or proprietary)",
+        "Check your remaining position against the four durable positions: proprietary context that can't rationally be platformized, infrastructure agents depend on, workflow depth with real switching costs, or trust and verification",
+        "Look at your position from the hyperscaler's perspective: does your existence generate more tokens for them, or do you sit between them and a customer they could serve directly at higher margin?"
+      ],
+      "framework_id": "middleware-trap-diagnostic"
+    },
+    {
+      "name": "Three-Layer Enterprise Context Taxonomy",
+      "type": "taxonomy",
+      "description": "Apply this framework when a user is deciding what enterprise context to share with an AI platform partner, defending institutional knowledge as a moat, or negotiating data access in a platform partnership. Classify their situation into structural, operational, or proprietary tiers. Then name explicitly what the platform will absorb, what has a closing window based on rate of change, and what creates genuine competitive exposure if shared.",
+      "when_to_apply": [
+        "We're deciding what enterprise data to share with our AI platform partner versus what to keep in-house",
+        "Our vertical AI startup claims 'domain expertise' as the moat \u2014 but I need to know how long that actually lasts as foundation models improve",
+        "A company in our portfolio says their institutional knowledge is their defensibility, but I suspect most of it is just system integration knowledge that platforms will absorb",
+        "We're negotiating a partnership with an AI infrastructure provider and need to know which data creates competitive exposure if shared",
+        "I'm trying to figure out whether our operational knowledge is actually proprietary or just not-yet-commoditized"
+      ],
+      "principles": [
+        "Structural context (system connections, permissions, data locations) is commodity plumbing that platform providers absorb within 12\u201324 months",
+        "Operational context defensibility is determined by rate of change: slowly-updating operational knowledge loses its window within one to two model generations; rapidly-updating knowledge stays defensible longer",
+        "Proprietary context (data and judgment that exists nowhere else and would create competitive exposure if shared) is the only tier worth defending as a strategic moat",
+        "Platforming proprietary context means giving the provider access to the thing that makes you competitively unique \u2014 today that is a partnership, in future model generations it may not be"
+      ],
+      "confidence": "high",
+      "source_posts": [
+        {
+          "id": "189945797",
+          "title": "Most AI companies are renting their position. These 4 prompts tell you if yours is one of them.",
+          "date": "2026-03-19T13:04:27.195Z"
+        }
+      ],
+      "date": "2026-03-19T13:04:27.195Z",
+      "category": "competitive-positioning",
+      "example_application": "The company's claimed moat is 'deep understanding of healthcare billing workflows' \u2014 but decomposed through the taxonomy, most of that is structural context (which EHR systems connect to which clearinghouses, permission models, data locations) that any platform provider will absorb once they ship native integrations. The operational knowledge \u2014 billing code selection heuristics, denial pattern recognition \u2014 updates slowly enough that it's one model generation from commoditization. The only genuinely proprietary tier is their accumulated dataset of 200,000 real denial-overturn outcomes paired with the clinical judgment calls that drove them. That dataset exists nowhere else and would create competitive exposure if shared with a model provider. Strategic response: platform the structural and slow-updating operational layers freely, but the denial-overturn dataset is the thing worth defending \u2014 and platforming it means handing the model provider the one asset that makes the company irreplaceable.",
+      "related_frameworks": [
+        "four-durable-positions-framework",
+        "middleware-trap-diagnostic"
+      ],
+      "origin": "extracted",
+      "description_original": "A classification system that sorts enterprise domain context into three tiers \u2014 structural, operational, and proprietary \u2014 each with a distinct defensibility profile and recommended strategic response.",
+      "do_not_use_when": [
+        "The user is a solo consultant deciding what client data to store in an AI tool \u2014 there is no platform partnership, competitive moat, or institutional knowledge at stake.",
+        "The user's 'proprietary data' question is actually a legal or regulatory compliance question about what they're permitted to share, not a strategic defensibility question.",
+        "The user is evaluating whether to build versus buy an AI capability internally \u2014 the decision is about make-or-buy economics, not about tiering what context to expose to a partner.",
+        "The user is asking how to structure data-sharing with an AI vendor for a one-time project with no ongoing relationship, so moat durability and model-generation windows are irrelevant."
+      ],
+      "framework_id": "three-layer-enterprise-context-taxonomy"
+    },
+    {
+      "name": "Four Durable Positions Framework",
+      "type": "taxonomy",
+      "description": "Apply this framework when a user questions whether their AI product survives platform consolidation. Classify their current position into one of the four durable tiers \u2014 proprietary context, agent infrastructure, workflow depth, or trust and verification \u2014 and identify whether they're straddling exposed middleware instead. Tell them which single position to target and why the hyperscalers' incentives support rather than threaten it.",
+      "when_to_apply": [
+        "Our product works today but I keep worrying that OpenAI or Google will just build this into their platform next quarter",
+        "We're an AI startup trying to decide which layer of the stack to build our core product around for long-term defensibility",
+        "Evaluating whether a portfolio company's AI positioning survives the next two rounds of platform consolidation",
+        "We've been told we're in the middleware trap and need to figure out which adjacent durable position to migrate toward",
+        "A founder is pitching us on AI infrastructure \u2014 how do I tell if their position gets stronger or weaker as the hyperscalers advance?"
+      ],
+      "principles": [
+        "Position 1 (Proprietary Context): Survive only in the proprietary context tier \u2014 structural and slowly-changing operational context will be absorbed by platform providers",
+        "Position 2 (Agent Infrastructure): Becoming a service that agents call regardless of who wins the orchestration war is more durable than competing in orchestration directly",
+        "Position 3 (Workflow Depth): Integration depth that encodes institutional workflows creates switching costs the model provider cannot easily replicate \u2014 value a product that gets harder to remove over time, not just better to use",
+        "Position 4 (Trust and Verification): The governance gap between agent capability adoption and auditability is the largest currently unoccupied structural position in the stack",
+        "Companies should target one of these four positions; straddling exposed middleware while also holding a durable position (as a search-augmented model does) creates asymmetric risk"
+      ],
+      "confidence": "high",
+      "source_posts": [
+        {
+          "id": "189945797",
+          "title": "Most AI companies are renting their position. These 4 prompts tell you if yours is one of them.",
+          "date": "2026-03-19T13:04:27.195Z"
+        }
+      ],
+      "date": "2026-03-19T13:04:27.195Z",
+      "category": "competitive-positioning",
+      "example_application": "This compliance automation startup sits in Position 4 \u2014 Trust and Verification. Every time a hyperscaler ships more powerful agents, the governance gap widens, which increases demand for independent audit infrastructure. Their position strengthens as the platforms advance, which is the defining test of structural durability. By contrast, their competitor building a 'smart orchestration layer' is in exposed middleware \u2014 when Anthropic or OpenAI ships native multi-step tool use, that orchestration value collapses. The competitor should pivot toward encoding customer-specific compliance workflows (Position 3) or building the verification layer agents must call regardless of orchestrator (Position 2).",
+      "related_frameworks": [
+        "middleware-trap-diagnostic",
+        "three-layer-enterprise-context-taxonomy"
+      ],
+      "origin": "extracted",
+      "description_original": "A classification of the four AI stack positions where non-hyperscaler companies can build structurally durable businesses because the hyperscalers' incentives align with their existence rather than their replacement.",
+      "do_not_use_when": [
+        "The user's AI product is a thin wrapper with no proprietary data, workflow integration, or infrastructure role \u2014 the honest answer is 'rebuild or exit,' not 'pick a durable position.'",
+        "The user is asking about platform consolidation risk for a non-AI software product that merely added an AI feature, where competitive moat questions belong to the underlying business model, not AI stack positioning.",
+        "The user is an enterprise buyer evaluating AI vendor lock-in for internal tooling decisions, not a founder or investor assessing product defensibility against hyperscalers.",
+        "The user's concern is near-term runway and whether to pivot immediately, making a long-horizon structural positioning framework premature relative to the actual decision they face."
+      ],
+      "framework_id": "four-durable-positions-framework"
+    },
+    {
+      "name": "AI Agent Supervision Model",
+      "type": "reframe",
+      "description": "Apply this framework when a non-technical founder feels like they're losing control of an AI coding agent. Shift their framing from \"I need to prompt better\" to \"I need to supervise effectively\" by introducing the foreman model. Surface the five supervisory habits\u2014version control, context management, rules files, blast radius control, and proactive quality demands\u2014and explicitly raise the gap between \"works for me\" and \"works for customers,\" because the agent never will.",
+      "when_to_apply": [
+        "My AI coding agent keeps breaking things I already had working and I don't know how to prevent it",
+        "I'm a non-technical founder using Cursor/Replit agents and I feel like I'm losing control of my codebase",
+        "I want to know the difference between getting better at prompting vs. getting better at managing AI agents",
+        "My vibe-coded app works for me but I'm nervous about whether it's actually safe for real users",
+        "I need to decide whether to keep building with AI agents myself or hire an engineer"
+      ],
+      "principles": [
+        "The shift from chat-based AI to agentic AI changes the primary skill from 'describe clearly' to 'supervise effectively'",
+        "You don't need to know the trade work; you need judgment about what's happening and when to stop",
+        "Five supervisory habits cover the majority of preventable disasters: version control, context management, rules files, blast radius control, and proactive quality demands",
+        "Bringing in an engineer is not failure\u2014it is a transition point after demand is proven",
+        "Interrupting an agent is not rude; it is the job",
+        "The gap between 'works for me' and 'works for customers' requires proactive demands the agent will never raise unprompted"
+      ],
+      "confidence": "medium",
+      "source_posts": [
+        {
+          "id": "190800262",
+          "title": "Your AI coding agent deleted 2.5 years of customer data in minutes. Here's why an experienced engineer couldn't stop it \u2014 and the 5 habits that would have + 5 prompts.",
+          "date": "2026-03-16T13:01:43.351Z"
+        }
+      ],
+      "date": "2026-03-16T13:01:43.351Z",
+      "category": "ai-adoption",
+      "example_application": "The conventional framing is that non-technical builders need to get better at prompting \u2014 describe what you want more precisely and the agent will build it right. That's wrong once you're using agentic AI. The real failure mode isn't imprecise instructions; it's unsupervised execution. The builder whose agent deleted 2.5 years of customer data wasn't bad at prompting \u2014 they were absent from supervision. The shift is from 'writer giving notes' to 'foreman on a job site': you need version control before every major change (so you can roll back), context management across sessions (so the agent doesn't lose the plot), rules files that encode past mistakes (so the agent doesn't repeat them), blast radius control (so one bad run can't destroy everything), and proactive quality demands (because the agent will never volunteer 'this isn't production-ready'). Knowing when to bring in a real engineer isn't failure \u2014 it's the sign that demand is proven and the project has graduated.",
+      "related_frameworks": [],
+      "origin": "extracted",
+      "description_original": "Reframes the role of a non-engineer using AI coding agents from 'prompter' to 'foreman'\u2014shifting the key skill from clear description to active supervision with defined operational habits.",
+      "do_not_use_when": [
+        "The user is a technical engineer evaluating whether to adopt AI coding agents on their team, not a non-technical founder losing control of their own codebase.",
+        "The user has no working product yet and needs guidance on what to build, not how to supervise an agent that is breaking existing functionality.",
+        "The user is asking about managing a human engineering team or contractor, not an AI agent, despite using language like 'losing control' and 'keeping things working.'",
+        "The user already has an engineer or CTO handling the codebase and is asking whether to give their AI tools more autonomy, not how to personally supervise agent work."
+      ],
+      "framework_id": "ai-agent-supervision-model"
+    },
+    {
+      "name": "Coordination Tax Audit",
+      "type": "diagnostic",
+      "description": "Apply this framework when a user suspects their role is bloated with coordination overhead or wants a principled basis for agent delegation. Challenge their assumption that what feels like judgment is genuinely irreplaceable \u2014 it's usually verifiable preparation work plus a thin layer of real residual on top. Push them to use last week's actual calendar, not their job description, because the gap between the two is where self-deception lives.",
+      "when_to_apply": [
+        "I spend most of my week in meetings and writing documents but I can't point to what I actually created",
+        "We're planning which team functions to hand off to AI agents and need a principled way to prioritize",
+        "My role feels important but I suspect most of what I do is just moving information between people who should already have it",
+        "I want a concrete, calendar-based measurement of how much of my job is automatable versus genuinely irreplaceable",
+        "We're restructuring headcount and need something more rigorous than gut feel about which roles are at risk"
+      ],
+      "principles": [
+        "Work hours fall into exactly three categories: coordination (meetings, translation artifacts, state synchronization), verifiable execution (tasks agents can already do or will within 18 months), and the genuine residual (zero-to-one judgment, political navigation, moral judgment, aesthetic taste).",
+        "The coordination category exists not because the work is inherently valuable, but because human bandwidth and context limits create a translation problem that would disappear if everyone shared perfect context.",
+        "What feels like 'judgment' is usually a composite of verifiable preparation work plus a thin layer of genuine non-verifiable judgment on top\u2014the audit separates these.",
+        "Use the actual calendar from the prior week, not the idealized job description, as the data source.",
+        "The residual is what matters: identify what your role would look like if the coordination tax dropped to zero, then build a migration sequence for delegating coordination tasks to agents."
+      ],
+      "steps": [
+        "Pull up your calendar from last week\u2014the actual version, not the idealized one. This matters because the author explicitly warns that the gap between your idealized job description and your actual calendar is 'where self-deception lives'\u2014we experience coordination overhead as 'the role' rather than recognizing it as overhead, and only the real calendar exposes that.",
+        "Count hours where the primary purpose was transferring information from someone who had it to someone who needed it (status updates, syncs, standups, one-on-ones for context transfer)\u2014label these 'coordination.' This matters because the author identifies these meetings as 'state synchronization'\u2014they exist not because the ceremony creates value but because humans working on the same problem can't share a brain, and labeling them separately prevents you from categorizing organizational physics as value creation.",
+        "Count hours spent creating artifacts whose primary purpose was translating your knowledge into a form someone else could act on (PRDs, specs, briefs, decks, tickets, handoff documents)\u2014also label these 'coordination.' This matters because the author calls these 'translation artifacts'\u2014a PRD exists because the engineer isn't the person who talked to the customer, not because PRDs are inherently valuable\u2014and most people miss this entire category of coordination tax because it feels like 'real work' and skilled craft rather than overhead.",
+        "Count hours spent doing the thing you were actually hired to do\u2014creating something that didn't exist before\u2014label these as either 'verifiable execution' (testable, measurable output) or 'genuine residual' (non-verifiable judgment, vision, or insight). This matters because the author warns that 'what they've been calling judgment is mostly preparation wrapped in a job title'\u2014splitting this remainder into verifiable execution versus genuine residual forces you to confront how thin the layer of truly irreplaceable judgment actually is once you separate it from the testable work agents can already handle.",
+        "Calculate your personal coordination tax percentage and compare it to the 60\u201370% benchmark. This matters because the author cites Microsoft and Asana data converging on 57\u201360% coordination overhead as organizational physics, not a productivity failure\u2014your personal number against this benchmark tells you whether your role is typical or structurally different, and most people discover they're right at or above the benchmark.",
+        "From the residual bucket, map what your role would look like if you spent 30 hours per week on it instead of your current allocation. This matters because the author frames this as the 'good news'\u2014the work that remains when you strip coordination away 'was always the most interesting'\u2014and this step forces you to confront what you'd actually build, decide, or create if the coordination tax dropped to zero, revealing whether your residual is rich enough to fill a full role or thinner than you assumed.",
+        "Identify which coordination tasks are ready for agent delegation now, which need a verification layer first, and what the handoff protocol looks like for each\u2014producing a concrete migration sequence. This matters because the author insists the output must be 'an actual migration sequence, not a theory'\u2014and his research on scaling agents shows that coordination overhead compounds and naive delegation degrades performance, so distinguishing agent-ready tasks from those needing a verification layer prevents the failure mode where you hand off work without the structure to catch errors."
+      ],
+      "confidence": "high",
+      "source_posts": [
+        {
+          "id": "190572530",
+          "title": "80 out of every 200 employees exist to manage handoffs that agents are eliminating + the coordination tax audit to find yours",
+          "date": "2026-03-12T13:03:29.157Z"
+        },
+        {
+          "id": "185421882",
+          "title": "My honest field notes on scaling agents past the demo phase + 6 rules from teams running hundreds",
+          "date": "2026-01-26T14:03:32.389Z"
+        }
+      ],
+      "date": "2026-01-26T14:03:32.389Z",
+      "category": "problem-diagnosis",
+      "example_application": "Last week's calendar shows 42 hours logged. 14 hours were meetings whose sole purpose was transferring context between people who didn't share it \u2014 standups, cross-team syncs, the Monday status review. Another 12 hours went to translation artifacts: writing a PRD that reformatted engineering context for a product review, updating tickets so another team could pick up work, building a deck that restated what was already in Slack threads. That's 26 hours \u2014 62% \u2014 pure coordination tax, right at the benchmark. Of the remaining 16 hours, 11 were verifiable execution (drafting copy, building a prototype, running analysis) that an agent handles today with a verification layer. The genuine residual is 5 hours: deciding which market to enter, navigating a political conflict between two VPs, and making an aesthetic call on brand direction. The migration sequence starts with the translation artifacts \u2014 the PRD and ticket-writing are agent-ready now with a human review checkpoint.",
+      "related_frameworks": [
+        "double-compression-loop",
+        "genuine-judgment-vs-coordination-overhead-disguised-as-judgm"
+      ],
+      "origin": "extracted",
+      "description_original": "A structured calendar analysis that categorizes all work hours into three buckets\u2014coordination overhead, verifiable execution, and genuine residual judgment\u2014to calculate the fraction of a role that is automatable or already obsolete.",
+      "do_not_use_when": [
+        "The user is a solo founder with no team, so coordination overhead reflects genuine context-switching costs rather than inter-human translation problems the framework targets.",
+        "The user's meetings are external client-facing sales or negotiation sessions, where the 'coordination tax' framing misclassifies revenue-generating relationship work as automatable overhead.",
+        "The user is asking whether to automate a specific, already-scoped task like invoice processing, not diagnosing their overall role composition, making the calendar audit unnecessary overhead.",
+        "The user's organization has already restructured and they need change management communication strategy, not a diagnostic of which work is automatable versus residual."
+      ],
+      "steps_original": [
+        "Pull up your calendar from last week\u2014the actual version, not the idealized one.",
+        "Count hours where the primary purpose was transferring information from someone who had it to someone who needed it (status updates, syncs, standups, one-on-ones for context transfer)\u2014label these 'coordination.'",
+        "Count hours spent creating artifacts whose primary purpose was translating your knowledge into a form someone else could act on (PRDs, specs, briefs, decks, tickets, handoff documents)\u2014also label these 'coordination.'",
+        "Count hours spent doing the thing you were actually hired to do\u2014creating something that didn't exist before\u2014label these as either 'verifiable execution' (testable, measurable output) or 'genuine residual' (non-verifiable judgment, vision, or insight).",
+        "Calculate your personal coordination tax percentage and compare it to the 60\u201370% benchmark.",
+        "From the residual bucket, map what your role would look like if you spent 30 hours per week on it instead of your current allocation.",
+        "Identify which coordination tasks are ready for agent delegation now, which need a verification layer first, and what the handoff protocol looks like for each\u2014producing a concrete migration sequence."
+      ],
+      "framework_id": "coordination-tax-audit"
+    }
+  ]
+}

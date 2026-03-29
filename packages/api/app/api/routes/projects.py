@@ -1,14 +1,16 @@
 """
-Project API routes — KIN-263.
+Project API routes — KIN-263, KIN-370.
 
 Endpoints:
-  POST   /api/v1/projects                  — create a project (201)
-  GET    /api/v1/projects                  — list user's projects, optional ?company_id= filter
-  GET    /api/v1/projects/{project_id}     — get a single project
-  PATCH  /api/v1/projects/{project_id}     — partial update (name, instructions, company_id)
-  DELETE /api/v1/projects/{project_id}     — hard-delete (204)
+  POST   /api/v1/projects                            — create a project (201)
+  GET    /api/v1/projects                            — list user's projects, optional ?company_id= filter
+  GET    /api/v1/projects/{project_id}               — get a single project
+  PATCH  /api/v1/projects/{project_id}               — partial update (name, instructions, company_id)
+  DELETE /api/v1/projects/{project_id}               — hard-delete (204)
+  GET    /api/v1/projects/{project_id}/knowledge-base — look up project KB
+  POST   /api/v1/projects/{project_id}/knowledge-base — create project KB (idempotent)
 
-Schema ref: docs/db-schema-spec.md §4 (projects)
+Schema ref: docs/db-schema-spec.md §4 (projects), §10 (knowledge_bases)
 Spec ref: docs/specs/kin-257-projects-conversations-spec.md §Part 1
 Conventions: all Supabase calls in async def use run_in_executor
 Error handling: raise AppException subclasses — never return None/[]/False on write ops
@@ -19,7 +21,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, field_validator
 
 from app.auth.deps import CurrentUser, get_current_user
@@ -280,3 +282,93 @@ async def delete_project(
     )
     if not result.data:
         raise NotFoundError("Project not found")
+
+
+# ---------------------------------------------------------------------------
+# Project Knowledge Base — KIN-370
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{project_id}/knowledge-base")
+async def get_project_knowledge_base(
+    project_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """
+    Look up the KB attached to this project. 404 if none exists.
+
+    Raises:
+        NotFoundError (404): Project not found or no KB attached.
+    """
+    client = get_supabase_client()
+    loop = asyncio.get_running_loop()
+
+    project_result = await loop.run_in_executor(
+        None,
+        lambda: client.table("projects")
+            .select("id").eq("id", project_id).eq("user_id", current_user.user_id)
+            .single().execute(),
+    )
+    if not project_result.data:
+        raise NotFoundError("Project not found.")
+
+    kb_result = await loop.run_in_executor(
+        None,
+        lambda: client.table("knowledge_bases")
+            .select("id").eq("project_id", project_id).execute(),
+    )
+    kb_rows = kb_result.data or []
+    if not kb_rows:
+        raise NotFoundError("No knowledge base attached to this project.")
+    return {"id": kb_rows[0]["id"]}
+
+
+@router.post("/{project_id}/knowledge-base", status_code=201)
+async def create_project_knowledge_base(
+    project_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+    response: Response = None,  # type: ignore[assignment]
+) -> dict:
+    """
+    Create a KB for the project. Idempotent — returns existing (200) if already attached. Owner only.
+
+    Raises:
+        NotFoundError (404): Project not found.
+        ValidationError (400): DB returned no data after insert.
+    """
+    client = get_supabase_client()
+    loop = asyncio.get_running_loop()
+
+    project_result = await loop.run_in_executor(
+        None,
+        lambda: client.table("projects")
+            .select("id").eq("id", project_id).eq("user_id", current_user.user_id)
+            .single().execute(),
+    )
+    if not project_result.data:
+        raise NotFoundError("Project not found.")
+
+    kb_result = await loop.run_in_executor(
+        None,
+        lambda: client.table("knowledge_bases")
+            .select("id").eq("project_id", project_id).execute(),
+    )
+    kb_rows = kb_result.data or []
+    if kb_rows:
+        if response is not None:
+            response.status_code = 200
+        return {"id": kb_rows[0]["id"]}
+
+    insert_result = await loop.run_in_executor(
+        None,
+        lambda: client.table("knowledge_bases")
+            .insert({"project_id": project_id, "user_id": current_user.user_id})
+            .execute(),
+    )
+    if not insert_result.data:
+        logger.error(
+            "create_project_knowledge_base: no data returned from insert",
+            extra={"user_id": current_user.user_id, "project_id": project_id},
+        )
+        raise ValidationError("Failed to create knowledge base.")
+    return {"id": insert_result.data[0]["id"]}

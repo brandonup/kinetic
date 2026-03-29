@@ -52,6 +52,7 @@ class AssembledContext:
         rag_context_text: L8+L9 chunk texts joined (added in Task 3).
         model_context_window: From llm_models row.
         conversation_history: Recent messages (added in Task 4).
+        rag_debug_contexts: Per-scope debug contexts for trace writes.
     """
 
     system_parts: list[str] = field(default_factory=list)
@@ -59,6 +60,7 @@ class AssembledContext:
     rag_context_text: str = ""
     model_context_window: int = 100_000
     conversation_history: list[dict] = field(default_factory=list)
+    rag_debug_contexts: list[tuple] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -437,12 +439,14 @@ class ContextAssembler:
         ctx: AssembledContext,
     ) -> None:
         """L8 (Project KB) + L9 (Agent KB): RAG retrieval via retrieve()."""
+        from app.services.rag.debug_context import RetrievalDebugContext
         from app.services.rag.retrieval import RetrievalScope, retrieve
 
         all_chunks = []
 
         # L8: Project KB
         if project_id:
+            debug_ctx = RetrievalDebugContext(scope="project_kb")
             try:
                 chunks = await retrieve(
                     query_text,
@@ -451,13 +455,18 @@ class ContextAssembler:
                     supabase=supabase,
                     openai_key=openai_key,
                     model_context_window=model_context_window,
+                    debug_ctx=debug_ctx,
                 )
                 all_chunks.extend(chunks)
             except Exception as exc:
                 logger.warning("L8 project KB retrieval failed — skipping: %s", exc)
+                debug_ctx.gating_decision = "error"
+                debug_ctx.error_message = str(exc)
+            ctx.rag_debug_contexts.append(("project_kb", debug_ctx))
 
         # L9: Agent KB
         if active_agent_id:
+            debug_ctx = RetrievalDebugContext(scope="agent_kb")
             try:
                 chunks = await retrieve(
                     query_text,
@@ -466,10 +475,14 @@ class ContextAssembler:
                     supabase=supabase,
                     openai_key=openai_key,
                     model_context_window=model_context_window,
+                    debug_ctx=debug_ctx,
                 )
                 all_chunks.extend(chunks)
             except Exception as exc:
                 logger.warning("L9 agent KB retrieval failed — skipping: %s", exc)
+                debug_ctx.gating_decision = "error"
+                debug_ctx.error_message = str(exc)
+            ctx.rag_debug_contexts.append(("agent_kb", debug_ctx))
 
         ctx.rag_chunks.extend(all_chunks)
 

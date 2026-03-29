@@ -16,9 +16,10 @@ from __future__ import annotations
 
 import asyncio
 from typing import List
-from unittest.mock import AsyncMock, MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, PropertyMock, call, patch
 from uuid import uuid4
 
+import httpx
 import pytest
 
 from tests.conftest import TEST_USER_ID
@@ -848,3 +849,155 @@ class TestDocumentStatusTags:
         assert response.status_code == 200
         data = response.json()
         assert data["tags"] == []
+
+
+# ---------------------------------------------------------------------------
+# Indexer retry on transient errors — KIN-KB-FIX
+# ---------------------------------------------------------------------------
+
+
+class TestIndexerTransientRetry:
+    """index_chunks retries on transient network errors (EAGAIN, ReadError)."""
+
+    def test_retries_on_resource_temporarily_unavailable(self, db_session):
+        """
+        Errno 35 (Resource temporarily unavailable) triggers retry.
+        Second attempt succeeds — chunks are indexed.
+        """
+        from app.services.ingestion.indexer import index_chunks
+        from app.services.ingestion.chunker import Chunk
+
+        document_id = uuid4()
+        kb_id = uuid4()
+        project_id = uuid4()
+
+        chunks = [Chunk(text="Test chunk", chunk_index=0, token_count=2)]
+        embeddings = [[0.1] * 3072]
+
+        attempt = {"n": 0}
+        original_execute = db_session.table.return_value.insert.return_value.execute
+
+        def _fail_then_succeed():
+            attempt["n"] += 1
+            if attempt["n"] == 1:
+                raise httpx.ReadError("[Errno 35] Resource temporarily unavailable")
+            return MagicMock(data=[{"id": str(uuid4())}])
+
+        db_session.table.return_value.insert.return_value.execute.side_effect = _fail_then_succeed
+
+        with patch("asyncio.sleep", new_callable=AsyncMock):
+            count = _run(index_chunks(db_session, document_id, kb_id, project_id, None, chunks, embeddings))
+
+        assert count == 1
+        assert attempt["n"] == 2  # failed once, succeeded on retry
+
+    def test_non_transient_error_raises_immediately(self, db_session):
+        """
+        Non-transient errors (e.g., schema mismatch) raise immediately without retry.
+        """
+        from app.services.ingestion.indexer import index_chunks
+        from app.services.ingestion.chunker import Chunk
+
+        document_id = uuid4()
+        kb_id = uuid4()
+
+        chunks = [Chunk(text="Test chunk", chunk_index=0, token_count=2)]
+        embeddings = [[0.1] * 3072]
+
+        attempt = {"n": 0}
+
+        def _always_fail():
+            attempt["n"] += 1
+            raise ValueError("column 'bad_col' does not exist")
+
+        db_session.table.return_value.insert.return_value.execute.side_effect = _always_fail
+
+        with pytest.raises(ValueError, match="bad_col"):
+            _run(index_chunks(db_session, document_id, kb_id, None, None, chunks, embeddings))
+
+        assert attempt["n"] == 1  # no retry
+
+    def test_exhausts_retries_then_raises(self, db_session):
+        """
+        If all retry attempts fail with transient errors, the error propagates.
+        """
+        from app.services.ingestion.indexer import index_chunks
+        from app.services.ingestion.chunker import Chunk
+
+        document_id = uuid4()
+        kb_id = uuid4()
+
+        chunks = [Chunk(text="Test chunk", chunk_index=0, token_count=2)]
+        embeddings = [[0.1] * 3072]
+
+        attempt = {"n": 0}
+
+        def _always_transient_fail():
+            attempt["n"] += 1
+            raise httpx.ReadError("[Errno 35] Resource temporarily unavailable")
+
+        db_session.table.return_value.insert.return_value.execute.side_effect = _always_transient_fail
+
+        with (
+            patch("asyncio.sleep", new_callable=AsyncMock),
+            pytest.raises(httpx.ReadError),
+        ):
+            _run(index_chunks(db_session, document_id, kb_id, None, None, chunks, embeddings))
+
+        assert attempt["n"] == 3  # 1 initial + 2 retries
+
+
+# ---------------------------------------------------------------------------
+# Pipeline uses dedicated Supabase client — KIN-KB-FIX
+# ---------------------------------------------------------------------------
+
+
+class TestPipelineClientIsolation:
+    """Upload and retry dispatch background tasks with a fresh Supabase client."""
+
+    def test_upload_uses_create_supabase_for_pipeline(self, client):
+        """
+        POST /documents/upload passes a fresh (non-singleton) Supabase client
+        to the background pipeline, not the shared singleton.
+        """
+        kb_id = str(uuid4())
+
+        kb_mock = MagicMock()
+        kb_mock.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
+            data={"project_id": None, "agent_definition_id": str(uuid4()), "user_id": TEST_USER_ID}
+        )
+
+        doc_mock = MagicMock()
+        doc_mock.insert.return_value.execute.return_value = MagicMock(data=[{"id": "new-doc-id"}])
+
+        def _table(name):
+            if name == "knowledge_bases":
+                return kb_mock
+            elif name == "knowledge_base_documents":
+                return doc_mock
+            return MagicMock()
+
+        singleton_sb = MagicMock()
+        singleton_sb.table.side_effect = _table
+        singleton_sb.storage.from_.return_value.upload.return_value = None
+
+        fresh_sb = MagicMock(name="fresh_pipeline_client")
+
+        with (
+            patch("app.api.routes.documents.get_supabase", return_value=singleton_sb),
+            patch("app.api.routes.documents.create_supabase", return_value=fresh_sb) as mock_create,
+            patch("app.api.routes.documents.fetch_user_key_async", new_callable=AsyncMock, return_value="sk-test"),
+            patch("app.api.routes.documents.run_ingestion", new_callable=AsyncMock) as mock_run,
+        ):
+            response = client.post(
+                "/api/v1/documents/upload",
+                files={"file": ("test.txt", b"hello world", "text/plain")},
+                data={"knowledge_base_id": kb_id},
+            )
+
+        assert response.status_code == 200
+        mock_create.assert_called_once()
+        # Verify the pipeline received the fresh client, not the singleton
+        pipeline_supabase_arg = mock_run.call_args.args[0]
+        assert pipeline_supabase_arg is fresh_sb
+        assert pipeline_supabase_arg is not singleton_sb

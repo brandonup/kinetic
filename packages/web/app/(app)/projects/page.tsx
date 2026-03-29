@@ -16,6 +16,7 @@
 import { useEffect, useState } from "react";
 
 import { ActiveMemoryPanel } from "@/components/ActiveMemoryPanel";
+import { KnowledgeBaseTab } from "@/components/KnowledgeBaseTab";
 import { ProposalReviewPanel } from "@/components/ProposalReviewPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,6 +59,11 @@ export default function ProjectsPage() {
   // Active Memory proposal review (per-project, lazy-loaded when settings open)
   const [pendingProposalCount, setPendingProposalCount] = useState(0);
   const [showProposalReview, setShowProposalReview] = useState(false);
+
+  // Knowledge Base (per-project, lazy-loaded when settings open)
+  const [kbId, setKbId] = useState<string | null>(null);
+  const [kbLoading, setKbLoading] = useState(false);
+  const [creatingKb, setCreatingKb] = useState(false);
 
   useEffect(() => {
     void loadAll();
@@ -138,6 +144,8 @@ export default function ProjectsPage() {
     setPendingCompanyName(null);
     setPendingProposalCount(0);
     setShowProposalReview(false);
+    setKbId(null);
+    setKbLoading(true);
     // Lazy-check for pending memory proposals
     void apiFetch(`/api/v1/active-memory/proposals?project_id=${project.id}`)
       .then((res) => res.ok ? res.json() : null)
@@ -145,6 +153,14 @@ export default function ProjectsPage() {
         if (data?.proposals) setPendingProposalCount(data.proposals.length);
       })
       .catch(() => {});
+    // Lazy-load KB
+    void apiFetch(`/api/v1/projects/${project.id}/knowledge-base`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data?.id) setKbId(data.id);
+      })
+      .catch(() => {})
+      .finally(() => setKbLoading(false));
   }
 
   function cancelSettings() {
@@ -152,6 +168,30 @@ export default function ProjectsPage() {
     setPendingCompanyName(null);
     setPendingProposalCount(0);
     setShowProposalReview(false);
+    setKbId(null);
+    setKbLoading(false);
+    setCreatingKb(false);
+  }
+
+  async function handleCreateKb(projectId: string) {
+    setCreatingKb(true);
+    try {
+      const res = await apiFetch(`/api/v1/projects/${projectId}/knowledge-base`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        const data: { id: string } = await res.json();
+        setKbId(data.id);
+        toast({ title: "Knowledge Base created" });
+      } else {
+        const msg = await parseApiError(res);
+        toast({ title: "Failed to create KB", description: msg, variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Failed to create KB", variant: "destructive" });
+    } finally {
+      setCreatingKb(false);
+    }
   }
 
   function handleCompanyChange(newCompanyId: string, currentCompanyId: string) {
@@ -393,6 +433,36 @@ export default function ProjectsPage() {
                   )}
                   <ActiveMemoryPanel projectId={project.id} />
                 </div>
+                {/* ── Knowledge Base ── */}
+                <Separator />
+                <div className="space-y-2">
+                  <div>
+                    <Label>Knowledge Base</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Upload documents for RAG retrieval in this project&apos;s conversations.
+                    </p>
+                  </div>
+                  {kbLoading ? (
+                    <p className="text-sm text-muted-foreground">Loading…</p>
+                  ) : kbId ? (
+                    <KnowledgeBaseTab knowledgeBaseId={kbId} />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-6 space-y-2">
+                      <p className="text-sm text-muted-foreground">
+                        No Knowledge Base yet.
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleCreateKb(project.id)}
+                        disabled={creatingKb}
+                      >
+                        {creatingKb ? "Creating…" : "Create Knowledge Base"}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
                 <Separator />
 
                 <div className="space-y-1.5">

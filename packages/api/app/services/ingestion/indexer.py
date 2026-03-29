@@ -23,6 +23,11 @@ from app.services.ingestion.chunker import Chunk
 
 logger = logging.getLogger(__name__)
 
+# Transient errors that warrant a retry (network hiccups, connection resets).
+_TRANSIENT_ERRORS = ("Resource temporarily unavailable", "ReadError", "ConnectError")
+_MAX_INDEX_RETRIES = 2
+_INDEX_RETRY_DELAYS = (2, 5)  # seconds
+
 
 async def index_chunks(
     supabase,
@@ -78,10 +83,31 @@ async def index_chunks(
     ]
 
     loop = asyncio.get_running_loop()
-    result = await loop.run_in_executor(
-        None,
-        lambda: supabase.table("knowledge_base_chunks").insert(rows).execute(),
-    )
+
+    last_exc: Exception | None = None
+    for attempt in range(_MAX_INDEX_RETRIES + 1):
+        try:
+            result = await loop.run_in_executor(
+                None,
+                lambda: supabase.table("knowledge_base_chunks").insert(rows).execute(),
+            )
+            break
+        except Exception as exc:
+            last_exc = exc
+            err_str = str(exc)
+            is_transient = any(t in err_str for t in _TRANSIENT_ERRORS)
+            if is_transient and attempt < _MAX_INDEX_RETRIES:
+                delay = _INDEX_RETRY_DELAYS[min(attempt, len(_INDEX_RETRY_DELAYS) - 1)]
+                logger.warning(
+                    "Transient error indexing document %s (attempt %d/%d): %s. "
+                    "Retrying in %ds.",
+                    document_id, attempt + 1, _MAX_INDEX_RETRIES, exc, delay,
+                )
+                await asyncio.sleep(delay)
+            else:
+                raise
+    else:
+        raise last_exc  # type: ignore[misc]
 
     if not result.data:
         raise RuntimeError(

@@ -34,7 +34,7 @@ We will use the following stack for Kinetic MVP:
 | LLM abstraction | LiteLLM |
 | Background jobs | FastAPI BackgroundTasks + TaskDispatcher abstraction |
 | Text extraction | `unstructured` (Python) |
-| Auth | Supabase Auth (magic link + Google OAuth) |
+| Auth | Supabase Auth (Google OAuth) |
 | File storage | Supabase Storage |
 
 ---

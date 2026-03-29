@@ -305,6 +305,40 @@ async def generate(
             })
             yield f"data: {done_event}\n\n"
 
+            # Dispatch RAG retrieval trace writes (fire-and-forget)
+            if message_id != "unknown" and ctx.rag_debug_contexts:
+                try:
+                    from app.services.rag.trace_writer import write_retrieval_trace
+
+                    for _scope, _dbg in ctx.rag_debug_contexts:
+                        _trace_kwargs = _dbg.to_trace_kwargs()
+                        _loop.run_in_executor(
+                            None,
+                            lambda s=_scope, tk=_trace_kwargs: write_retrieval_trace(
+                                message_id,
+                                s,
+                                body.message,
+                                tk["vector_candidates"],
+                                tk["mmr_selections"],
+                                tk["injected_chunks"],
+                                tk["gating_decision"],
+                                client,
+                                error_message=tk["error_message"],
+                                retrieval_duration_ms=tk["retrieval_duration_ms"],
+                                timings=tk["timings"],
+                            ),
+                        )
+                    logger.info(
+                        "generate: dispatched %d RAG trace writes for message %s",
+                        len(ctx.rag_debug_contexts),
+                        message_id,
+                    )
+                except Exception as trace_exc:
+                    logger.warning(
+                        "generate: RAG trace dispatch failed (non-fatal): %s",
+                        trace_exc,
+                    )
+
             # Periodic memory proposal + rolling summary trigger (KIN-388, KIN-392)
             # After user + assistant stored, total = _sequence + 1
             # Fire every 10 messages, proposals debounced on pending proposals

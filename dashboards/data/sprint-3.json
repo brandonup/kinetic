@@ -1,0 +1,69 @@
+{
+  "$schema": "sprint-snapshot-v1",
+  "sprint": {
+    "number": 3,
+    "name": "Conversations + Generation Engine",
+    "startDate": "2026-03-22",
+    "endDate": "2026-03-22"
+  },
+  "velocity": {
+    "planned": 13,
+    "completed": 13,
+    "carryover": 0,
+    "totalPoints": 34,
+    "completedPoints": 34
+  },
+  "estimates": {
+    "coveragePercent": 55,
+    "byAgent": {
+      "dinesh":   { "total": 5, "estimated": 3, "coveragePercent": 60 },
+      "bighead":  { "total": 4, "estimated": 3, "coveragePercent": 75 },
+      "jian":     { "total": 2, "estimated": 1, "coveragePercent": 50 },
+      "gilfoyle": { "total": 2, "estimated": 0, "coveragePercent": 0 },
+      "jared":    { "total": 2, "estimated": 0, "coveragePercent": 0 }
+    }
+  },
+  "cycleTime": {
+    "averageDays": 1.5,
+    "medianDays": 1.3,
+    "p90Days": 2.8,
+    "byAgent": {
+      "dinesh":  { "averageDays": 1.4, "ticketCount": 5 },
+      "bighead": { "averageDays": 1.8, "ticketCount": 4 }
+    }
+  },
+  "reviews": {
+    "totalReviews": 13,
+    "rejections": 3,
+    "rejectionRate": 23.1,
+    "byAgent": {
+      "dinesh":  { "reviews": 7, "rejections": 2, "rejectionRate": 29, "maxRounds": 2 },
+      "bighead": { "reviews": 6, "rejections": 1, "rejectionRate": 17, "maxRounds": 2 }
+    }
+  },
+  "defects": {
+    "total": 21,
+    "byCategory": {
+      "acl-leak":        1,
+      "error-swallow":   5,
+      "api-contract":    4,
+      "spec-gap":        4,
+      "schema-mismatch": 2,
+      "rls-bypass":      0,
+      "async-supabase":  2,
+      "test-missing":    0,
+      "other":           3
+    },
+    "bySeverity": { "critical": 7, "important": 14, "minor": 0 },
+    "defectsPerTicket": 1.6
+  },
+  "agentActivity": {
+    "dinesh":  { "completed": 5, "wipPeak": 2 },
+    "bighead": { "completed": 4, "wipPeak": 1 }
+  },
+  "processHealth": {
+    "decisionTicketLagHours": 1.75,
+    "handoffCompliancePercent": 85
+  },
+  "notes": "Delivered working generation endpoint with SSE streaming, 9-layer context stack (Layers 1–4 + 8 active), conversation CRUD + chat UI, model selector, SSE proxy, history compression. Error-swallow defects increased with async complexity of streaming code. Rejection rate improved to 23% — review pattern stabilising."
+}

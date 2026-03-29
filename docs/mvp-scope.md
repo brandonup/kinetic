@@ -15,8 +15,8 @@ This document defines the minimum viable product for Kinetic. It is a subset of 
 ## MVP Feature Set
 
 ### Auth & Admin
-- **Registration:** Email-only. User provides email → account is auto-created. No approval flow, no invite codes, no password setup on registration (use magic link or OAuth).
-- **Login:** Magic link (email-based) or OAuth (Google). No password management in MVP.
+- **Registration:** Email-only. User provides email → account is auto-created via Google OAuth. No approval flow, no invite codes, no password setup.
+- **Login:** Google OAuth only. No magic link, no password management in MVP.
 - **Admin section:** List users, disable accounts. No roles beyond admin/user.
 
 ### User Profile

@@ -12,6 +12,7 @@
  *   POST   /api/v1/agents/:agentId/frameworks
  *   PATCH  /api/v1/agents/:agentId/frameworks/:frameworkId
  *   DELETE /api/v1/agents/:agentId/frameworks/:frameworkId
+ *   DELETE /api/v1/agents/:agentId/frameworks          (delete all)
  *   POST   /api/v1/agents/:agentId/frameworks/upload
  */
 
@@ -25,6 +26,7 @@ import type {
   CreateFrameworkRequest,
   Framework,
   FrameworkListResponse,
+  FrameworkOverrides,
   UpdateFrameworkRequest,
   UploadFrameworksResponse,
 } from "@/lib/types/models";
@@ -43,11 +45,11 @@ interface FrameworkFormProps {
 
 function FrameworkForm({ initial, saving, onSave, onCancel }: FrameworkFormProps) {
   const [name, setName] = useState(initial?.name ?? "");
+  const [category, setCategory] = useState(initial?.category ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
   const [whenToApply, setWhenToApply] = useState<string[]>(initial?.when_to_apply ?? [""]);
   const [principles, setPrinciples] = useState<string[]>(initial?.principles ?? [""]);
-  const [category, setCategory] = useState(initial?.category ?? "");
-  const [exampleApplication, setExampleApplication] = useState(initial?.example_application ?? "");
-  const [confidence, setConfidence] = useState<"high" | "medium">(initial?.confidence ?? "high");
+  const [steps, setSteps] = useState<string[]>(initial?.steps ?? [""]);
 
   const whenToApplyChanged =
     initial !== null &&
@@ -58,12 +60,14 @@ function FrameworkForm({ initial, saving, onSave, onCancel }: FrameworkFormProps
       // PATCH — only include changed fields
       const body: UpdateFrameworkRequest = {};
       if (name !== initial.name) body.name = name;
+      if (category !== (initial.category ?? "")) body.category = category || undefined;
+      if (description !== (initial.description ?? "")) body.description = description || undefined;
       if (JSON.stringify(whenToApply.filter(Boolean)) !== JSON.stringify(initial.when_to_apply))
         body.when_to_apply = whenToApply.filter(Boolean);
-      if (category !== (initial.category ?? "")) body.category = category || undefined;
-      if (exampleApplication !== (initial.example_application ?? ""))
-        body.example_application = exampleApplication || undefined;
-      if (confidence !== initial.confidence) body.confidence = confidence;
+      if (JSON.stringify(principles.filter(Boolean)) !== JSON.stringify(initial.principles))
+        body.principles = principles.filter(Boolean);
+      if (JSON.stringify(steps.filter(Boolean)) !== JSON.stringify(initial.steps))
+        body.steps = steps.filter(Boolean);
       onSave(body);
     } else {
       // POST — full body
@@ -71,9 +75,9 @@ function FrameworkForm({ initial, saving, onSave, onCancel }: FrameworkFormProps
         name,
         when_to_apply: whenToApply.filter(Boolean),
         principles: principles.filter(Boolean),
-        confidence,
         category: category || undefined,
-        example_application: exampleApplication || undefined,
+        description: description || undefined,
+        steps: steps.filter(Boolean).length > 0 ? steps.filter(Boolean) : undefined,
       };
       onSave(body);
     }
@@ -87,9 +91,27 @@ function FrameworkForm({ initial, saving, onSave, onCancel }: FrameworkFormProps
         <Input value={name} onChange={(e) => setName(e.target.value)} className="mt-1" placeholder="e.g., Coordination Tax Diagnostic" />
       </div>
 
+      {/* Category */}
+      <div>
+        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Category</label>
+        <Input value={category} onChange={(e) => setCategory(e.target.value)} className="mt-1" placeholder="e.g., strategy, org-design" />
+      </div>
+
+      {/* Description */}
+      <div>
+        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Description</label>
+        <textarea
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          placeholder="Brief description of what this framework does…"
+          rows={3}
+          className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+        />
+      </div>
+
       {/* When to apply */}
       <div>
-        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Trigger phrases *</label>
+        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">When to apply *</label>
         <div className="mt-1 space-y-1">
           {whenToApply.map((phrase, i) => (
             <div key={i} className="flex gap-1">
@@ -120,67 +142,65 @@ function FrameworkForm({ initial, saving, onSave, onCancel }: FrameworkFormProps
         )}
       </div>
 
-      {/* Principles — only shown in add mode (edit doesn't surface it per spec) */}
-      {!initial && (
-        <div>
-          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Principles *</label>
-          <div className="mt-1 space-y-1">
-            {principles.map((p, i) => (
-              <div key={i} className="flex gap-1">
-                <Input
-                  value={p}
-                  onChange={(e) => {
-                    const next = [...principles];
-                    next[i] = e.target.value;
-                    setPrinciples(next);
-                  }}
-                  placeholder="Core idea or rule…"
-                  className="h-8 text-sm"
-                />
-                {principles.length > 1 && (
-                  <Button
-                    variant="ghost" size="sm" className="h-8 px-2 text-destructive hover:text-destructive"
-                    onClick={() => setPrinciples(principles.filter((_, j) => j !== i))}
-                  >×</Button>
-                )}
-              </div>
-            ))}
-            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setPrinciples([...principles, ""])}>
-              + Add principle
-            </Button>
-          </div>
+      {/* Principles — shown in both add and edit modes (KIN-371) */}
+      <div>
+        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Principles {!initial && "*"}</label>
+        <div className="mt-1 space-y-1">
+          {principles.map((p, i) => (
+            <div key={i} className="flex gap-1">
+              <Input
+                value={p}
+                onChange={(e) => {
+                  const next = [...principles];
+                  next[i] = e.target.value;
+                  setPrinciples(next);
+                }}
+                placeholder="Core idea or rule…"
+                className="h-8 text-sm"
+              />
+              {principles.length > 1 && (
+                <Button
+                  variant="ghost" size="sm" className="h-8 px-2 text-destructive hover:text-destructive"
+                  onClick={() => setPrinciples(principles.filter((_, j) => j !== i))}
+                >×</Button>
+              )}
+            </div>
+          ))}
+          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setPrinciples([...principles, ""])}>
+            + Add principle
+          </Button>
         </div>
-      )}
-
-      {/* Category */}
-      <div>
-        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Category</label>
-        <Input value={category} onChange={(e) => setCategory(e.target.value)} className="mt-1" placeholder="e.g., strategy, org-design" />
       </div>
 
-      {/* Example application */}
+      {/* Steps */}
       <div>
-        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Example application</label>
-        <textarea
-          value={exampleApplication}
-          onChange={(e) => setExampleApplication(e.target.value)}
-          placeholder="Describe a concrete scenario…"
-          rows={3}
-          className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none"
-        />
-      </div>
-
-      {/* Confidence */}
-      <div>
-        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Confidence</label>
-        <select
-          value={confidence}
-          onChange={(e) => setConfidence(e.target.value as "high" | "medium")}
-          className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-        >
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-        </select>
+        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Steps</label>
+        <div className="mt-1 space-y-1">
+          {steps.map((s, i) => (
+            <div key={i} className="flex gap-1">
+              <span className="flex items-center text-xs text-muted-foreground w-5 shrink-0 justify-center">{i + 1}.</span>
+              <Input
+                value={s}
+                onChange={(e) => {
+                  const next = [...steps];
+                  next[i] = e.target.value;
+                  setSteps(next);
+                }}
+                placeholder="Step description…"
+                className="h-8 text-sm"
+              />
+              {steps.length > 1 && (
+                <Button
+                  variant="ghost" size="sm" className="h-8 px-2 text-destructive hover:text-destructive"
+                  onClick={() => setSteps(steps.filter((_, j) => j !== i))}
+                >×</Button>
+              )}
+            </div>
+          ))}
+          <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setSteps([...steps, ""])}>
+            + Add step
+          </Button>
+        </div>
       </div>
 
       {/* Actions */}
@@ -223,13 +243,22 @@ export function FrameworkLibraryTab({ agentId, isOwner }: FrameworkLibraryTabPro
   const [editTarget, setEditTarget] = useState<Framework | null>(null); // null = add mode
   const [formSaving, setFormSaving] = useState(false);
 
+  // Delete all
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
+
   // Upload
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadSummary, setUploadSummary] = useState<UploadFrameworksResponse | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Pin/exclude overrides (KIN-372)
+  const [overrides, setOverrides] = useState<FrameworkOverrides>({ pinned: [], excluded: [] });
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
   useEffect(() => {
     void loadFrameworks();
+    void loadOverrides();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentId]);
 
@@ -245,6 +274,51 @@ export function FrameworkLibraryTab({ agentId, isOwner }: FrameworkLibraryTabPro
       // Silent — empty state rendered
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadOverrides() {
+    try {
+      const res = await apiFetch(`/api/v1/agents/${agentId}/instance`);
+      if (res.ok) {
+        const data = await res.json();
+        setOverrides(data.framework_overrides ?? { pinned: [], excluded: [] });
+      }
+    } catch {
+      // Silent — defaults to empty overrides
+    }
+  }
+
+  async function handleToggleOverride(
+    frameworkId: string,
+    action: "pin" | "exclude" | "clear",
+  ) {
+    setTogglingId(frameworkId);
+    const prev = { ...overrides };
+    // Compute new state
+    let pinned = overrides.pinned.filter((id) => id !== frameworkId);
+    let excluded = overrides.excluded.filter((id) => id !== frameworkId);
+    if (action === "pin") pinned = [...pinned, frameworkId];
+    if (action === "exclude") excluded = [...excluded, frameworkId];
+
+    const next: FrameworkOverrides = { pinned, excluded };
+    // Optimistic update
+    setOverrides(next);
+    try {
+      const res = await apiFetch(`/api/v1/agents/${agentId}/instance`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ framework_overrides: next }),
+      });
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+      const data = await res.json();
+      setOverrides(data.framework_overrides ?? next);
+    } catch {
+      // Rollback
+      setOverrides(prev);
+      toast({ title: "Failed to update override", variant: "destructive" });
+    } finally {
+      setTogglingId(null);
     }
   }
 
@@ -290,6 +364,28 @@ export function FrameworkLibraryTab({ agentId, isOwner }: FrameworkLibraryTabPro
     } finally {
       setDeletingId(null);
       deletedRowRef.current = null;
+    }
+  }
+
+  async function handleDeleteAll() {
+    setDeletingAll(true);
+    setShowDeleteAllConfirm(false);
+    const prevFrameworks = [...frameworks];
+    // Optimistic clear
+    setFrameworks([]);
+    try {
+      const res = await apiFetch(`/api/v1/agents/${agentId}/frameworks`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error(`Status ${res.status}`);
+      const data = await res.json();
+      toast({ title: `Deleted ${data.deleted_count} framework${data.deleted_count === 1 ? "" : "s"}` });
+    } catch {
+      // Restore on failure
+      setFrameworks(prevFrameworks);
+      toast({ title: "Failed to delete frameworks", variant: "destructive" });
+    } finally {
+      setDeletingAll(false);
     }
   }
 
@@ -439,6 +535,35 @@ export function FrameworkLibraryTab({ agentId, isOwner }: FrameworkLibraryTabPro
         </div>
       )}
 
+      {/* Confirm delete-all modal */}
+      {showDeleteAllConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-background border rounded-lg shadow-lg p-6 max-w-sm w-full mx-4 space-y-4">
+            <h2 className="text-base font-semibold">Delete all frameworks?</h2>
+            <p className="text-sm text-muted-foreground">
+              This will permanently delete all {frameworks.length} framework{frameworks.length === 1 ? "" : "s"} and
+              their trigger vectors. This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowDeleteAllConfirm(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => void handleDeleteAll()}
+              >
+                Delete all
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Controls */}
       <div className="flex flex-wrap items-center gap-2">
         <Input
@@ -468,6 +593,17 @@ export function FrameworkLibraryTab({ agentId, isOwner }: FrameworkLibraryTabPro
               className="hidden"
               onChange={(e) => void handleUpload(e)}
             />
+            {frameworks.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                disabled={deletingAll}
+                onClick={() => setShowDeleteAllConfirm(true)}
+              >
+                {deletingAll ? "Deleting..." : "Delete all"}
+              </Button>
+            )}
           </>
         )}
 
@@ -534,8 +670,7 @@ export function FrameworkLibraryTab({ agentId, isOwner }: FrameworkLibraryTabPro
               <tr className="border-b bg-muted/40">
                 <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground">Name</th>
                 <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground">Category</th>
-                <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground">Confidence</th>
-                <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground">Triggers</th>
+                <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground">When to apply</th>
                 <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground">Origin</th>
                 {isOwner && (
                   <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground">Actions</th>
@@ -546,22 +681,40 @@ export function FrameworkLibraryTab({ agentId, isOwner }: FrameworkLibraryTabPro
               {filteredFrameworks.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={isOwner ? 6 : 5}
+                    colSpan={isOwner ? 5 : 4}
                     className="px-3 py-4 text-center text-xs text-muted-foreground"
                   >
                     No frameworks match your filter.
                   </td>
                 </tr>
               ) : (
-                filteredFrameworks.map((f) => (
+                filteredFrameworks.map((f) => {
+                  const isPinned = overrides.pinned.includes(f.framework_id);
+                  const isExcluded = overrides.excluded.includes(f.framework_id);
+                  return (
                   <tr
                     key={f.id}
                     className={cn(
                       "border-b last:border-0 transition-colors hover:bg-muted/20",
-                      deletingId === f.id && "opacity-40 pointer-events-none"
+                      deletingId === f.id && "opacity-40 pointer-events-none",
+                      isExcluded && "opacity-50"
                     )}
                   >
-                    <td className="px-3 py-2 font-medium">{f.name}</td>
+                    <td className="px-3 py-2 font-medium">
+                      <span className={cn(isExcluded && "line-through text-muted-foreground")}>
+                        {f.name}
+                      </span>
+                      {isPinned && (
+                        <span className="ml-1.5 inline-flex items-center text-xs rounded bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 px-1.5 py-0.5 font-medium">
+                          Pinned
+                        </span>
+                      )}
+                      {isExcluded && (
+                        <span className="ml-1.5 inline-flex items-center text-xs rounded bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 px-1.5 py-0.5 font-medium">
+                          Excluded
+                        </span>
+                      )}
+                    </td>
                     <td className="px-3 py-2">
                       {f.category ? (
                         <span className="text-xs rounded bg-muted px-1.5 py-0.5">
@@ -570,18 +723,6 @@ export function FrameworkLibraryTab({ agentId, isOwner }: FrameworkLibraryTabPro
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
-                    </td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={cn(
-                          "text-xs rounded px-1.5 py-0.5 font-medium",
-                          f.confidence === "high"
-                            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
-                            : "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400"
-                        )}
-                      >
-                        {f.confidence}
-                      </span>
                     </td>
                     <td className="px-3 py-2 text-muted-foreground">
                       {f.when_to_apply.length}
@@ -604,6 +745,36 @@ export function FrameworkLibraryTab({ agentId, isOwner }: FrameworkLibraryTabPro
                           <Button
                             variant="ghost"
                             size="sm"
+                            className={cn(
+                              "h-6 px-2 text-xs",
+                              isPinned
+                                ? "text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                                : "hover:bg-muted"
+                            )}
+                            onClick={() => void handleToggleOverride(f.framework_id, isPinned ? "clear" : "pin")}
+                            disabled={togglingId === f.framework_id || deletingId === f.id}
+                            title={isPinned ? "Unpin framework" : "Pin framework (always inject)"}
+                          >
+                            {isPinned ? "Unpin" : "Pin"}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={cn(
+                              "h-6 px-2 text-xs",
+                              isExcluded
+                                ? "text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                                : "hover:bg-muted"
+                            )}
+                            onClick={() => void handleToggleOverride(f.framework_id, isExcluded ? "clear" : "exclude")}
+                            disabled={togglingId === f.framework_id || deletingId === f.id}
+                            title={isExcluded ? "Include framework" : "Exclude framework (remove from pool)"}
+                          >
+                            {isExcluded ? "Include" : "Exclude"}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             className="h-6 px-2 text-xs hover:bg-muted"
                             onClick={() => { setEditTarget(f); setShowForm(true); }}
                             disabled={deletingId === f.id}
@@ -623,7 +794,8 @@ export function FrameworkLibraryTab({ agentId, isOwner }: FrameworkLibraryTabPro
                       </td>
                     )}
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>

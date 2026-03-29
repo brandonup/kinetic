@@ -1,5 +1,5 @@
 """
-MCP context endpoint — KIN-321.
+MCP context endpoint — KIN-321, KIN-324 (access control).
 
 POST /api/v1/mcp/context
 
@@ -27,14 +27,18 @@ import asyncio
 import hashlib
 import logging
 import math
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 from app.core.errors import AuthenticationError, NotFoundError, RateLimitError, ValidationError
 from app.db.supabase_client import get_supabase
+from app.services.rag.framework_selection import select_framework, FrameworkMatch
+from app.services.rag.retrieval import retrieve, RetrievalScope, RetrievedChunk
+from app.services.user_keys import fetch_user_key_async
 
 logger = logging.getLogger(__name__)
 
@@ -140,43 +144,55 @@ async def _check_rate_limit(user_id: str, client, loop: asyncio.AbstractEventLoo
     """
     Enforce per-user daily rate limit (ADR-006 §3).
 
-    Checks mcp_rate_limits for today's row. If request_count >= daily_cap,
-    raises RateLimitError (429). Otherwise increments the counter via UPSERT.
+    Calls mcp_check_and_increment_rate_limit RPC which performs an atomic
+    INSERT ... ON CONFLICT DO UPDATE SET request_count = request_count + 1
+    and returns (allowed, request_count, daily_cap).
+
+    Fails open on RPC error — rate limit write failure should not block context
+    assembly. See conventions.md § Error Handling (read-path fail-open acceptable
+    when documented).
+
+    Migration: supabase/migrations/20260324000000_mcp_rate_limit_rpc.sql
     """
     today = date.today().isoformat()
 
-    result = await loop.run_in_executor(
-        None,
-        lambda: client
-            .table("mcp_rate_limits")
-            .select("request_count, daily_cap")
-            .eq("user_id", user_id)
-            .eq("date", today)
-            .execute(),
-    )
-
-    rows = result.data if isinstance(result.data, list) else []
-    if rows:
-        row = rows[0]
-        if row["request_count"] >= row["daily_cap"]:
+    try:
+        result = await loop.run_in_executor(
+            None,
+            lambda: client
+                .rpc(
+                    "mcp_check_and_increment_rate_limit",
+                    {"p_user_id": user_id, "p_date": today},
+                )
+                .execute(),
+        )
+        rows = result.data if isinstance(result.data, list) else []
+        if rows and not rows[0].get("allowed", True):
+            cap = rows[0].get("daily_cap", 1000)
+            # Compute seconds until next UTC midnight for Retry-After header
+            now_utc = datetime.now(timezone.utc)
+            next_midnight = now_utc.replace(
+                hour=0, minute=0, second=0, microsecond=0
+            ) + timedelta(days=1)
+            retry_after = int((next_midnight - now_utc).total_seconds())
+            reset_at = next_midnight.strftime("%Y-%m-%dT%H:%M:%SZ")
+            reset_timestamp = int(next_midnight.timestamp())
             raise RateLimitError(
                 "Daily MCP request limit reached",
-                details={"daily_cap": row["daily_cap"]},
+                details={
+                    "daily_cap": cap,
+                    "retry_after": retry_after,
+                    "reset_at": reset_at,
+                    "reset_timestamp": reset_timestamp,
+                },
             )
-        new_count = row["request_count"] + 1
-    else:
-        new_count = 1
-
-    await loop.run_in_executor(
-        None,
-        lambda: client
-            .table("mcp_rate_limits")
-            .upsert(
-                {"user_id": user_id, "date": today, "request_count": new_count},
-                on_conflict="user_id,date",
-            )
-            .execute(),
-    )
+    except RateLimitError:
+        raise
+    except Exception:
+        logger.warning(
+            "mcp_check_and_increment_rate_limit RPC failed — rate limit not enforced",
+            exc_info=True,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -248,7 +264,8 @@ async def mcp_context(
     )
     user = user_result.data or {}
 
-    # L3 — project (ownership enforced via user_id filter)
+    # L3 — project: fetch by id + user_id filter (anti-enumeration: 404 for both
+    # not-found and not-authorized, per Gilfoyle review + spec §6 update)
     project_row = None
     if body.project_id:
         r = await loop.run_in_executor(
@@ -274,9 +291,9 @@ async def mcp_context(
                 details={"code": "SCOPE_MISMATCH"},
             )
 
-    # L2 — company
+    # L2 — company (anti-enumeration: 404 for both not-found and not-authorized)
     # When project_id given: fetch via project's company_id (ownership already verified via project)
-    # When explicit company_id without project: ownership check via user_id
+    # When explicit company_id without project: ownership check via user_id filter
     company_row = None
     effective_company_id = None
     if project_row:
@@ -286,7 +303,7 @@ async def mcp_context(
 
     if effective_company_id and (body.project_id or body.company_id):
         if project_row and not body.company_id:
-            # Fetched via project's parent — no separate user_id ownership check needed
+            # Fetched via project's parent — no separate ownership check needed
             r = await loop.run_in_executor(
                 None,
                 lambda: client
@@ -297,7 +314,7 @@ async def mcp_context(
                     .execute(),
             )
         else:
-            # Explicit company_id — enforce ownership
+            # Explicit company_id — enforce ownership via user_id filter
             r = await loop.run_in_executor(
                 None,
                 lambda: client
@@ -312,7 +329,8 @@ async def mcp_context(
             raise NotFoundError("Company not found")
         company_row = r.data
 
-    # L5 — agent (public agents accessible to all; private agents owner-only — ADR-006 §4)
+    # L5 — agent (public agents accessible to all; private agents owner-only)
+    # Anti-enumeration: private agent + not owner returns 404 (not 403)
     agent_row = None
     if body.agent_id:
         r = await loop.run_in_executor(
@@ -327,12 +345,52 @@ async def mcp_context(
         if not r.data:
             raise NotFoundError("Agent not found")
         agent_row = r.data
-        # ACL: private agents are owner-only; return 404 to avoid confirming existence
         if agent_row["visibility"] != "public" and agent_row["owner_id"] != user_id:
             raise NotFoundError("Agent not found")
 
-    # Step 5: Assemble context
+    # Step 5: Pipeline ops — L7 (framework selection), L8/L9 (RAG retrieval)
+    # Uses user's BYOK OpenAI key for embedding. Fail-open on error.
+    openai_key = await fetch_user_key_async(client, user_id, "openai")
+
+    # L7 — Framework selection (when agent_id present)
+    framework_match = FrameworkMatch(matched_framework_id=None, matched_framework_name=None, framework_text=None)
+    if body.agent_id and agent_row and openai_key:
+        framework_match = await select_framework(
+            body.query, body.agent_id, client, openai_key=openai_key,
+        )
+
+    # L8 — Project KB RAG (when project_id present)
+    project_rag_chunks: list[RetrievedChunk] = []
+    if body.project_id and project_row and openai_key:
+        try:
+            project_rag_chunks = await retrieve(
+                body.query, RetrievalScope.PROJECT_KB, UUID(body.project_id), client,
+                openai_key=openai_key,
+            )
+        except Exception:
+            logger.warning("L8 RAG retrieval failed — omitting project KB context", exc_info=True)
+
+    # L9 — Agent KB RAG (when agent_id present)
+    agent_rag_chunks: list[RetrievedChunk] = []
+    if body.agent_id and agent_row and openai_key:
+        try:
+            agent_rag_chunks = await retrieve(
+                body.query, RetrievalScope.AGENT_KB, UUID(body.agent_id), client,
+                openai_key=openai_key,
+            )
+        except Exception:
+            logger.warning("L9 RAG retrieval failed — omitting agent KB context", exc_info=True)
+
+    # Step 6: Assemble context
     layers = resolve_layers(body.project_id, body.agent_id, body.company_id)
+
+    # Add pipeline layers to assembled list
+    if framework_match.matched_framework_id:
+        layers.append("L7")
+    if project_rag_chunks:
+        layers.append("L8")
+    if agent_rag_chunks:
+        layers.append("L9")
 
     parts: list[str] = []
 
@@ -363,15 +421,41 @@ async def mcp_context(
             f"Instructions: {agent_row.get('instructions', '')}"
         )
 
+    # L7: framework (if matched)
+    if "L7" in layers and framework_match.framework_text:
+        parts.append(framework_match.framework_text)
+
+    # L8: project KB RAG chunks
+    if "L8" in layers:
+        rag_section = "Project Knowledge Base:\n" + "\n---\n".join(c.text for c in project_rag_chunks)
+        parts.append(rag_section)
+
+    # L9: agent KB RAG chunks
+    if "L9" in layers:
+        rag_section = "Agent Knowledge Base:\n" + "\n---\n".join(c.text for c in agent_rag_chunks)
+        parts.append(rag_section)
+
     context = "\n\n".join(parts)
+
+    # Build sources metadata from RAG chunks
+    sources = []
+    for chunk in project_rag_chunks + agent_rag_chunks:
+        sources.append({
+            "document_id": chunk.document_id,
+            "document_title": chunk.document_title,
+            "chunk_id": chunk.chunk_id,
+            "snippet": chunk.text[:200],
+            "similarity_score": chunk.similarity_score,
+            "scope": chunk.scope,
+        })
 
     return {
         "context": context,
         "metadata": {
             "layers_assembled": layers,
             "token_count_estimate": math.ceil(len(context) / 4),
-            "matched_framework_id": None,
-            "matched_framework_name": None,
-            "sources": [],
+            "matched_framework_id": framework_match.matched_framework_id,
+            "matched_framework_name": framework_match.matched_framework_name,
+            "sources": sources,
         },
     }

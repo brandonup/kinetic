@@ -2,7 +2,7 @@
 Optional document-level summary generation.
 
 Enabled when settings.ENRICHMENT_ENABLED is True (default).
-Uses platform PLATFORM_ANTHROPIC_KEY + call_llm with CONVERSATION_COMPRESSION_MODEL (Haiku).
+Uses user's BYOK Anthropic key + call_llm with CONVERSATION_COMPRESSION_MODEL (Haiku).
 
 Failures are non-fatal — enrichment failure does NOT fail ingestion.
 Returns None on any error; the pipeline stores null summary and continues.
@@ -28,21 +28,22 @@ _SUMMARY_PROMPT = (
 )
 
 
-def generate_summary(text: str) -> Optional[str]:
+def generate_summary(text: str, anthropic_key: Optional[str] = None) -> Optional[str]:
     """
-    Generate a short document summary using the platform LLM.
+    Generate a short document summary using the user's BYOK Anthropic key.
 
     Args:
         text: Full extracted document text.
+        anthropic_key: User's decrypted Anthropic API key. None → skip.
 
     Returns:
-        2-3 sentence summary string, or None if enrichment is disabled or fails.
+        2-3 sentence summary string, or None if enrichment is disabled, key missing, or fails.
     """
     if not getattr(settings, "ENRICHMENT_ENABLED", True):
         return None
 
-    if not settings.PLATFORM_ANTHROPIC_KEY:
-        logger.warning("PLATFORM_ANTHROPIC_KEY not set — skipping document enrichment")
+    if not anthropic_key:
+        logger.info("No Anthropic key provided — skipping document summary")
         return None
 
     try:
@@ -50,7 +51,7 @@ def generate_summary(text: str) -> Optional[str]:
         summary = call_llm(
             messages=[{"role": "user", "content": _SUMMARY_PROMPT.format(text=snippet)}],
             model=settings.CONVERSATION_COMPRESSION_MODEL,
-            api_key=settings.PLATFORM_ANTHROPIC_KEY,
+            api_key=anthropic_key,
             max_tokens=200,
             timeout=20,
         )

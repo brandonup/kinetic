@@ -510,3 +510,104 @@ class TestReviewAndSave:
             # Scoped to current user only
             eq_args = mock_db.return_value.table.return_value.update.return_value.eq.call_args
             assert TEST_USER_ID in str(eq_args)
+
+
+# ---------------------------------------------------------------------------
+# Corrupted document (parsing error path) — 422 responses
+# ---------------------------------------------------------------------------
+
+
+class TestCorruptedDocumentParsing:
+    """
+    extract_text raises RuntimeError when a file is corrupted / unreadable.
+    All three surfaces must return 422 (not 500) with a clear message.
+    This is the 'parsing error' path distinct from the LLM model error path.
+    """
+
+    def test_corrupted_pdf_profile_returns_422(self, client):
+        """Corrupted document on profile upload → extract_text raises RuntimeError → 422."""
+        with (
+            patch(PATCH_SUPABASE) as mock_db,
+            patch(PATCH_EXTRACT_TEXT, side_effect=RuntimeError("pdfminer failed")),
+        ):
+            mock_db.return_value.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(
+                data=[{"provider": "anthropic", "key_ciphertext": "aabbcc", "key_nonce": "112233"}]
+            )
+            resp = client.post("/api/profile/upload-document", files=[_pdf_file()])
+
+        assert resp.status_code == 422
+        body = resp.json()
+        assert "detail" in body
+        assert "extract" in body["detail"].lower() or "corrupt" in body["detail"].lower()
+
+    def test_corrupted_pdf_company_returns_422(self, client):
+        """Corrupted document on company upload → extract_text raises RuntimeError → 422."""
+        with (
+            patch(PATCH_SUPABASE) as mock_db,
+            patch(PATCH_EXTRACT_TEXT, side_effect=RuntimeError("pdfminer failed")),
+        ):
+            mock_db.return_value.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(
+                data=[{"provider": "anthropic", "key_ciphertext": "aabbcc", "key_nonce": "112233"}]
+            )
+            resp = client.post(
+                f"/api/company/{COMPANY_ID}/upload-document",
+                files=[_pdf_file()],
+            )
+
+        assert resp.status_code == 422
+        assert "detail" in resp.json()
+
+    def test_corrupted_pdf_agent_returns_422(self, client):
+        """Corrupted document on agent upload → extract_text raises RuntimeError → 422."""
+        with (
+            patch(PATCH_SUPABASE) as mock_db,
+            patch(PATCH_EXTRACT_TEXT, side_effect=RuntimeError("pdfminer failed")),
+        ):
+            mock_db.return_value.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(
+                data=[{"provider": "anthropic", "key_ciphertext": "aabbcc", "key_nonce": "112233"}]
+            )
+            resp = client.post(
+                f"/api/agent/{AGENT_ID}/upload-document",
+                files=[_pdf_file()],
+            )
+
+        assert resp.status_code == 422
+        assert "detail" in resp.json()
+
+
+# ---------------------------------------------------------------------------
+# BYOK gate — company and agent surfaces
+# ---------------------------------------------------------------------------
+
+
+class TestBYOKGateAllSurfaces:
+    """
+    BYOK gate must be enforced on all three surfaces, not just profile.
+    Tests complement TestBYOKGate which covers only the profile surface.
+    """
+
+    def test_company_upload_no_api_keys_returns_400(self, client):
+        """No API keys on company upload → 400."""
+        with patch(PATCH_SUPABASE) as mock_db:
+            mock_db.return_value.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(
+                data=[]
+            )
+            resp = client.post(
+                f"/api/company/{COMPANY_ID}/upload-document",
+                files=[_text_file()],
+            )
+        assert resp.status_code == 400
+        assert "api key" in resp.json()["detail"].lower()
+
+    def test_agent_upload_no_api_keys_returns_400(self, client):
+        """No API keys on agent upload → 400."""
+        with patch(PATCH_SUPABASE) as mock_db:
+            mock_db.return_value.table.return_value.select.return_value.eq.return_value.execute.return_value = MagicMock(
+                data=[]
+            )
+            resp = client.post(
+                f"/api/agent/{AGENT_ID}/upload-document",
+                files=[_text_file()],
+            )
+        assert resp.status_code == 400
+        assert "api key" in resp.json()["detail"].lower()

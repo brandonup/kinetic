@@ -68,7 +68,9 @@ def fetch_user_key(supabase, user_id: str, provider: str) -> Optional[str]:
         return decrypt_api_key(ciphertext, nonce, master_key, user_id)
     except Exception:
         logger.error(
-            "fetch_user_key: failed to decrypt %s key for user %s",
+            "fetch_user_key: failed to decrypt %s key for user %s "
+            "(likely API_KEY_ENCRYPTION_KEY changed since key was stored — "
+            "user must re-save their key in Settings)",
             provider,
             user_id,
             exc_info=True,

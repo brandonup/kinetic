@@ -65,6 +65,24 @@ class ValidationError(AppException):
         super().__init__("VALIDATION_ERROR", message, details)
 
 
+class ConflictError(AppException):
+    """Raised when a state conflict prevents the operation (e.g., already revoked)."""
+
+    def __init__(
+        self, message: str = "Conflict", details: Optional[Dict[str, Any]] = None
+    ):
+        super().__init__("CONFLICT", message, details)
+
+
+class RateLimitError(AppException):
+    """Raised when a user exceeds their MCP daily rate limit."""
+
+    def __init__(
+        self, message: str = "Rate limit exceeded", details: Optional[Dict[str, Any]] = None
+    ):
+        super().__init__("RATE_LIMIT_EXCEEDED", message, details)
+
+
 class MemoryCapExceededError(AppException):
     """Raised when a write would exceed the active memory token cap."""
 
@@ -130,14 +148,30 @@ def add_exception_handlers(app: FastAPI) -> None:
             status_code = status.HTTP_404_NOT_FOUND
         elif isinstance(exc, ValidationError):
             status_code = status.HTTP_400_BAD_REQUEST
+        elif isinstance(exc, ConflictError):
+            status_code = status.HTTP_409_CONFLICT
+        elif isinstance(exc, RateLimitError):
+            status_code = status.HTTP_429_TOO_MANY_REQUESTS
         elif isinstance(exc, MemoryCapExceededError):
             status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
 
         logger.error(f"{exc.code}: {exc.message}", extra={"details": exc.details})
+
+        resp_headers = {**_cors_headers(request)}
+        # KIN-323: add rate limit headers on 429 responses
+        if isinstance(exc, RateLimitError) and exc.details:
+            if "retry_after" in exc.details:
+                resp_headers["Retry-After"] = str(exc.details["retry_after"])
+            if "daily_cap" in exc.details:
+                resp_headers["X-RateLimit-Limit"] = str(exc.details["daily_cap"])
+            resp_headers["X-RateLimit-Remaining"] = "0"
+            if "reset_timestamp" in exc.details:
+                resp_headers["X-RateLimit-Reset"] = str(exc.details["reset_timestamp"])
+
         return JSONResponse(
             status_code=status_code,
             content=error_response(exc.code, exc.message, exc.details),
-            headers=_cors_headers(request),
+            headers=resp_headers,
         )
 
     @app.exception_handler(PydanticValidationError)

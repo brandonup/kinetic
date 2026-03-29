@@ -70,7 +70,7 @@ Kinetic is a context-rich AI workspace where every generation is pre-loaded with
 
 ### 1. Auth & Admin
 
-**Registration:** Email-only. User provides email → account auto-created. No approval flow, invite codes, or password setup. Login via magic link (email) or OAuth (Google). No password management in MVP.
+**Registration:** Email-only. User provides email → account auto-created. No approval flow, invite codes, or password setup. Login via Google OAuth. No password management in MVP.
 
 **User disable rule:** Admin must transfer ownership of all public agents before disabling a user account. The admin panel enforces this — the disable action is blocked until all public agents owned by the user are either transferred to another user or set to private. This prevents orphaned public agents that no one can edit.
 
@@ -155,6 +155,8 @@ Users can create multiple companies. One company is active at a time; the user s
 
 A project is an in-app workspace for a specific initiative. Projects belong to a company.
 
+**Primary view:** The project chat page (`/projects/<id>`, KIN-383) is the main project surface — a chat-first layout with the project title, chat input, and recent conversations in the center panel, and agents, instructions, active memory, and knowledge base in the right panel. Project settings (name, company, instructions editing) live at `/projects/<id>/settings`.
+
 **Creation:** When a user creates a project, it is automatically assigned to the currently active company. The company assignment can be changed later.
 
 **Fields and components:**
@@ -187,7 +189,7 @@ Conversations are the core interaction unit. A conversation is a threaded sequen
 | **Project conversation** | Full 9-layer stack (user + company + project + agent if invoked) | Working on a specific initiative |
 | **Company conversation** | Layers 1–2 (user profile + active company) + agent layers if invoked. No project instructions, project active memory, or project KB. | General company-level thinking, not tied to a project |
 
-Conversations are listed in a left column (Claude-style chat history), grouped by project. Company-level conversations appear in a separate "General" group under the active company.
+Conversations appear in two places: (1) the **global left sidebar** (KIN-380) shows the 10 most recent conversations across all projects and agents for the active company, with parent context labels, and (2) the **center panel** of project and agent chat pages shows recent conversations scoped to that specific project or agent.
 
 **Conversation entity:**
 
@@ -241,7 +243,9 @@ An AgentInstance is created automatically the first time a user invokes an agent
 
 **One agent at a time (MVP).** The user can invoke one agent per conversation. Multiple simultaneous agents are planned for post-MVP.
 
-**Agent invocation UX:** A side panel or agent selector in the chat UI allows the user to toggle an agent on for the current conversation. When an agent is active, the UI clearly indicates which agent is responding (agent name, visual indicator). The user can deactivate the agent or switch to a different agent mid-conversation.
+**Agent invocation UX:** Users can interact with agents in two ways: (1) on the **project chat page** (`/projects/<id>`, KIN-383), the right panel's Agents section lets the user activate an agent for the current/next conversation; (2) the **agent chat page** (`/agents/<id>/chat`, KIN-381) provides a dedicated chat surface scoped to a single agent with the agent's instructions, memory, and KB in the right panel. When an agent is active, the UI clearly indicates which agent is responding (agent name badge in chat input and on AI messages). The user can deactivate the agent or switch to a different agent mid-conversation.
+
+**Agent list page** (`/agents`, KIN-381): Displays all accessible agents in card layout with Chat, Settings, and Delete actions per agent. Chat navigates to `/agents/<id>/chat`. Settings navigates to `/agents/<id>` (the agent profile page). Delete shows a confirmation dialog and soft-deletes the agent (owner-only). Client-side search filter by agent name. Agents split into "My Agents" (owned) and "Public Agents" (others).
 
 | Action | Behavior |
 |---|---|
@@ -261,12 +265,18 @@ An AgentInstance is created automatically the first time a user invokes an agent
 
 **Linked Upload (auto-fill):** Same pattern as User Profile and Company Profile. Upload a thought leader's writing sample, transcript, interview, article, or book excerpt (`.pdf`, `.docx`, `.doc`, `.txt`, `.md`, max 25MB) to auto-populate Agent Name and Instructions (system prompt). The system analyzes the writing for thinking style, communication patterns, core principles, and areas of expertise, then generates a system prompt that instructs the LLM to reason like this person. File discarded after extraction — if the user wants the document for RAG, they upload it separately to the agent's KB. See `docs/feature-linked-upload.md`.
 
-**Agent Profile page includes:**
+**Agent Profile page** (`/agents/<id>`, accessed via Settings action) **includes:**
 
 - Agent Name and Instructions (system prompt) — view, edit, and linked upload to auto-fill from a writing sample
 - Knowledge Base — browse documents, upload new docs, manage folders and tags
 - Framework Library — browse, edit, add, delete individual frameworks
 - Visibility toggle
+
+**Agent Chat page** (`/agents/<id>/chat`, accessed via Chat action) **includes:**
+
+- Center panel: agent name with icon, chat input (agent badge, model selector), recent conversations with this agent
+- Right panel: Instructions (inline edit), Active Memory (entries + token count), Knowledge Base (documents + upload)
+- Context stack: Layers 1–2 (user + company) + Layers 5–7, 9 (agent instructions, memory, frameworks, KB). No project layers.
 
 **User stories:**
 
@@ -351,9 +361,9 @@ Frameworks are named, structured reasoning tools attached to an AgentDefinition.
 
 **Framework schema:** Each framework includes: `id` (stable unique, kebab-case), `name`, `type` (one of: distinction, taxonomy, diagnostic, reframe, failure_catalog, evaluation_criteria, procedure), `description`, `category` (open list), `when_to_apply` (array of 3–5 trigger phrases), `principles`, `steps` (optional — omitted when empty), `date` (optional — ISO 8601 datetime of earliest source post), `example_application`, `related_frameworks`, `source_posts`, `confidence` (high/medium), `origin` (extracted/manual). See `docs/domain-model.md` § Framework for full schema.
 
-**Selection pipeline (Layer 7):** When a user sends a message with an agent invoked, the 4-step selection pipeline runs: (1) embedding similarity on per-trigger vectors, (2) agent expertise boost and recency boost for tie-breaking, (3) LLM reranker (Haiku) on top-5 for precision, (4) inject winner whole. If no match exceeds the confidence threshold, no framework is injected. The framework reranker is the only per-query LLM call in the MVP pipeline (~50 output tokens via Haiku, platform-owned key). This is a precision classifier on a small candidate set — not comparable to the bulk LLM calls cut from the RAG pipeline.
+**Selection pipeline (Layer 7) — MVP:** When a user sends a message with an agent invoked, the 3-step MVP selection pipeline runs: (1) embedding similarity on per-trigger vectors, (2) trigger-count boost for tie-breaking (frameworks where multiple trigger phrases score above threshold get boosted — rewards frameworks with broader semantic coverage), (3) gate on confidence threshold — inject winner whole. If no match exceeds the threshold, no framework is injected. No LLM call in the MVP pipeline. Full V1 pipeline adds an LLM reranker (Haiku, ~50 tokens, platform-owned key) as step 3 for precision on ambiguous top-5 candidates — addable when usage data shows mis-selection rates that justify the latency cost.
 
-**Recency scoring:** Framework recency (based on `created_at` — when the framework was added to the library) is factored into step 2 as a tie-breaking signal alongside the agent expertise boost. More recently added frameworks score slightly higher when embedding similarity is otherwise close. This ensures that when a user refines or adds new frameworks over time, the updated thinking is preferred over older entries. The recency weight is configurable and applies only when top candidates are within a narrow similarity band; it does not override a significantly stronger semantic match.
+**Recency scoring:** Framework recency (based on `created_at` — when the framework was added to the library) is factored into step 2 as a tie-breaking signal alongside the trigger-count boost. More recently added frameworks score slightly higher when embedding similarity is otherwise close. This ensures that when a user refines or adds new frameworks over time, the updated thinking is preferred over older entries. The recency weight is configurable and applies only when top candidates are within a narrow similarity band; it does not override a significantly stronger semantic match.
 
 See `docs/domain-model.md` § Framework Selection Architecture.
 
@@ -544,16 +554,53 @@ The uploaded file is NOT added to any Knowledge Base and is NOT used for RAG. Th
 
 ## UI Structure
 
-| Surface | What it shows |
+Kinetic uses a **three-panel layout** modeled on Claude cowork (see `docs/ui-reference-guide-claude-cowork.md`):
+
+| Panel | Width | Contents |
+|---|---|---|
+| **Left sidebar** | ~240px, persistent across all pages | Company switcher, main nav (Companies, Projects, Agents, Profile), projects list (max 5, sorted by recency), conversations list (max 10, with parent context), sign out |
+| **Center panel** | Flexible | Page-specific content: chat input, message threads, lists, forms |
+| **Right panel** | ~320px, context-specific | Collapsible accordion sections showing contextual information for the active project or agent |
+
+### Page-Level Layouts
+
+| Surface | Center Panel | Right Panel |
+|---|---|---|
+| **Project chat** (`/projects/<id>`) | Project title, chat input (with project badge, agent badge, model selector), recent conversations list | Agents (activate/deactivate), Instructions (inline edit), Active Memory (entries + token count), Knowledge Base (documents + upload) |
+| **Project conversation** (`/projects/<id>/conversations/<conv_id>`) | Back navigation, full message thread, chat input | Same as project chat |
+| **Project settings** (`/projects/<id>/settings`) | Project edit form (name, instructions, company) | — |
+| **Agent list** (`/agents`) | Page title, search filter, agent cards (name, type/visibility badges, description) with Chat/Settings/Delete actions | — |
+| **Agent chat** (`/agents/<id>/chat`) | Agent name + icon, chat input (with agent badge, model selector), recent conversations list | Instructions (inline edit), Active Memory (entries + token count), Knowledge Base (documents + upload) |
+| **Agent profile** (`/agents/<id>`) | Instructions (system prompt), KB upload and management, Framework Library (browse/edit/add/delete), visibility toggle | — |
+| **User Profile page** | Name, bio (with linked upload), API key management, default model selector, MCP token management (generate/revoke) | — |
+| **Company pages** | Create/edit companies (with linked upload), switch active company | — |
+| **Admin panel** | Three tabs: Users (list, enable/disable accounts), LLM Models (manage generation/embedding/reranking model library), RAG Debug (retrieval traces for recent queries) | — |
+
+### Left Sidebar (Global, Persistent — KIN-380)
+
+The left sidebar persists across every page. It contains:
+
+1. **Company switcher** — active company determines which projects and conversations appear below
+2. **Main nav** — Companies, Projects, Agents, Profile (same routes, same icons)
+3. **Projects section** — truncated list of projects (max 5) for the active company, sorted by `updated_at` descending. Active project highlighted. "View all" link when >5 projects. Each item navigates to `/projects/<id>` (project chat page)
+4. **Conversations section** — recent conversations (max 10) across all projects and agents for the active company. Each item shows title + parent context (project name or agent name). Sorted by `updated_at` descending. Click navigates to the conversation within its parent context
+5. **Sign out** — bottom of sidebar
+
+Both lists reactively update when the active company changes.
+
+### Right Panel Accordion Sections
+
+Right panel sections use collapsible accordions (expanded by default, click header to collapse). Each section has a title, optional badge (e.g., token count), and optional action button in the header.
+
+### Agent Actions on Agent List Page (KIN-381)
+
+Each agent card on `/agents` shows three actions:
+
+| Action | Behavior |
 |---|---|
-| **Chat view** | Message thread with model selector and agent selector. Citation references below AI responses. |
-| **Left sidebar** | Conversation history grouped by project + "General" group for company-level conversations. Company switcher. Navigation to Projects and Agents. |
-| **Agent selector** | Side panel or dropdown to toggle an agent on/off for the current conversation. Shows active agent name and visual indicator when an agent is responding. |
-| **User Profile page** | Name, bio (with linked upload), API key management, default model selector, MCP token management (generate/revoke). |
-| **Company pages** | Create/edit companies (with linked upload), switch active company. |
-| **Project pages** | Create/edit project, Instructions field, KB upload and management, Active Memory view/edit, conversation list. |
-| **Agent Profile page** | Instructions (system prompt), KB upload and management, Framework Library (browse/edit/add/delete), visibility toggle. |
-| **Admin panel** | Three tabs: Users (list, enable/disable accounts), LLM Models (manage generation/embedding/reranking model library), RAG Debug (retrieval traces for recent queries). |
+| **Chat** | Navigate to `/agents/<id>/chat` (agent chat page) |
+| **Settings** | Navigate to `/agents/<id>` (agent profile page) |
+| **Delete** | Confirmation dialog → soft-delete. Only shown for agents the user owns. |
 
 ---
 
@@ -651,6 +698,11 @@ These decisions were made during PRD development and are now canonical:
 | Periodic memory proposal interval | Fixed at every 10 messages. Not user-configurable in MVP. |
 | Conversation compression fallback | When BYOK key fails during rolling summary compression (rate limit, invalid key, provider outage), truncate oldest messages without summarization and notify the user of the issue. Lossy but functional — prevents context window overflow. |
 | Active Memory entry structure | Each entry is an individual row with `created_at` timestamp and `source_conversation_id`. Not a single text blob. Enables tracing where a memory came from and when it was captured. |
+| UI layout — three-panel (KIN-380/381/383) | Three-panel layout modeled on Claude cowork: persistent left sidebar (~240px) with company switcher, nav, projects list, conversations list; flexible center panel; right context panel (~320px) with collapsible accordion sections. See `docs/ui-reference-guide-claude-cowork.md`. |
+| Project primary view — chat-first (KIN-383) | `/projects/<id>` is a chat page (project title, chat input with badges + model selector, recent conversations) — not a settings/edit form. Settings moved to `/projects/<id>/settings`. |
+| Agent chat page (KIN-381) | `/agents/<id>/chat` provides a dedicated agent chat surface with agent name, chat input, recents in center panel and instructions, active memory, KB in right panel. Context stack: Layers 1-2 + agent layers (no project layers). |
+| Agent list actions (KIN-381) | Agent cards show Chat, Settings, Delete actions. Delete is owner-only with confirmation dialog and soft-delete. |
+| Left sidebar — global persistence (KIN-380) | Sidebar persists across all pages with projects list (max 5), conversations list (max 10 with parent context), reactive to active company changes. |
 
 ---
 

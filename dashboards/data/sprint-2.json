@@ -1,0 +1,69 @@
+{
+  "$schema": "sprint-snapshot-v1",
+  "sprint": {
+    "number": 2,
+    "name": "Core Entities",
+    "startDate": "2026-03-22",
+    "endDate": "2026-03-22"
+  },
+  "velocity": {
+    "planned": 14,
+    "completed": 14,
+    "carryover": 0,
+    "totalPoints": 30,
+    "completedPoints": 30
+  },
+  "estimates": {
+    "coveragePercent": 45,
+    "byAgent": {
+      "dinesh":   { "total": 7, "estimated": 4, "coveragePercent": 57 },
+      "bighead":  { "total": 3, "estimated": 1, "coveragePercent": 33 },
+      "jian":     { "total": 2, "estimated": 1, "coveragePercent": 50 },
+      "gilfoyle": { "total": 3, "estimated": 0, "coveragePercent": 0 },
+      "jared":    { "total": 2, "estimated": 0, "coveragePercent": 0 }
+    }
+  },
+  "cycleTime": {
+    "averageDays": 1.3,
+    "medianDays": 1.1,
+    "p90Days": 2.5,
+    "byAgent": {
+      "dinesh":  { "averageDays": 1.2, "ticketCount": 7 },
+      "bighead": { "averageDays": 1.5, "ticketCount": 3 }
+    }
+  },
+  "reviews": {
+    "totalReviews": 12,
+    "rejections": 3,
+    "rejectionRate": 25,
+    "byAgent": {
+      "dinesh":  { "reviews": 7, "rejections": 2, "rejectionRate": 29, "maxRounds": 2 },
+      "bighead": { "reviews": 5, "rejections": 1, "rejectionRate": 20, "maxRounds": 2 }
+    }
+  },
+  "defects": {
+    "total": 15,
+    "byCategory": {
+      "acl-leak":        2,
+      "error-swallow":   3,
+      "api-contract":    3,
+      "spec-gap":        2,
+      "schema-mismatch": 1,
+      "rls-bypass":      0,
+      "async-supabase":  2,
+      "test-missing":    0,
+      "other":           2
+    },
+    "bySeverity": { "critical": 5, "important": 10, "minor": 0 },
+    "defectsPerTicket": 1.1
+  },
+  "agentActivity": {
+    "dinesh":  { "completed": 7, "wipPeak": 2 },
+    "bighead": { "completed": 3, "wipPeak": 1 }
+  },
+  "processHealth": {
+    "decisionTicketLagHours": 1.75,
+    "handoffCompliancePercent": 82
+  },
+  "notes": "Sprint 2 delivered all Core Entities: User Profile (CRUD + API keys), Company CRUD, Project CRUD, Admin Users tab, Admin LLM Models tab (ported from FounderPanel), RAG retrieval pipeline, ADR-002 + ADR-003. 0 carryover — cleanest sprint to date. Async-Supabase defects carried over from Sprint 1 pattern."
+}

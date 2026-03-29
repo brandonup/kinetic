@@ -1,0 +1,21 @@
+{
+  "project": "kinetic",
+  "team": "KIN",
+  "agents": ["dinesh", "bighead", "gilfoyle", "jared", "jian", "bachman"],
+  "agentDisplayNames": {
+    "dinesh": "Dinesh",
+    "bighead": "Big Head",
+    "gilfoyle": "Gilfoyle",
+    "jared": "Jared",
+    "jian": "Jìan",
+    "bachman": "Bachman"
+  },
+  "sprints": [
+    { "number": 1, "file": "sprint-1.json", "label": "S1: Foundation" },
+    { "number": 2, "file": "sprint-2.json", "label": "S2: Core Entities" },
+    { "number": 3, "file": "sprint-3.json", "label": "S3: Gen Engine" },
+    { "number": 4, "file": "sprint-4.json", "label": "S4: Agents" },
+    { "number": 5, "file": "sprint-5.json", "label": "S5: Active Memory" }
+  ],
+  "generatedAt": "2026-03-24T00:00:00Z"
+}

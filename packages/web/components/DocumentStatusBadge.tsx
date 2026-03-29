@@ -66,8 +66,10 @@ export function DocumentStatusBadge({
   const isProcessing = PROCESSING_STATUSES.has(status);
 
   const ariaLabel =
-    status === "failed" && errorStage
-      ? `Failed at ${errorStage}${errorMessage ? `: ${errorMessage}` : ""}`
+    status === "failed"
+      ? errorStage
+        ? `Failed at ${errorStage}${errorMessage ? `: ${errorMessage}` : ""}`
+        : "Ingestion failed unexpectedly"
       : undefined;
 
   const badge = (
@@ -89,7 +91,7 @@ export function DocumentStatusBadge({
     </Badge>
   );
 
-  if (status === "failed" && (errorStage || errorMessage)) {
+  if (status === "failed") {
     return (
       <TooltipProvider delayDuration={200}>
         <Tooltip>
@@ -97,6 +99,11 @@ export function DocumentStatusBadge({
           <TooltipContent side="top" className="max-w-xs text-xs">
             {errorStage && <p className="font-medium">Failed at: {errorStage}</p>}
             {errorMessage && <p className="mt-0.5 text-muted-foreground">{errorMessage}</p>}
+            {!errorStage && !errorMessage && (
+              <p className="text-muted-foreground">
+                Ingestion failed unexpectedly. Try uploading again.
+              </p>
+            )}
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>

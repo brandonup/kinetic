@@ -287,7 +287,107 @@ Returns:
 
 ---
 
-## 11. Open Questions
+## 11. Framework User Overrides API (KIN-391)
+
+Framework overrides allow users to customize the framework selection pipeline per-AgentInstance. The overrides are stored on `agent_instances.framework_overrides` (JSONB, per ADR-003 §5).
+
+### 11.1 Override Types
+
+| Override | JSONB field | Behavior |
+|---|---|---|
+| **Pin** | `pinned: ["framework-id", ...]` | Force-inject the specified framework(s), skip the selection pipeline entirely. If multiple pinned, all are injected. |
+| **Exclude** | `excluded: ["framework-id", ...]` | Remove specified frameworks from the candidate pool before the selection pipeline runs. |
+| **Disable** | `disabled: true` | Skip framework selection entirely. Layer 7 is empty for all queries. Overrides any pinned/excluded values. |
+
+**Default state:** `{ "pinned": [], "excluded": [], "disabled": false }` (no overrides).
+
+### 11.2 Endpoint
+
+**`PATCH /api/v1/agents/:id/instance`**
+
+The existing instance PATCH endpoint accepts `framework_overrides` as a partial update field. The full JSONB value is replaced on each update (not merged).
+
+**Request body (framework overrides portion):**
+
+```json
+{
+  "framework_overrides": {
+    "pinned": ["framework-id-1"],
+    "excluded": ["framework-id-2"],
+    "disabled": false
+  }
+}
+```
+
+All fields within `framework_overrides` are optional. If omitted, defaults apply:
+- `pinned`: `[]`
+- `excluded`: `[]`
+- `disabled`: `false`
+
+**Response:** Full AgentInstance object with updated `framework_overrides`.
+
+### 11.3 Validation Rules
+
+1. **Framework existence:** All IDs in `pinned` and `excluded` must exist in the parent AgentDefinition's `frameworks` table. Invalid IDs are rejected with 422:
+   ```json
+   {
+     "error": "invalid_framework_ids",
+     "invalid_ids": ["nonexistent-id"],
+     "message": "Framework IDs not found in this agent's library."
+   }
+   ```
+
+2. **No overlap:** A framework ID cannot appear in both `pinned` and `excluded`. Return 422:
+   ```json
+   {
+     "error": "conflicting_overrides",
+     "conflicting_ids": ["framework-id"],
+     "message": "A framework cannot be both pinned and excluded."
+   }
+   ```
+
+3. **`disabled` supersedes:** When `disabled: true`, the `pinned` and `excluded` arrays are retained in storage but have no effect. They take effect again when `disabled` is set back to `false`.
+
+4. **Max pinned:** Maximum 3 pinned frameworks. More than 3 would inject excessive context into L7. Return 422 if exceeded.
+
+5. **Ownership check:** The user must have access to the AgentDefinition (owner or public agent) and must be the owner of the AgentInstance (`user_id = auth.uid()`). Return 403 otherwise.
+
+### 11.4 Pipeline Integration
+
+The framework selection pipeline (generation-engine-spec.md §2.3) checks overrides before running:
+
+```python
+overrides = agent_instance.framework_overrides
+
+if overrides.get("disabled"):
+    # Skip L7 entirely
+    return None
+
+if overrides.get("pinned"):
+    # Fetch pinned frameworks directly, skip pipeline
+    return fetch_frameworks_by_ids(overrides["pinned"])
+
+# Normal pipeline with exclusions
+excluded_ids = set(overrides.get("excluded", []))
+candidates = get_trigger_embeddings(agent_id, exclude=excluded_ids)
+# ... run similarity search, boost, gate
+```
+
+### 11.5 UI Integration
+
+**Framework Library tab (Agent Profile page):**
+- Each framework row has a pin/exclude toggle (icon buttons).
+- A "Disable all frameworks" toggle at the top of the library.
+- Current override state is loaded from the user's AgentInstance.
+- Changes are saved via `PATCH /api/v1/agents/:id/instance`.
+
+**Chat UI (optional indicator):**
+- When an agent has pinned frameworks, show a small indicator in the agent badge: "Pinned: Framework Name."
+- When frameworks are disabled, show: "Frameworks disabled."
+
+---
+
+## 12. Open Questions
 
 _None at time of writing. All major decisions locked in MEMORY.md._
 

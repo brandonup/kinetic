@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sprint Dashboard — Kinetic</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='2' y='20' width='6' height='10' rx='2' fill='%23D97757'/%3E%3Crect x='10' y='12' width='6' height='18' rx='2' fill='%235B8AF5'/%3E%3Crect x='18' y='6' width='6' height='24' rx='2' fill='%234CAF82'/%3E%3Crect x='26' y='14' width='4' height='16' rx='2' fill='%238B6FC0'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-primary: #faf9f5;
+      --bg-secondary: #F5F4EF;
+      --bg-card: #ffffff;
+      --text-primary: #141413;
+      --text-secondary: #5c5c5a;
+      --text-muted: #8c8c8a;
+      --accent: #D97757;
+      --accent-hover: #c4684a;
+      --border: #e5e4df;
+      --border-light: #eeeee9;
+      --shadow: rgba(20, 20, 19, 0.04);
+      --shadow-hover: rgba(20, 20, 19, 0.08);
+      --green: #4CAF82;
+      --red: #E07B8B;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      padding: 24px;
+      line-height: 1.5;
+    }
+
+    /* ── Header ── */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .header-left h1 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    .header-left p {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    select {
+      font-family: inherit;
+      font-size: 13px;
+      padding: 7px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--bg-card);
+      color: var(--text-primary);
+      cursor: pointer;
+      outline: none;
+    }
+
+    select:focus { border-color: var(--accent); }
+
+    button.load-btn {
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 500;
+      padding: 7px 16px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    button.load-btn:hover { background: var(--accent-hover); }
+
+    .status-pill {
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: var(--bg-secondary);
+      color: var(--text-muted);
+    }
+
+    .status-pill.loaded {
+      background: #e8f5ee;
+      color: #2d7a52;
+    }
+
+    /* ── Empty state ── */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 80px 24px;
+      text-align: center;
+    }
+
+    .empty-state svg { margin-bottom: 16px; opacity: 0.4; }
+    .empty-state h2 { font-size: 1.1rem; font-weight: 600; margin-bottom: 8px; }
+    .empty-state p { font-size: 13px; color: var(--text-muted); max-width: 340px; }
+
+    /* ── Dashboard ── */
+    #dashboard { display: none; }
+    #dashboard.visible { display: block; }
+
+    /* ── KPI Cards ── */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .kpi-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: 10px;
+      padding: 18px 20px;
+      box-shadow: 0 1px 3px var(--shadow);
+    }
+
+    .kpi-label {
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+
+    .kpi-value {
+      font-size: 2rem;
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      line-height: 1;
+    }
+
+    .kpi-delta {
+      font-size: 12px;
+      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .kpi-delta.up   { color: var(--green); }
+    .kpi-delta.down { color: var(--red); }
+    .kpi-delta.neutral { color: var(--text-muted); }
+
+    /* ── Charts grid ── */
+    .charts-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .chart-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 1px 3px var(--shadow);
+    }
+
+    .chart-card.full-width {
+      grid-column: 1 / -1;
+    }
+
+    .chart-card h2 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .chart-wrap {
+      position: relative;
+      height: 240px;
+    }
+
+    .chart-wrap.tall {
+      height: 280px;
+    }
+
+    .chart-wrap.doughnut {
+      height: 220px;
+      display: flex;
+      justify-content: center;
+    }
+
+    /* ── Sprint notes ── */
+    .sprint-notes {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-top: 12px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      box-shadow: 0 1px 3px var(--shadow);
+    }
+
+    .sprint-notes strong {
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 900px) {
+      .kpi-row { grid-template-columns: repeat(2, 1fr); }
+      .charts-grid { grid-template-columns: 1fr; }
+      .chart-card.full-width { grid-column: auto; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>Sprint Dashboard</h1>
+    <p id="project-label">Load a data folder to begin</p>
+  </div>
+  <div class="header-right">
+    <span class="status-pill" id="status-pill">No data loaded</span>
+    <select id="sprint-select" style="display:none"></select>
+    <button class="load-btn" id="load-btn">Load Data Folder</button>
+  </div>
+</header>
+
+<div class="empty-state" id="empty-state">
+  <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+    <rect x="6" y="30" width="8" height="12" rx="2" fill="#D97757"/>
+    <rect x="18" y="20" width="8" height="22" rx="2" fill="#5B8AF5"/>
+    <rect x="30" y="10" width="8" height="32" rx="2" fill="#4CAF82"/>
+    <rect x="42" y="22" width="6" height="20" rx="2" fill="#8B6FC0"/>
+  </svg>
+  <h2>No sprint data loaded</h2>
+  <p>Click <strong>Load Data Folder</strong> and select the <code>data/</code> folder next to this file to render the dashboard.</p>
+</div>
+
+<div id="dashboard">
+  <!-- KPI Cards -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-label">Sprint Completion</div>
+      <div class="kpi-value" id="kpi-completion">—</div>
+      <div class="kpi-delta neutral" id="kpi-completion-delta"></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Defect Density</div>
+      <div class="kpi-value" id="kpi-defects">—</div>
+      <div class="kpi-delta neutral" id="kpi-defects-delta"></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Review Rejection Rate</div>
+      <div class="kpi-value" id="kpi-rejection">—</div>
+      <div class="kpi-delta neutral" id="kpi-rejection-delta"></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">Estimate Coverage</div>
+      <div class="kpi-value" id="kpi-coverage">—</div>
+      <div class="kpi-delta neutral" id="kpi-coverage-delta"></div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="charts-grid">
+
+    <!-- 1. Velocity Trend -->
+    <div class="chart-card">
+      <h2>Velocity Trend</h2>
+      <div class="chart-wrap">
+        <canvas id="chart-velocity"></canvas>
+      </div>
+    </div>
+
+    <!-- 2. Completion & Carryover -->
+    <div class="chart-card">
+      <h2>Completion &amp; Carryover Rate</h2>
+      <div class="chart-wrap">
+        <canvas id="chart-completion"></canvas>
+      </div>
+    </div>
+
+    <!-- 3. Defect Categories (full width) -->
+    <div class="chart-card full-width">
+      <h2>Defect Categories by Sprint</h2>
+      <div class="chart-wrap tall">
+        <canvas id="chart-defect-categories"></canvas>
+      </div>
+    </div>
+
+    <!-- 4. Severity Distribution -->
+    <div class="chart-card">
+      <h2>Defect Severity — <span id="severity-sprint-label">Selected Sprint</span></h2>
+      <div class="chart-wrap doughnut">
+        <canvas id="chart-severity"></canvas>
+      </div>
+    </div>
+
+    <!-- 5. Review Rejection by Agent -->
+    <div class="chart-card">
+      <h2>Review Rejection Rate by Agent</h2>
+      <div class="chart-wrap">
+        <canvas id="chart-rejection"></canvas>
+      </div>
+    </div>
+
+    <!-- 6. Cycle Time Trend -->
+    <div class="chart-card">
+      <h2>Cycle Time Trend (avg days)</h2>
+      <div class="chart-wrap">
+        <canvas id="chart-cycle-time"></canvas>
+      </div>
+    </div>
+
+    <!-- 7. Agent Velocity Comparison -->
+    <div class="chart-card">
+      <h2>Agent Velocity Comparison</h2>
+      <div class="chart-wrap">
+        <canvas id="chart-agent-velocity"></canvas>
+      </div>
+    </div>
+
+    <!-- 8. Estimate Coverage Trend -->
+    <div class="chart-card">
+      <h2>Estimate Coverage Trend</h2>
+      <div class="chart-wrap">
+        <canvas id="chart-estimate-coverage"></canvas>
+      </div>
+    </div>
+
+    <!-- 9. Agent WIP Peak -->
+    <div class="chart-card">
+      <h2>Agent WIP Peak</h2>
+      <div class="chart-wrap">
+        <canvas id="chart-wip"></canvas>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Sprint Notes -->
+  <div class="sprint-notes" id="sprint-notes" style="display:none">
+    <strong>Sprint Notes:</strong> <span id="sprint-notes-text"></span>
+  </div>
+</div>
+
+<script>
+// ── Palette ──────────────────────────────────────────────────────────────────
+const C = {
+  accent:  '#D97757',
+  blue:    '#5B8AF5',
+  green:   '#4CAF82',
+  purple:  '#8B6FC0',
+  teal:    '#47B5A0',
+  gold:    '#D4A843',
+  rose:    '#E07B8B',
+  muted:   '#c4c4c2',
+};
+
+const DEFECT_COLORS = {
+  'acl-leak':        C.rose,
+  'error-swallow':   C.accent,
+  'api-contract':    C.blue,
+  'spec-gap':        C.gold,
+  'schema-mismatch': C.purple,
+  'rls-bypass':      '#E53E3E',
+  'async-supabase':  C.teal,
+  'test-missing':    C.green,
+  'other':           C.muted,
+};
+
+const CHART_DEFAULTS = {
+  font:   { family: "'Inter', -apple-system, sans-serif", size: 12 },
+  color:  '#5c5c5a',
+  borderColor: '#eeeee9',
+};
+
+Chart.defaults.font.family = CHART_DEFAULTS.font.family;
+Chart.defaults.font.size   = CHART_DEFAULTS.font.size;
+Chart.defaults.color       = CHART_DEFAULTS.color;
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let allSprints  = [];   // sorted array of sprint data objects
+let manifest    = null;
+let chartInstances = {};
+
+// ── IndexedDB handle persistence ─────────────────────────────────────────────
+const IDB_NAME = 'sprint-dashboard';
+const IDB_STORE = 'handles';
+const IDB_KEY = 'dataDir';
+
+function openIDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(IDB_NAME, 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE);
+    req.onsuccess = e => resolve(e.target.result);
+    req.onerror = e => reject(e.target.error);
+  });
+}
+
+async function saveHandle(handle) {
+  try {
+    const db = await openIDB();
+    const tx = db.transaction(IDB_STORE, 'readwrite');
+    tx.objectStore(IDB_STORE).put(handle, IDB_KEY);
+  } catch { /* non-critical */ }
+}
+
+async function loadSavedHandle() {
+  try {
+    const db = await openIDB();
+    return await new Promise((resolve, reject) => {
+      const req = db.transaction(IDB_STORE, 'readonly').objectStore(IDB_STORE).get(IDB_KEY);
+      req.onsuccess = e => resolve(e.target.result || null);
+      req.onerror = e => reject(e.target.error);
+    });
+  } catch { return null; }
+}
+
+// On page load, check for a saved handle and update the button label
+window.addEventListener('DOMContentLoaded', async () => {
+  const saved = await loadSavedHandle();
+  if (saved) {
+    const btn = document.getElementById('load-btn');
+    btn.textContent = 'Reload data folder';
+  }
+});
+
+// ── File System Access API ────────────────────────────────────────────────────
+document.getElementById('load-btn').addEventListener('click', async () => {
+  try {
+    // Try saved handle first (avoids navigation — just permission prompt)
+    const saved = await loadSavedHandle();
+    if (saved) {
+      const perm = await saved.requestPermission({ mode: 'read' });
+      if (perm === 'granted') {
+        await loadFromDirectory(saved);
+        return;
+      }
+    }
+    // Fall back to picker
+    const dirHandle = await window.showDirectoryPicker({ mode: 'read' });
+    await saveHandle(dirHandle);
+    await loadFromDirectory(dirHandle);
+  } catch (e) {
+    if (e.name !== 'AbortError') {
+      console.error(e);
+      alert('Failed to load data folder: ' + e.message);
+    }
+  }
+});
+
+async function loadFromDirectory(dirHandle) {
+  // Read manifest
+  let manifestHandle;
+  try {
+    manifestHandle = await dirHandle.getFileHandle('manifest.json');
+  } catch {
+    alert('manifest.json not found in the selected folder.');
+    return;
+  }
+
+  const manifestFile = await manifestHandle.getFile();
+  manifest = JSON.parse(await manifestFile.text());
+
+  // Read each sprint file
+  allSprints = [];
+  for (const sprintRef of manifest.sprints) {
+    try {
+      const fh   = await dirHandle.getFileHandle(sprintRef.file);
+      const file = await fh.getFile();
+      const data = JSON.parse(await file.text());
+      data._label = sprintRef.label;
+      allSprints.push(data);
+    } catch (e) {
+      console.warn('Could not load sprint file:', sprintRef.file, e);
+    }
+  }
+
+  allSprints.sort((a, b) => a.sprint.number - b.sprint.number);
+
+  if (allSprints.length === 0) {
+    alert('No sprint files could be loaded.');
+    return;
+  }
+
+  // Populate sprint selector (for severity doughnut)
+  const sel = document.getElementById('sprint-select');
+  sel.innerHTML = '';
+  allSprints.forEach((s, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = s._label;
+    sel.appendChild(opt);
+  });
+  sel.value = allSprints.length - 1;  // default to latest
+  sel.style.display = '';
+  sel.addEventListener('change', () => {
+    updateSeverityChart(allSprints[+sel.value]);
+    updateSprintNotes(allSprints[+sel.value]);
+  });
+
+  // Update status
+  const pill = document.getElementById('status-pill');
+  pill.textContent = `${allSprints.length} sprint${allSprints.length > 1 ? 's' : ''} loaded`;
+  pill.className = 'status-pill loaded';
+
+  document.getElementById('project-label').textContent =
+    `${manifest.project || 'Project'} · ${manifest.team || ''}`;
+
+  // Show dashboard
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('dashboard').classList.add('visible');
+
+  renderAll();
+}
+
+// ── Render all charts + KPIs ──────────────────────────────────────────────────
+function renderAll() {
+  const latest = allSprints[allSprints.length - 1];
+  const prev   = allSprints.length > 1 ? allSprints[allSprints.length - 2] : null;
+
+  renderKPIs(latest, prev);
+  renderVelocityChart();
+  renderCompletionChart();
+  renderDefectCategoriesChart();
+  updateSeverityChart(latest);
+  renderRejectionChart();
+  renderCycleTimeChart();
+  renderAgentVelocityChart();
+  renderEstimateCoverageChart();
+  renderWipChart();
+  updateSprintNotes(latest);
+}
+
+// ── KPI Cards ─────────────────────────────────────────────────────────────────
+function renderKPIs(latest, prev) {
+  const completionRate = (latest.velocity.completed / latest.velocity.planned * 100).toFixed(1);
+  setKPI('kpi-completion', completionRate + '%',
+    prev ? deltaPct(
+      latest.velocity.completed / latest.velocity.planned * 100,
+      prev.velocity.completed   / prev.velocity.planned   * 100,
+      true) : null);
+
+  setKPI('kpi-defects', latest.defects.defectsPerTicket.toFixed(1),
+    prev ? deltaPct(latest.defects.defectsPerTicket, prev.defects.defectsPerTicket, false) : null);
+
+  setKPI('kpi-rejection', latest.reviews.rejectionRate.toFixed(1) + '%',
+    prev ? deltaPct(latest.reviews.rejectionRate, prev.reviews.rejectionRate, false) : null);
+
+  setKPI('kpi-coverage', latest.estimates.coveragePercent.toFixed(1) + '%',
+    prev ? deltaPct(latest.estimates.coveragePercent, prev.estimates.coveragePercent, true) : null);
+}
+
+function setKPI(id, value, delta) {
+  document.getElementById(id).textContent = value;
+  const deltaEl = document.getElementById(id + '-delta');
+  if (!delta) {
+    deltaEl.textContent = 'Baseline sprint';
+    deltaEl.className = 'kpi-delta neutral';
+    return;
+  }
+  deltaEl.innerHTML = delta.arrow + ' ' + delta.text;
+  deltaEl.className = 'kpi-delta ' + delta.dir;
+}
+
+// higherIsBetter: true = green when positive delta
+function deltaPct(current, prior, higherIsBetter) {
+  const diff = current - prior;
+  if (diff === 0) return { arrow: '→', text: 'No change', dir: 'neutral' };
+  const isPositive = diff > 0;
+  const isGood = higherIsBetter ? isPositive : !isPositive;
+  const sign = isPositive ? '+' : '';
+  return {
+    arrow: isPositive ? '↑' : '↓',
+    text:  sign + diff.toFixed(1) + ' vs prior sprint',
+    dir:   isGood ? 'up' : 'down',
+  };
+}
+
+// ── Chart helpers ──────────────────────────────────────────────────────────────
+function makeChart(id, config) {
+  if (chartInstances[id]) chartInstances[id].destroy();
+  const ctx = document.getElementById(id).getContext('2d');
+  chartInstances[id] = new Chart(ctx, config);
+  return chartInstances[id];
+}
+
+const gridOpts = {
+  color: '#eeeee9',
+  borderColor: '#eeeee9',
+};
+
+const tickOpts = { color: '#8c8c8a' };
+
+function baseScales(yLabel) {
+  return {
+    x: { grid: gridOpts, ticks: tickOpts },
+    y: {
+      grid: gridOpts,
+      ticks: tickOpts,
+      title: yLabel ? { display: true, text: yLabel, color: '#8c8c8a', font: { size: 11 } } : undefined,
+      beginAtZero: true,
+    }
+  };
+}
+
+function sprintLabels() {
+  return allSprints.map(s => s._label);
+}
+
+// ── Chart 1: Velocity Trend ───────────────────────────────────────────────────
+function renderVelocityChart() {
+  makeChart('chart-velocity', {
+    type: 'line',
+    data: {
+      labels: sprintLabels(),
+      datasets: [
+        {
+          label: 'Completed',
+          data: allSprints.map(s => s.velocity.completed),
+          borderColor: C.accent,
+          backgroundColor: C.accent + '22',
+          tension: 0.3,
+          fill: true,
+          pointRadius: 5,
+          pointBackgroundColor: C.accent,
+        },
+        {
+          label: 'Planned',
+          data: allSprints.map(s => s.velocity.planned),
+          borderColor: C.blue,
+          borderDash: [5, 4],
+          tension: 0.3,
+          fill: false,
+          pointRadius: 4,
+          pointBackgroundColor: C.blue,
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 14 } } },
+      scales: baseScales('Tickets'),
+    }
+  });
+}
+
+// ── Chart 2: Completion & Carryover ──────────────────────────────────────────
+function renderCompletionChart() {
+  makeChart('chart-completion', {
+    type: 'bar',
+    data: {
+      labels: sprintLabels(),
+      datasets: [
+        {
+          type: 'bar',
+          label: 'Completion %',
+          data: allSprints.map(s => +(s.velocity.completed / s.velocity.planned * 100).toFixed(1)),
+          backgroundColor: C.green + 'cc',
+          borderColor: C.green,
+          borderWidth: 1,
+          yAxisID: 'y',
+        },
+        {
+          type: 'line',
+          label: 'Carryover %',
+          data: allSprints.map(s => +(s.velocity.carryover / s.velocity.planned * 100).toFixed(1)),
+          borderColor: C.rose,
+          backgroundColor: 'transparent',
+          tension: 0.3,
+          pointRadius: 5,
+          pointBackgroundColor: C.rose,
+          yAxisID: 'y2',
+        },
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 14 } } },
+      scales: {
+        x: { grid: gridOpts, ticks: tickOpts },
+        y: {
+          grid: gridOpts, ticks: tickOpts, beginAtZero: true, max: 100,
+          title: { display: true, text: 'Completion %', color: '#8c8c8a', font: { size: 11 } },
+        },
+        y2: {
+          position: 'right', grid: { display: false }, ticks: tickOpts, beginAtZero: true,
+          title: { display: true, text: 'Carryover %', color: '#8c8c8a', font: { size: 11 } },
+        },
+      }
+    }
+  });
+}
+
+// ── Chart 3: Defect Categories (stacked bar) ──────────────────────────────────
+function renderDefectCategoriesChart() {
+  const categories = Object.keys(DEFECT_COLORS);
+  const datasets = categories.map(cat => ({
+    label: cat,
+    data: allSprints.map(s => s.defects.byCategory[cat] || 0),
+    backgroundColor: DEFECT_COLORS[cat] + 'dd',
+    borderColor: DEFECT_COLORS[cat],
+    borderWidth: 1,
+  })).filter(ds => ds.data.some(v => v > 0));
+
+  makeChart('chart-defect-categories', {
+    type: 'bar',
+    data: { labels: sprintLabels(), datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 10 } } },
+      scales: {
+        ...baseScales('Defects'),
+        x: { stacked: true, grid: gridOpts, ticks: tickOpts },
+        y: { stacked: true, grid: gridOpts, ticks: tickOpts, beginAtZero: true,
+             title: { display: true, text: 'Defects', color: '#8c8c8a', font: { size: 11 } } },
+      }
+    }
+  });
+}
+
+// ── Chart 4: Severity Doughnut ────────────────────────────────────────────────
+function updateSeverityChart(sprint) {
+  document.getElementById('severity-sprint-label').textContent = sprint._label;
+  const { critical, important, minor } = sprint.defects.bySeverity;
+  makeChart('chart-severity', {
+    type: 'doughnut',
+    data: {
+      labels: ['Critical', 'Important', 'Minor'],
+      datasets: [{
+        data: [critical, important, minor],
+        backgroundColor: [C.rose + 'ee', C.gold + 'ee', C.green + 'ee'],
+        borderColor: ['#ffffff', '#ffffff', '#ffffff'],
+        borderWidth: 2,
+        hoverOffset: 6,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '62%',
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, padding: 14 } },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const total = critical + important + minor;
+              const pct = total ? (ctx.parsed / total * 100).toFixed(1) : 0;
+              return ` ${ctx.label}: ${ctx.parsed} (${pct}%)`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+// ── Chart 5: Rejection by Agent ───────────────────────────────────────────────
+function renderRejectionChart() {
+  // Collect all agent keys that appear in reviews.byAgent across sprints
+  const agentKeys = [...new Set(
+    allSprints.flatMap(s => Object.keys(s.reviews.byAgent || {}))
+  )];
+
+  const agentColors = [C.accent, C.blue, C.green, C.purple, C.teal, C.gold];
+
+  const datasets = agentKeys.map((key, i) => ({
+    label: manifest?.agentDisplayNames?.[key] || key,
+    data: allSprints.map(s => s.reviews.byAgent?.[key]?.rejectionRate || 0),
+    backgroundColor: agentColors[i % agentColors.length] + 'cc',
+    borderColor: agentColors[i % agentColors.length],
+    borderWidth: 1,
+  }));
+
+  makeChart('chart-rejection', {
+    type: 'bar',
+    data: { labels: sprintLabels(), datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 14 } } },
+      scales: {
+        ...baseScales('Rejection %'),
+        y: { ...baseScales('Rejection %').y, max: 100 }
+      }
+    }
+  });
+}
+
+// ── Chart 6: Cycle Time Trend ──────────────────────────────────────────────────
+function renderCycleTimeChart() {
+  // Collect agent keys from cycleTime.byAgent
+  const agentKeys = [...new Set(
+    allSprints.flatMap(s => Object.keys(s.cycleTime?.byAgent || {}))
+  )];
+
+  const agentColors = [C.accent, C.blue, C.green, C.purple];
+
+  const datasets = [
+    {
+      label: 'Team Avg',
+      data: allSprints.map(s => s.cycleTime.averageDays),
+      borderColor: C.teal,
+      backgroundColor: C.teal + '22',
+      fill: true,
+      tension: 0.3,
+      pointRadius: 5,
+      pointBackgroundColor: C.teal,
+    },
+    ...agentKeys.map((key, i) => ({
+      label: manifest?.agentDisplayNames?.[key] || key,
+      data: allSprints.map(s => s.cycleTime.byAgent?.[key]?.averageDays || null),
+      borderColor: agentColors[i % agentColors.length],
+      borderDash: [4, 3],
+      tension: 0.3,
+      fill: false,
+      pointRadius: 4,
+      pointBackgroundColor: agentColors[i % agentColors.length],
+      spanGaps: true,
+    }))
+  ];
+
+  makeChart('chart-cycle-time', {
+    type: 'line',
+    data: { labels: sprintLabels(), datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 14 } } },
+      scales: baseScales('Days'),
+    }
+  });
+}
+
+// ── Chart 7: Agent Velocity Comparison ────────────────────────────────────────
+function renderAgentVelocityChart() {
+  const agentKeys = [...new Set(
+    allSprints.flatMap(s => Object.keys(s.agentActivity || {}))
+  )];
+
+  const agentColors = [C.accent, C.blue, C.green, C.purple, C.teal, C.gold];
+
+  const datasets = agentKeys.map((key, i) => ({
+    label: manifest?.agentDisplayNames?.[key] || key,
+    data: allSprints.map(s => s.agentActivity?.[key]?.completed || 0),
+    backgroundColor: agentColors[i % agentColors.length] + 'cc',
+    borderColor: agentColors[i % agentColors.length],
+    borderWidth: 1,
+  }));
+
+  makeChart('chart-agent-velocity', {
+    type: 'bar',
+    data: { labels: sprintLabels(), datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 14 } } },
+      scales: baseScales('Tickets Completed'),
+    }
+  });
+}
+
+// ── Chart 8: Estimate Coverage Trend ─────────────────────────────────────────
+function renderEstimateCoverageChart() {
+  const agentKeys = [...new Set(
+    allSprints.flatMap(s => Object.keys(s.estimates?.byAgent || {}))
+  )].filter(k => allSprints.some(s => (s.estimates?.byAgent?.[k]?.estimated || 0) > 0));
+
+  const agentColors = [C.accent, C.blue, C.green, C.purple, C.teal, C.gold];
+
+  const datasets = [
+    {
+      label: 'Overall',
+      data: allSprints.map(s => s.estimates.coveragePercent),
+      borderColor: C.teal,
+      backgroundColor: C.teal + '22',
+      fill: true,
+      tension: 0.3,
+      pointRadius: 5,
+      pointBackgroundColor: C.teal,
+    },
+    ...agentKeys.map((key, i) => ({
+      label: manifest?.agentDisplayNames?.[key] || key,
+      data: allSprints.map(s => s.estimates?.byAgent?.[key]?.coveragePercent ?? null),
+      borderColor: agentColors[i % agentColors.length],
+      borderDash: [4, 3],
+      tension: 0.3,
+      fill: false,
+      pointRadius: 4,
+      pointBackgroundColor: agentColors[i % agentColors.length],
+      spanGaps: true,
+    }))
+  ];
+
+  makeChart('chart-estimate-coverage', {
+    type: 'line',
+    data: { labels: sprintLabels(), datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 14 } } },
+      scales: {
+        ...baseScales('Coverage %'),
+        y: { ...baseScales('Coverage %').y, max: 100 }
+      }
+    }
+  });
+}
+
+// ── Chart 9: Agent WIP Peak ────────────────────────────────────────────────────
+function renderWipChart() {
+  const agentKeys = [...new Set(
+    allSprints.flatMap(s => Object.keys(s.agentActivity || {}))
+  )];
+
+  const agentColors = [C.accent, C.blue, C.green, C.purple, C.teal, C.gold];
+
+  const datasets = agentKeys.map((key, i) => ({
+    label: manifest?.agentDisplayNames?.[key] || key,
+    data: allSprints.map(s => s.agentActivity?.[key]?.wipPeak || 0),
+    backgroundColor: agentColors[i % agentColors.length] + 'cc',
+    borderColor: agentColors[i % agentColors.length],
+    borderWidth: 1,
+  }));
+
+  makeChart('chart-wip', {
+    type: 'bar',
+    data: { labels: sprintLabels(), datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, padding: 14 } } },
+      scales: {
+        ...baseScales('Max Concurrent WIP'),
+        y: {
+          ...baseScales('Max Concurrent WIP').y,
+          ticks: { ...tickOpts, stepSize: 1 },
+        }
+      }
+    }
+  });
+}
+
+// ── Sprint Notes ──────────────────────────────────────────────────────────────
+function updateSprintNotes(sprint) {
+  const notesEl  = document.getElementById('sprint-notes');
+  const notesText = document.getElementById('sprint-notes-text');
+  if (sprint.notes) {
+    notesText.textContent = sprint.notes;
+    notesEl.style.display = '';
+  } else {
+    notesEl.style.display = 'none';
+  }
+}
+</script>
+</body>
+</html>

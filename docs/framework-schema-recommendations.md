@@ -297,3 +297,11 @@ Two additional issues identified during a final-pass review of the retrieval and
 **Fix:** Build a framework selection eval (30-50 queries, including "no match" and ambiguous cases) and tune the threshold empirically before user testing.
 
 **Status:** KIN-260 created for Jìan. High priority, blocks user testing.
+
+### Finding 3: Dead `related_frameworks` references after curation
+
+**Problem:** When the full framework corpus (383) was curated down to 184 ICP-relevant frameworks, `related_frameworks` slugs pointing to removed frameworks were not cleaned up. 149 dead references across 60+ frameworks — they resolve to nothing at runtime and could cause lookup failures or silent misses.
+
+**Fix:** After any curation pass that removes frameworks, run a referential integrity check: build the set of valid slugs from the curated index, then strip any `related_frameworks` entry not present in that set.
+
+**Status:** Cleaned manually on 2026-03-25. Add this check as a validation step in the enrichment pipeline before any future upload.

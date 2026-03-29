@@ -2,7 +2,7 @@
 RAG retrieval pipeline — MVP implementation.
 
 Pipeline:
-  1. Embed query         — text-embedding-3-large via platform OpenAI key
+  1. Embed query         — text-embedding-3-large via user's BYOK OpenAI key
   2. Vector search       — cosine similarity against knowledge_base_chunks (scoped)
   3. MMR selection       — Maximal Marginal Relevance to reduce near-duplicates
   4. Similarity threshold — exclude chunks below SIMILARITY_THRESHOLD; return [] if none qualify
@@ -84,7 +84,6 @@ class RetrievedChunk:
 
 _ENCODING_NAME = "cl100k_base"
 _encoding = None
-_embedder: Optional[EmbeddingService] = None
 
 
 def _get_encoding():
@@ -95,12 +94,9 @@ def _get_encoding():
     return _encoding
 
 
-def _get_embedder() -> EmbeddingService:
-    """Return a shared EmbeddingService instance (lazy singleton)."""
-    global _embedder
-    if _embedder is None:
-        _embedder = EmbeddingService()
-    return _embedder
+def _get_embedder(api_key: str) -> EmbeddingService:
+    """Return an EmbeddingService instance with the user's BYOK key."""
+    return EmbeddingService(api_key=api_key)
 
 
 def _count_tokens(text: str) -> int:
@@ -386,11 +382,13 @@ async def retrieve(
     scope: RetrievalScope,
     scope_id: UUID,
     supabase,
+    openai_key: str = "",
     model_context_window: int = 100_000,
     vector_top_k: int = VECTOR_TOP_K,
     mmr_top_k: int = MMR_TOP_K,
     mmr_lambda: float = MMR_LAMBDA,
     similarity_threshold: float = SIMILARITY_THRESHOLD,
+    debug_ctx: "RetrievalDebugContext | None" = None,
 ) -> List[RetrievedChunk]:
     """
     Run the full MVP RAG retrieval pipeline for one scope.
@@ -404,19 +402,23 @@ async def retrieve(
         scope: RetrievalScope.PROJECT_KB or RetrievalScope.AGENT_KB.
         scope_id: UUID of the project or agent_definition, depending on scope.
         supabase: Supabase service-role client (sync — wrapped in run_in_executor).
+        openai_key: User's decrypted OpenAI BYOK key (required for embedding).
         model_context_window: Context window of the generation model (tokens).
             Used to compute RAG_MAX_TOKENS = max(2048, context_window * 15%).
         vector_top_k: Candidates to fetch from vector search (default 20).
         mmr_top_k: Candidates to keep after MMR (default 8).
         mmr_lambda: MMR relevance/diversity tradeoff (default 0.6).
         similarity_threshold: Minimum cosine similarity for injection (default 0.3).
+        debug_ctx: Optional RetrievalDebugContext for timing instrumentation.
+            When provided, each stage records wall-clock timing. When None
+            (default), no timing overhead. Existing callers are unaffected.
 
     Returns:
         List of RetrievedChunk objects ordered by MMR score (best first).
         Returns [] when no chunks meet the threshold — never raises on empty result.
 
     Raises:
-        RuntimeError: If the embedding call fails (platform key misconfigured, network).
+        RuntimeError: If the embedding call fails (key missing, network).
     """
     if not query_text.strip():
         logger.warning("retrieve() called with empty query — returning [].")
@@ -426,22 +428,31 @@ async def retrieve(
         raise ValueError("scope_id must not be null — pass a valid project/agent UUID.")
 
     # --- Step 1: Embed query ---
-    embedder = _get_embedder()
+    embedder = _get_embedder(api_key=openai_key)
     loop = asyncio.get_running_loop()
     try:
+        _t = debug_ctx.start_step("embed") if debug_ctx else None
         query_embeddings: List[List[float]] = await loop.run_in_executor(
             None, lambda: embedder.embed_batch([query_text])
         )
+        if _t:
+            _t.stop()
     except Exception as exc:
+        if debug_ctx:
+            debug_ctx.gating_decision = "error"
+            debug_ctx.error_message = f"RAG query embedding failed: {exc}"
         raise RuntimeError(f"RAG query embedding failed: {exc}") from exc
 
     query_embedding = query_embeddings[0]
 
     # --- Step 2: Vector search ---
+    _t = debug_ctx.start_step("vector_search") if debug_ctx else None
     raw_rows: List[dict] = await loop.run_in_executor(
         None,
         lambda: _vector_search_sync(supabase, query_embedding, scope, scope_id, vector_top_k),
     )
+    if _t:
+        _t.stop()
 
     if not raw_rows:
         logger.debug(
@@ -449,21 +460,41 @@ async def retrieve(
             scope,
             scope_id,
         )
+        if debug_ctx:
+            debug_ctx.gating_decision = "below_threshold"
         return []
 
     # Normalise rows to uniform shape
     candidates = [_normalise_search_row(row) for row in raw_rows]
 
+    if debug_ctx:
+        debug_ctx.vector_candidates = [
+            {"chunk_id": c["chunk_id"], "score": c["similarity_score"]}
+            for c in candidates
+        ]
+
     # --- Step 3: MMR selection ---
+    _t = debug_ctx.start_step("mmr") if debug_ctx else None
     mmr_results = mmr_select(
         query_embedding=query_embedding,
         candidates=candidates,
         top_k=mmr_top_k,
         lambda_=mmr_lambda,
     )
+    if _t:
+        _t.stop()
+
+    if debug_ctx:
+        debug_ctx.mmr_selections = [
+            {"chunk_id": c["chunk_id"], "score": c["similarity_score"]}
+            for c in mmr_results
+        ]
 
     # --- Step 4: Similarity threshold gate ---
+    _t = debug_ctx.start_step("threshold") if debug_ctx else None
     above_threshold = [c for c in mmr_results if c["similarity_score"] >= similarity_threshold]
+    if _t:
+        _t.stop()
 
     if not above_threshold:
         logger.debug(
@@ -472,12 +503,18 @@ async def retrieve(
             similarity_threshold,
             scope,
         )
+        if debug_ctx:
+            debug_ctx.gating_decision = "below_threshold"
         return []
 
     # --- Step 5: Token budget ---
+    _t = debug_ctx.start_step("budget") if debug_ctx else None
     budget_filtered = _apply_token_budget(above_threshold, model_context_window)
+    if _t:
+        _t.stop()
 
     # --- Step 6: Citation assembly ---
+    _t = debug_ctx.start_step("citation") if debug_ctx else None
     retrieved: List[RetrievedChunk] = []
     for chunk in budget_filtered:
         retrieved.append(
@@ -495,6 +532,19 @@ async def retrieve(
                 scope=scope.value,
             )
         )
+    if _t:
+        _t.stop()
+
+    if debug_ctx:
+        debug_ctx.gating_decision = "injected"
+        debug_ctx.injected_chunks = [
+            {
+                "chunk_id": c.chunk_id,
+                "score": c.similarity_score,
+                "text_preview": c.text[:200],
+            }
+            for c in retrieved
+        ]
 
     logger.info(
         "RAG retrieval complete: scope=%s, candidates=%d, mmr=%d, "

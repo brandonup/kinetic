@@ -71,11 +71,16 @@ def _kb_owned_with_folders(mock_client, folders=None):
             # Delete
             m.delete.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
         elif name == "knowledge_base_documents":
+            # List endpoint (includes .order)
             m.select.return_value.eq.return_value.is_.return_value.order.return_value.execute.return_value = MagicMock(
                 data=[]
             )
-            # Reassign update
+            # Ingestion guard fetch in delete_folder (no .order)
+            m.select.return_value.eq.return_value.is_.return_value.execute.return_value = MagicMock(data=[])
+            # Reassign update (when reassign_to is provided)
             m.update.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
+            # Hard delete (when no reassign_to)
+            m.delete.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
         return m
 
     mock_client.table.side_effect = _table
@@ -204,10 +209,32 @@ class TestFolderCRUD:
         assert resp.status_code == 200
         assert resp.json()["name"] == "Renamed"
 
-    def test_delete_folder_reassigns_documents(self, client):
+    def test_delete_folder_without_reassign_deletes_documents(self, client):
+        """Delete folder with no reassign_to hard-deletes its documents."""
         mock_client = MagicMock()
         folder = {"id": FOLDER_ID, "knowledge_base_id": KB_ID, "name": "Old", "created_at": "2026-03-24T00:00:00Z"}
-        _kb_owned_with_folders(mock_client, [folder])
+        doc_delete_mock = MagicMock()
+        doc_delete_mock.eq.return_value.execute.return_value = MagicMock(data=[])
+
+        def _table(name):
+            m = MagicMock()
+            if name == "knowledge_bases":
+                m.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
+                    data={"id": KB_ID, "user_id": USER_ID}
+                )
+            elif name == "knowledge_base_folders":
+                m.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
+                    data=folder
+                )
+                m.delete.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
+            elif name == "knowledge_base_documents":
+                # Ingestion guard fetch: no active docs
+                m.select.return_value.eq.return_value.is_.return_value.execute.return_value = MagicMock(data=[])
+                # Hard delete
+                m.delete = doc_delete_mock
+            return m
+
+        mock_client.table.side_effect = _table
 
         with patch(PATCH_SUPABASE, return_value=mock_client):
             resp = client.delete(
@@ -217,6 +244,39 @@ class TestFolderCRUD:
         assert resp.status_code == 200
         assert resp.json()["status"] == "deleted"
         assert resp.json()["reassigned_to"] is None
+        doc_delete_mock.assert_called_once()
+
+    def test_delete_folder_active_doc_returns_409(self, client):
+        """Delete folder with no reassign_to returns 409 if a doc is actively ingesting."""
+        mock_client = MagicMock()
+        folder = {"id": FOLDER_ID, "knowledge_base_id": KB_ID, "name": "Old", "created_at": "2026-03-24T00:00:00Z"}
+        active_doc = {"id": DOC_ID, "status": "extracting"}
+
+        def _table(name):
+            m = MagicMock()
+            if name == "knowledge_bases":
+                m.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
+                    data={"id": KB_ID, "user_id": USER_ID}
+                )
+            elif name == "knowledge_base_folders":
+                m.select.return_value.eq.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
+                    data=folder
+                )
+            elif name == "knowledge_base_documents":
+                m.select.return_value.eq.return_value.is_.return_value.execute.return_value = MagicMock(
+                    data=[active_doc]
+                )
+            return m
+
+        mock_client.table.side_effect = _table
+
+        with patch(PATCH_SUPABASE, return_value=mock_client):
+            resp = client.delete(
+                f"/api/v1/knowledge-bases/{KB_ID}/folders/{FOLDER_ID}",
+            )
+
+        assert resp.status_code == 409
+        assert "processing" in resp.json()["detail"].lower()
 
     def test_delete_folder_reassign_to_valid_target(self, client):
         """Delete folder with reassign_to pointing to another folder in the same KB."""

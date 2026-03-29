@@ -14,6 +14,7 @@ import { DocumentRow } from "@/components/DocumentRow";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/use-toast";
 import { apiFetch, parseApiError } from "@/lib/api";
 import type { DocumentStatus } from "@/lib/types/models";
 import { cn } from "@/lib/utils";
@@ -96,6 +97,11 @@ export function KnowledgeBaseTab({ knowledgeBaseId }: KnowledgeBaseTabProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Delete all (KIN-379)
+  const { toast } = useToast();
+  const [showDeleteAllConfirm, setShowDeleteAllConfirm] = useState(false);
+  const [deletingAll, setDeletingAll] = useState(false);
 
   // Collect all unique tags from documents
   const allTags = Array.from(new Set(documents.flatMap((d) => d.tags))).sort();
@@ -279,6 +285,56 @@ export function KnowledgeBaseTab({ knowledgeBaseId }: KnowledgeBaseTabProps) {
   );
 
   // ---------------------------------------------------------------------------
+  // Document delete handlers (KIN-379)
+  // ---------------------------------------------------------------------------
+
+  const handleDocumentDeleted = useCallback(
+    (documentId: string) => {
+      setDocuments((prev) => prev.filter((d) => d.id !== documentId));
+    },
+    [],
+  );
+
+  const handleDeleteAll = useCallback(async () => {
+    if (!knowledgeBaseId) return;
+    setDeletingAll(true);
+    try {
+      const res = await apiFetch(
+        `/api/v1/knowledge-bases/${knowledgeBaseId}/documents`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) {
+        if (res.status === 409) {
+          toast({
+            variant: "destructive",
+            title: "Cannot delete all",
+            description: "Some documents are still processing. Wait for them to complete or fail before deleting all.",
+          });
+        } else {
+          const msg = await parseApiError(res);
+          toast({ variant: "destructive", title: "Delete failed", description: msg });
+        }
+        return;
+      }
+      const data = await res.json();
+      setDocuments([]);
+      toast({
+        title: "Documents deleted",
+        description: `Deleted ${data.deleted_count} document${data.deleted_count !== 1 ? "s" : ""}.`,
+      });
+    } catch (err) {
+      toast({
+        variant: "destructive",
+        title: "Delete failed",
+        description: err instanceof Error ? err.message : "An unexpected error occurred.",
+      });
+    } finally {
+      setDeletingAll(false);
+      setShowDeleteAllConfirm(false);
+    }
+  }, [knowledgeBaseId, toast]);
+
+  // ---------------------------------------------------------------------------
   // Render
   // ---------------------------------------------------------------------------
 
@@ -299,6 +355,39 @@ export function KnowledgeBaseTab({ knowledgeBaseId }: KnowledgeBaseTabProps) {
   }
 
   return (
+    <>
+      {/* Delete all confirmation dialog (KIN-379) */}
+      {showDeleteAllConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-background border rounded-lg shadow-lg p-6 max-w-sm w-full mx-4 space-y-4">
+            <h2 className="text-base font-semibold">Delete all documents?</h2>
+            <p className="text-sm text-muted-foreground">
+              Delete all {documents.length} document{documents.length !== 1 ? "s" : ""}?
+              This will permanently remove all documents and their data from this
+              knowledge base. This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowDeleteAllConfirm(false)}
+                disabled={deletingAll}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => void handleDeleteAll()}
+                disabled={deletingAll}
+              >
+                {deletingAll ? "Deleting…" : "Delete all"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
     <div className="flex gap-4">
       {/* Folder sidebar */}
       <div className="w-48 shrink-0 space-y-2">
@@ -442,6 +531,17 @@ export function KnowledgeBaseTab({ knowledgeBaseId }: KnowledgeBaseTabProps) {
           >
             {uploading ? "Uploading..." : "Upload documents"}
           </Button>
+          {documents.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={deletingAll}
+              onClick={() => setShowDeleteAllConfirm(true)}
+              className="text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+            >
+              {deletingAll ? "Deleting…" : "Delete all"}
+            </Button>
+          )}
           {uploadError && (
             <p className="text-xs text-destructive">{uploadError}</p>
           )}
@@ -500,11 +600,13 @@ export function KnowledgeBaseTab({ knowledgeBaseId }: KnowledgeBaseTabProps) {
                 fileType={doc.file_type}
                 initialStatus={doc.status}
                 initialTags={doc.tags}
+                onDeleted={handleDocumentDeleted}
               />
             ))}
           </div>
         )}
       </div>
     </div>
+    </>
   );
 }

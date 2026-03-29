@@ -1,10 +1,10 @@
 """
 Application configuration and settings for Kinetic.
 
-All LLM provider user-facing keys (ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.) are
-BYOK — they come from the user's encrypted profile, not platform env vars.
-Platform-owned keys are PLATFORM_OPENAI_KEY (embedding) and PLATFORM_ANTHROPIC_KEY
-(pipeline reranker calls like framework selection).
+All LLM/embedding keys are BYOK — they come from the user's encrypted
+profile (user_api_keys table), not platform env vars. There are no
+platform-owned keys. Embedding, enrichment, and RAG use the user's keys
+fetched at request time via app.services.user_keys.
 """
 
 import os
@@ -52,11 +52,7 @@ class Settings(BaseSettings):
     # Must be 32 bytes base64-encoded. Never expose in logs or responses.
     API_KEY_ENCRYPTION_KEY: str
 
-    # Platform-owned LLM keys (used for embedding + pipeline calls, NOT user generation)
-    PLATFORM_OPENAI_KEY: str  # text-embedding-3-large, required
-    PLATFORM_ANTHROPIC_KEY: str = ""  # Haiku reranker calls, optional fallback
-
-    # Platform pipeline models (not user-facing — users pick generation model per query)
+    # Pipeline models (not user-facing — users pick generation model per query)
     FRAMEWORK_RERANKER_MODEL: str = "claude-haiku-3-5"
     EMBEDDING_MODEL: str = "text-embedding-3-large"
     CONVERSATION_COMPRESSION_MODEL: str = "claude-haiku-3-5"
@@ -95,6 +91,7 @@ class Settings(BaseSettings):
     model_config = {
         "env_file": str(ENV_FILE_PATH),
         "case_sensitive": True,
+        "extra": "ignore",  # Tolerate stale env vars (e.g., removed PLATFORM_*_KEY)
     }
 
 
@@ -106,7 +103,6 @@ def validate_settings(s: Settings) -> None:
         "SUPABASE_ANON_KEY",
         "SUPABASE_JWT_SECRET",
         "API_KEY_ENCRYPTION_KEY",
-        "PLATFORM_OPENAI_KEY",
     ]
 
     missing = []

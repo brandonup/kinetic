@@ -1,0 +1,449 @@
+{
+  "eval": "active_memory_proposal_quality",
+  "ticket": "KIN-328",
+  "timestamp": "2026-03-23-14-06",
+  "dry_run": true,
+  "config": {
+    "gen_model": "gpt-4o-mini",
+    "judge_model": "gpt-4o"
+  },
+  "summary": {
+    "total_conversations": 17,
+    "conversations_passed": 17,
+    "total_proposals": 48,
+    "global_mean_score": 2.0,
+    "hallucination_rate": 0.0,
+    "threshold_met": true,
+    "hallucination_ok": true,
+    "verdict": "DRY_RUN_OK"
+  },
+  "results": [
+    {
+      "conversation_id": "conv-001",
+      "label": "engineering-preferences",
+      "category": "factual",
+      "proposals": [
+        {
+          "proposal": "User has strong opinions about code architecture \u2014 prefers thin controllers with business logic in services.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User never catches broad exceptions and considers silent failure a serious code smell.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User requires 80% test coverage minimum on all code before merging.",
+          "score": 2,
+          "reason": "dry-run mock"
+        }
+      ],
+      "mean_score": 2.0,
+      "proposal_count": 3,
+      "pass": true,
+      "note": "dry-run"
+    },
+    {
+      "conversation_id": "conv-002",
+      "label": "communication-style",
+      "category": "factual",
+      "proposals": [
+        {
+          "proposal": "User has strong opinions about code architecture \u2014 prefers thin controllers with business logic in services.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User never catches broad exceptions and considers silent failure a serious code smell.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User requires 80% test coverage minimum on all code before merging.",
+          "score": 2,
+          "reason": "dry-run mock"
+        }
+      ],
+      "mean_score": 2.0,
+      "proposal_count": 3,
+      "pass": true,
+      "note": "dry-run"
+    },
+    {
+      "conversation_id": "conv-003",
+      "label": "product-decisions",
+      "category": "factual",
+      "proposals": [
+        {
+          "proposal": "User has strong opinions about code architecture \u2014 prefers thin controllers with business logic in services.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User never catches broad exceptions and considers silent failure a serious code smell.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User requires 80% test coverage minimum on all code before merging.",
+          "score": 2,
+          "reason": "dry-run mock"
+        }
+      ],
+      "mean_score": 2.0,
+      "proposal_count": 3,
+      "pass": true,
+      "note": "dry-run"
+    },
+    {
+      "conversation_id": "conv-004",
+      "label": "working-rhythm",
+      "category": "factual",
+      "proposals": [
+        {
+          "proposal": "User has strong opinions about code architecture \u2014 prefers thin controllers with business logic in services.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User never catches broad exceptions and considers silent failure a serious code smell.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User requires 80% test coverage minimum on all code before merging.",
+          "score": 2,
+          "reason": "dry-run mock"
+        }
+      ],
+      "mean_score": 2.0,
+      "proposal_count": 3,
+      "pass": true,
+      "note": "dry-run"
+    },
+    {
+      "conversation_id": "conv-005",
+      "label": "technical-standards",
+      "category": "factual",
+      "proposals": [
+        {
+          "proposal": "User has strong opinions about code architecture \u2014 prefers thin controllers with business logic in services.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User never catches broad exceptions and considers silent failure a serious code smell.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User requires 80% test coverage minimum on all code before merging.",
+          "score": 2,
+          "reason": "dry-run mock"
+        }
+      ],
+      "mean_score": 2.0,
+      "proposal_count": 3,
+      "pass": true,
+      "note": "dry-run"
+    },
+    {
+      "conversation_id": "conv-006",
+      "label": "decision-framework",
+      "category": "factual",
+      "proposals": [
+        {
+          "proposal": "User has strong opinions about code architecture \u2014 prefers thin controllers with business logic in services.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User never catches broad exceptions and considers silent failure a serious code smell.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User requires 80% test coverage minimum on all code before merging.",
+          "score": 2,
+          "reason": "dry-run mock"
+        }
+      ],
+      "mean_score": 2.0,
+      "proposal_count": 3,
+      "pass": true,
+      "note": "dry-run"
+    },
+    {
+      "conversation_id": "conv-007",
+      "label": "company-context",
+      "category": "factual",
+      "proposals": [
+        {
+          "proposal": "User has strong opinions about code architecture \u2014 prefers thin controllers with business logic in services.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User never catches broad exceptions and considers silent failure a serious code smell.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User requires 80% test coverage minimum on all code before merging.",
+          "score": 2,
+          "reason": "dry-run mock"
+        }
+      ],
+      "mean_score": 2.0,
+      "proposal_count": 3,
+      "pass": true,
+      "note": "dry-run"
+    },
+    {
+      "conversation_id": "conv-008",
+      "label": "feedback-preferences",
+      "category": "factual",
+      "proposals": [
+        {
+          "proposal": "User has strong opinions about code architecture \u2014 prefers thin controllers with business logic in services.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User never catches broad exceptions and considers silent failure a serious code smell.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User requires 80% test coverage minimum on all code before merging.",
+          "score": 2,
+          "reason": "dry-run mock"
+        }
+      ],
+      "mean_score": 2.0,
+      "proposal_count": 3,
+      "pass": true,
+      "note": "dry-run"
+    },
+    {
+      "conversation_id": "conv-009",
+      "label": "frameworks-opinions",
+      "category": "opinion",
+      "proposals": [
+        {
+          "proposal": "User has strong opinions about code architecture \u2014 prefers thin controllers with business logic in services.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User never catches broad exceptions and considers silent failure a serious code smell.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User requires 80% test coverage minimum on all code before merging.",
+          "score": 2,
+          "reason": "dry-run mock"
+        }
+      ],
+      "mean_score": 2.0,
+      "proposal_count": 3,
+      "pass": true,
+      "note": "dry-run"
+    },
+    {
+      "conversation_id": "conv-010",
+      "label": "task-prioritization-opinions",
+      "category": "opinion",
+      "proposals": [
+        {
+          "proposal": "User has strong opinions about code architecture \u2014 prefers thin controllers with business logic in services.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User never catches broad exceptions and considers silent failure a serious code smell.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User requires 80% test coverage minimum on all code before merging.",
+          "score": 2,
+          "reason": "dry-run mock"
+        }
+      ],
+      "mean_score": 2.0,
+      "proposal_count": 3,
+      "pass": true,
+      "note": "dry-run"
+    },
+    {
+      "conversation_id": "conv-011",
+      "label": "meeting-preferences",
+      "category": "opinion",
+      "proposals": [
+        {
+          "proposal": "User has strong opinions about code architecture \u2014 prefers thin controllers with business logic in services.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User never catches broad exceptions and considers silent failure a serious code smell.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User requires 80% test coverage minimum on all code before merging.",
+          "score": 2,
+          "reason": "dry-run mock"
+        }
+      ],
+      "mean_score": 2.0,
+      "proposal_count": 3,
+      "pass": true,
+      "note": "dry-run"
+    },
+    {
+      "conversation_id": "conv-012",
+      "label": "debugging-session",
+      "category": "task",
+      "proposals": [
+        {
+          "proposal": "User has strong opinions about code architecture \u2014 prefers thin controllers with business logic in services.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User never catches broad exceptions and considers silent failure a serious code smell.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User requires 80% test coverage minimum on all code before merging.",
+          "score": 2,
+          "reason": "dry-run mock"
+        }
+      ],
+      "mean_score": 2.0,
+      "proposal_count": 3,
+      "pass": true,
+      "note": "dry-run"
+    },
+    {
+      "conversation_id": "conv-013",
+      "label": "sql-query-help",
+      "category": "task",
+      "proposals": [
+        {
+          "proposal": "User has strong opinions about code architecture \u2014 prefers thin controllers with business logic in services.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User never catches broad exceptions and considers silent failure a serious code smell.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User requires 80% test coverage minimum on all code before merging.",
+          "score": 2,
+          "reason": "dry-run mock"
+        }
+      ],
+      "mean_score": 2.0,
+      "proposal_count": 3,
+      "pass": true,
+      "note": "dry-run"
+    },
+    {
+      "conversation_id": "conv-014",
+      "label": "grammar-check",
+      "category": "task",
+      "proposals": [
+        {
+          "proposal": "User prefers to work in deep-focus blocks without interruptions.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User values async collaboration over synchronous meetings.",
+          "score": 2,
+          "reason": "dry-run mock"
+        }
+      ],
+      "mean_score": 2.0,
+      "proposal_count": 2,
+      "pass": true,
+      "note": "dry-run"
+    },
+    {
+      "conversation_id": "conv-015",
+      "label": "stack-contradiction",
+      "category": "contradiction",
+      "proposals": [
+        {
+          "proposal": "User has strong opinions about code architecture \u2014 prefers thin controllers with business logic in services.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User never catches broad exceptions and considers silent failure a serious code smell.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User requires 80% test coverage minimum on all code before merging.",
+          "score": 2,
+          "reason": "dry-run mock"
+        }
+      ],
+      "mean_score": 2.0,
+      "proposal_count": 3,
+      "pass": true,
+      "note": "dry-run"
+    },
+    {
+      "conversation_id": "conv-016",
+      "label": "timeline-update",
+      "category": "contradiction",
+      "proposals": [
+        {
+          "proposal": "User has strong opinions about code architecture \u2014 prefers thin controllers with business logic in services.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User never catches broad exceptions and considers silent failure a serious code smell.",
+          "score": 2,
+          "reason": "dry-run mock"
+        },
+        {
+          "proposal": "User requires 80% test coverage minimum on all code before merging.",
+          "score": 2,
+          "reason": "dry-run mock"
+        }
+      ],
+      "mean_score": 2.0,
+      "proposal_count": 3,
+      "pass": true,
+      "note": "dry-run"
+    },
+    {
+      "conversation_id": "conv-017",
+      "label": "short-preference-mention",
+      "category": "short",
+      "proposals": [
+        {
+          "proposal": "User uses Cursor IDE as their primary development environment.",
+          "score": 2,
+          "reason": "dry-run mock"
+        }
+      ],
+      "mean_score": 2.0,
+      "proposal_count": 1,
+      "pass": true,
+      "note": "dry-run"
+    }
+  ]
+}

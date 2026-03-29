@@ -6,6 +6,10 @@ Runs stages sequentially: extracting → chunking → embedding → completed.
 Each stage is retried up to MAX_INGESTION_RETRIES times with INGESTION_RETRY_DELAYS backoff.
 Token limit check (INGESTION_TOKEN_LIMIT) happens after extraction — rejects before embedding.
 
+Supports stage-resumption for retry (KIN-336): run_ingestion_from_stage allows
+restarting from chunking when extraction already succeeded. Extracted text is
+persisted to Supabase Storage after extraction for this purpose.
+
 Schema ref: db-schema-spec.md §12 (knowledge_base_documents)
 """
 
@@ -24,8 +28,16 @@ from app.services.ingestion.embedder import EmbeddingService
 from app.services.ingestion.extractor import extract_text
 from app.services.ingestion.indexer import index_chunks
 from app.services.ingestion.summarizer import generate_summary
+from app.services.ingestion.tag_suggester import suggest_tags
 
 logger = logging.getLogger(__name__)
+
+# Per-stage timeout in seconds. Prevents indefinite hangs from blocking the
+# pipeline. Generous to allow large documents (embedding many batches).
+# Note: asyncio.wait_for on run_in_executor raises TimeoutError but cannot
+# cancel the underlying thread — the thread may continue briefly. This is
+# acceptable because we only need to unblock the pipeline and persist the error.
+STAGE_TIMEOUT_SECONDS = 600  # 10 minutes
 
 
 class TokenLimitExceeded(ValueError):
@@ -47,6 +59,198 @@ async def _update_document(supabase, document_id: UUID, **fields) -> None:
     _ = result  # noqa: F841
 
 
+async def _store_extracted_text(supabase, document_id: UUID, text: str) -> None:
+    """
+    Persist extracted text to Supabase Storage for stage-resume retry (KIN-336).
+    Non-fatal — if storage fails or times out, the document still processes.
+    """
+    try:
+        loop = asyncio.get_running_loop()
+        text_path = f"{document_id}/extracted.txt"
+        await asyncio.wait_for(
+            loop.run_in_executor(
+                None,
+                lambda: supabase.storage.from_(settings.SUPABASE_STORAGE_BUCKET)
+                .upload(text_path, text.encode("utf-8"), {"content-type": "text/plain"}),
+            ),
+            timeout=60,
+        )
+    except asyncio.TimeoutError:
+        logger.warning("Extracted text storage timed out (non-fatal) for %s", document_id)
+    except Exception as exc:
+        logger.warning("Failed to persist extracted text (non-fatal): %s", exc)
+
+
+async def _run_enrichment(
+    supabase, document_id: UUID, text: str,
+    anthropic_key: Optional[str] = None,
+) -> None:
+    """
+    Run non-fatal enrichment steps: summary generation + tag suggestion.
+    Uses user's BYOK Anthropic key. Failures logged and skipped — never fatal.
+    """
+    loop = asyncio.get_running_loop()
+
+    # Summary
+    try:
+        summary = await loop.run_in_executor(
+            None, lambda: generate_summary(text, anthropic_key=anthropic_key),
+        )
+        if summary:
+            await _update_document(supabase, document_id, summary=summary)
+    except Exception as exc:
+        logger.warning("Summary generation failed (non-fatal) for %s: %s", document_id, exc)
+
+    # Tag suggestions (KIN-336)
+    try:
+        tags = await loop.run_in_executor(
+            None, lambda: suggest_tags(text, anthropic_key=anthropic_key),
+        )
+        if tags:
+            await _update_document(supabase, document_id, tags=tags)
+    except Exception as exc:
+        logger.warning("Tag suggestion failed (non-fatal) for %s: %s", document_id, exc)
+
+
+async def _run_pipeline_stages(
+    supabase,
+    document_id: UUID,
+    knowledge_base_id: UUID,
+    project_id: Optional[UUID],
+    agent_definition_id: Optional[UUID],
+    text: str,
+    total_tokens: int,
+    openai_key: str = "",
+) -> None:
+    """
+    Run chunking → embedding → indexing → completed.
+    Shared between full ingestion and stage-resume retry.
+    """
+    retry_count = 0
+
+    async def _run_stage(stage_name: str, coro):
+        """Update status to stage_name, run coro, retry on transient failure."""
+        nonlocal retry_count
+
+        for attempt in range(settings.MAX_INGESTION_RETRIES + 1):
+            try:
+                await _update_document(supabase, document_id, status=stage_name)
+                return await asyncio.wait_for(
+                    coro(), timeout=STAGE_TIMEOUT_SECONDS,
+                )
+            except asyncio.TimeoutError:
+                exc = TimeoutError(
+                    f"Stage '{stage_name}' timed out after {STAGE_TIMEOUT_SECONDS}s"
+                )
+                logger.error(
+                    "Stage %s timed out for document %s (attempt %d)",
+                    stage_name, document_id, attempt + 1,
+                )
+                if attempt < settings.MAX_INGESTION_RETRIES:
+                    retry_count += 1
+                    delays = settings.INGESTION_RETRY_DELAYS
+                    delay = delays[min(attempt, len(delays) - 1)]
+                    await _update_document(supabase, document_id, retry_count=retry_count)
+                    await asyncio.sleep(delay)
+                else:
+                    await _update_document(
+                        supabase, document_id,
+                        status="failed",
+                        error_stage=stage_name,
+                        error_message=str(exc)[:2000],
+                        retry_count=retry_count,
+                    )
+                    raise exc
+            except Exception as exc:
+                if attempt < settings.MAX_INGESTION_RETRIES:
+                    delays = settings.INGESTION_RETRY_DELAYS
+                    delay = delays[min(attempt, len(delays) - 1)]
+                    retry_count += 1
+                    logger.warning(
+                        "Stage %s failed (attempt %d/%d) for document %s: %s. "
+                        "Retrying in %ds.",
+                        stage_name,
+                        attempt + 1,
+                        settings.MAX_INGESTION_RETRIES,
+                        document_id,
+                        exc,
+                        delay,
+                    )
+                    await _update_document(supabase, document_id, retry_count=retry_count)
+                    await asyncio.sleep(delay)
+                else:
+                    logger.error(
+                        "Stage %s exhausted retries for document %s: %s",
+                        stage_name,
+                        document_id,
+                        exc,
+                    )
+                    await _update_document(
+                        supabase,
+                        document_id,
+                        status="failed",
+                        error_stage=stage_name,
+                        error_message=str(exc)[:2000],
+                        retry_count=retry_count,
+                    )
+                    raise
+
+    # --- Stage: chunking ---
+    async def _chunk():
+        _loop = asyncio.get_running_loop()
+        return await _loop.run_in_executor(
+            None, lambda: chunk_document(text, total_tokens)
+        )
+
+    chunks = await _run_stage("chunking", _chunk)
+
+    # --- Stage: embedding ---
+    embedder = EmbeddingService(api_key=openai_key)
+
+    async def _embed():
+        loop = asyncio.get_running_loop()
+        texts = [c.text for c in chunks]
+        return await loop.run_in_executor(None, lambda: embedder.embed_batch(texts))
+
+    embeddings = await _run_stage("embedding", _embed)
+
+    # Index chunks — failure sets error state so retry can recover
+    try:
+        await index_chunks(
+            supabase,
+            document_id,
+            knowledge_base_id,
+            project_id,
+            agent_definition_id,
+            chunks,
+            embeddings,
+        )
+    except Exception as exc:
+        logger.error("Indexing failed for document %s: %s", document_id, exc)
+        await _update_document(
+            supabase,
+            document_id,
+            status="failed",
+            error_stage="embedding",  # closest stage — indexing is not a status enum value
+            error_message=f"Indexing failed: {str(exc)[:1990]}",
+            retry_count=retry_count,
+        )
+        raise
+
+    await _update_document(
+        supabase,
+        document_id,
+        status="completed",
+        retry_count=retry_count,
+    )
+    logger.info(
+        "Ingestion complete for document %s: %d chunks, retry_count=%d",
+        document_id,
+        len(chunks),
+        retry_count,
+    )
+
+
 async def run_ingestion(
     supabase,
     document_id: UUID,
@@ -56,15 +260,17 @@ async def run_ingestion(
     file_content: bytes,
     filename: str,
     content_type: str,
+    openai_key: str = "",
+    anthropic_key: Optional[str] = None,
 ) -> None:
     """
     Run the full ingestion pipeline for one document.
 
     Stages:
       1. extracting  — text extraction via unstructured
+      [optional]     — document-level summary + tag suggestions (ENRICHMENT_ENABLED)
       2. chunking    — fixed-size token chunking (~500 tokens, ~50 overlap)
-      3. embedding   — text-embedding-3-large via platform OpenAI key
-      [optional]     — document-level summary (ENRICHMENT_ENABLED)
+      3. embedding   — text-embedding-3-large via user's BYOK OpenAI key
       4. indexing    — write chunks to knowledge_base_chunks (pgvector)
       5. completed   — final status update
 
@@ -81,6 +287,8 @@ async def run_ingestion(
         file_content: Raw file bytes.
         filename: Original filename.
         content_type: MIME type.
+        openai_key: User's decrypted OpenAI API key (required for embedding).
+        anthropic_key: User's decrypted Anthropic API key (optional, for enrichment).
     """
     retry_count = 0
 
@@ -91,10 +299,34 @@ async def run_ingestion(
         for attempt in range(settings.MAX_INGESTION_RETRIES + 1):
             try:
                 await _update_document(supabase, document_id, status=stage_name)
-                return await coro()
+                return await asyncio.wait_for(
+                    coro(), timeout=STAGE_TIMEOUT_SECONDS,
+                )
             except TokenLimitExceeded:
-                # Hard rejection — do not retry
                 raise
+            except asyncio.TimeoutError:
+                exc = TimeoutError(
+                    f"Stage '{stage_name}' timed out after {STAGE_TIMEOUT_SECONDS}s"
+                )
+                logger.error(
+                    "Stage %s timed out for document %s (attempt %d)",
+                    stage_name, document_id, attempt + 1,
+                )
+                if attempt < settings.MAX_INGESTION_RETRIES:
+                    retry_count += 1
+                    delays = settings.INGESTION_RETRY_DELAYS
+                    delay = delays[min(attempt, len(delays) - 1)]
+                    await _update_document(supabase, document_id, retry_count=retry_count)
+                    await asyncio.sleep(delay)
+                else:
+                    await _update_document(
+                        supabase, document_id,
+                        status="failed",
+                        error_stage=stage_name,
+                        error_message=str(exc)[:2000],
+                        retry_count=retry_count,
+                    )
+                    raise exc
             except Exception as exc:
                 if attempt < settings.MAX_INGESTION_RETRIES:
                     delays = settings.INGESTION_RETRY_DELAYS
@@ -148,54 +380,17 @@ async def run_ingestion(
 
         text, total_tokens = await _run_stage("extracting", _extract)
 
-        # Optional enrichment — outside retry loop, non-fatal.
-        # generate_summary makes a blocking LiteLLM HTTP call — run in executor.
-        loop = asyncio.get_running_loop()
-        summary = await loop.run_in_executor(None, lambda: generate_summary(text))
-        if summary:
-            await _update_document(supabase, document_id, summary=summary)
+        # Persist extracted text to Storage for stage-resume retry (KIN-336)
+        await _store_extracted_text(supabase, document_id, text)
 
-        # --- Stage: chunking ---
-        async def _chunk():
-            _loop = asyncio.get_running_loop()
-            return await _loop.run_in_executor(
-                None, lambda: chunk_document(text, total_tokens)
-            )
+        # Enrichment: summary + tags (non-fatal, outside retry loop)
+        await _run_enrichment(supabase, document_id, text, anthropic_key=anthropic_key)
 
-        chunks = await _run_stage("chunking", _chunk)
-
-        # --- Stage: embedding ---
-        embedder = EmbeddingService()
-
-        async def _embed():
-            loop = asyncio.get_running_loop()
-            texts = [c.text for c in chunks]
-            return await loop.run_in_executor(None, lambda: embedder.embed_batch(texts))
-
-        embeddings = await _run_stage("embedding", _embed)
-
-        # Index chunks (outside retry — indexer raises on failure, caller can retry from outside)
-        await index_chunks(
-            supabase,
-            document_id,
-            knowledge_base_id,
-            project_id,
-            agent_definition_id,
-            chunks,
-            embeddings,
-        )
-
-        await _update_document(
-            supabase,
-            document_id,
-            status="completed",
-            retry_count=retry_count,
-        )
-        logger.info(
-            "Ingestion complete for document %s: %d chunks, retry_count=%d",
-            document_id,
-            len(chunks),
-            retry_count,
+        # Run remaining stages (chunking → embedding → indexing → completed)
+        await _run_pipeline_stages(
+            supabase, document_id, knowledge_base_id,
+            project_id, agent_definition_id, text, total_tokens,
+            openai_key=openai_key,
         )
 
     except TokenLimitExceeded as exc:
@@ -208,6 +403,100 @@ async def run_ingestion(
             retry_count=retry_count,
         )
         logger.warning("Document %s rejected: %s", document_id, exc)
-    except Exception:
-        # Stage failure already persisted by _run_stage — just propagate
+    except Exception as exc:
+        # Catch-all: persist error to DB so the UI shows a meaningful message.
+        # _run_stage failures are already persisted, but exceptions from
+        # _store_extracted_text, _run_enrichment, or _run_pipeline_stages
+        # (outside _run_stage) would otherwise propagate silently through
+        # FastAPI's background task runner with no DB update.
+        logger.error(
+            "Unhandled pipeline error for document %s: %s", document_id, exc,
+        )
+        try:
+            await _update_document(
+                supabase,
+                document_id,
+                status="failed",
+                error_stage="unknown",
+                error_message=f"Pipeline error: {str(exc)[:1980]}",
+                retry_count=retry_count,
+            )
+        except Exception:
+            logger.error(
+                "Failed to persist error state for document %s", document_id,
+            )
+        raise
+
+
+async def run_ingestion_from_stage(
+    supabase,
+    document_id: UUID,
+    knowledge_base_id: UUID,
+    project_id: Optional[UUID],
+    agent_definition_id: Optional[UUID],
+    start_stage: str,
+    file_content: Optional[bytes] = None,
+    extracted_text: Optional[str] = None,
+    filename: str = "",
+    content_type: str = "application/octet-stream",
+    openai_key: str = "",
+    anthropic_key: Optional[str] = None,
+) -> None:
+    """
+    Resume ingestion from a specific stage (KIN-336).
+
+    Used by the retry endpoint after a failed ingestion.
+
+    Args:
+        start_stage: 'extracting' to re-run full pipeline, 'chunking' to skip extraction.
+        file_content: Required if start_stage == 'extracting'.
+        extracted_text: Required if start_stage == 'chunking'.
+        openai_key: User's decrypted OpenAI API key (required for embedding).
+        anthropic_key: User's decrypted Anthropic API key (optional, for enrichment).
+    """
+    try:
+        if start_stage == "extracting":
+            if file_content is None:
+                raise ValueError("file_content required for retry from extracting stage")
+            await run_ingestion(
+                supabase, document_id, knowledge_base_id,
+                project_id, agent_definition_id,
+                file_content, filename, content_type,
+                openai_key=openai_key, anthropic_key=anthropic_key,
+            )
+        elif start_stage == "chunking":
+            if extracted_text is None:
+                raise ValueError("extracted_text required for retry from chunking stage")
+            # Re-count tokens from extracted text
+            enc = tiktoken.get_encoding("cl100k_base")
+            total_tokens = len(enc.encode(extracted_text))
+            # Re-run enrichment (tags/summary may have failed on first run too)
+            await _run_enrichment(
+                supabase, document_id, extracted_text, anthropic_key=anthropic_key,
+            )
+            # Run chunking → embedding → indexing → completed
+            await _run_pipeline_stages(
+                supabase, document_id, knowledge_base_id,
+                project_id, agent_definition_id, extracted_text, total_tokens,
+                openai_key=openai_key,
+            )
+        else:
+            raise ValueError(f"Invalid start_stage: {start_stage}")
+    except Exception as exc:
+        logger.error(
+            "Unhandled error in stage-resume for document %s: %s",
+            document_id, exc,
+        )
+        try:
+            await _update_document(
+                supabase,
+                document_id,
+                status="failed",
+                error_stage=start_stage,
+                error_message=f"Resume error: {str(exc)[:1980]}",
+            )
+        except Exception:
+            logger.error(
+                "Failed to persist error state for document %s", document_id,
+            )
         raise

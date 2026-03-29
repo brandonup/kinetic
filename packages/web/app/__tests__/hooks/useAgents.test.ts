@@ -28,8 +28,6 @@ function makeAgent(overrides: Partial<{ id: string; owner_id: string; visibility
     instructions: "Be helpful.",
     type: "custom",
     visibility: "private",
-    knowledge_base_id: null,
-    mcp_enabled: false,
     created_at: "2026-01-01T00:00:00Z",
     updated_at: "2026-01-01T00:00:00Z",
     ...overrides,

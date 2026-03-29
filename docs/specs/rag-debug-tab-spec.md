@@ -1,6 +1,6 @@
 # Admin RAG Debug Tab — Implementation Spec
 
-**Status:** In Review
+**Status:** Approved
 **Author:** Jared
 **Date:** 2026-03-23
 **Linear:** KIN-315
@@ -71,7 +71,7 @@ Returns a paginated list of recent retrieval traces.
       "created_at": "ISO-8601"
     }
   ],
-  "next_cursor": "uuid | null"
+  "next_cursor": "ISO-8601 timestamp | null"
 }
 ```
 
@@ -160,6 +160,7 @@ Trace writes must not add latency to the user query path.
 | BYOK key error mid-query | Not relevant to this feature — retrieval uses platform-owned embedding key. No BYOK dependency. |
 | Trace write fails (DB unavailable) | Log error server-side. Query continues normally. Trace is lost — acceptable in MVP. |
 | Message is deleted | `message_id` FK becomes a dangling reference. Traces are append-only — retain as-is. Queries against deleted messages still show in the debug list (the message text is captured in `query_text` at write time). |
+| KB document hard-deleted | The read-time join (Option B) returns null for orphaned `chunk_id` references in historical traces. Render `[Document removed]` in place of `document_title` and `section_path` — do not throw an error or omit the chunk row. |
 
 ---
 
@@ -176,12 +177,8 @@ Trace writes must not add latency to the user query path.
 
 ## Open Questions
 
-**1. Injected chunk display — join vs. denormalize?**
+_All resolved._
 
-`db-schema-spec.md §20` defines `injected_chunks` as `[{chunk_id, score, text_preview}]`. The UI trace detail wants to show `document_title` and `section_path` per chunk. Two options:
+**1. Injected chunk display — join vs. denormalize? → RESOLVED: Option B**
 
-- **Option A (denormalize at write time):** Expand `injected_chunks` JSONB to `[{chunk_id, score, text_preview, document_title, section_path}]`. Requires a schema update. Pro: no read-time join. Con: small schema change.
-- **Option B (join at read time):** Keep schema as-is. Detail endpoint joins `knowledge_base_chunks` → `knowledge_base_documents` via `chunk_id` when serving trace detail. Pro: no schema change. Con: extra query at read time (admin-only, acceptable).
-
-**Recommendation:** Option B — admin reads are infrequent and the join is trivial. No schema change needed.
-**Needs Gilfoyle's call** — confirm Option B is acceptable before Approved.
+**Decision (Gilfoyle, 2026-03-23):** Join at read time. Keep schema as-is. Detail endpoint joins `knowledge_base_chunks → knowledge_base_documents` via `chunk_id`. Admin detail reads are infrequent and the join is trivial. Denormalizing would bloat every trace row and couple the write path to an extra read. Orphaned chunk behavior (hard-deleted documents) covered in §6 Edge Cases.

@@ -401,6 +401,8 @@ Structured reasoning tools attached to an AgentDefinition.
 | `example_application` | `text` | | 2–3 sentence scenario |
 | `related_frameworks` | `text[]` | | Array of framework_id strings |
 | `source_posts` | `jsonb` | | `[{"id": "...", "title": "..."}]` |
+| `type` | `text` | | Framework type: diagnostic, procedure, taxonomy, etc. |
+| `do_not_use_when` | `text[]` | | Negative triggers — when NOT to recommend this framework |
 | `confidence` | `framework_confidence` | `NOT NULL` | high or medium |
 | `origin` | `framework_origin` | `NOT NULL` | extracted or manual |
 | `created_at` | `timestamptz` | `NOT NULL DEFAULT now()` | |
@@ -557,9 +559,13 @@ Per-query retrieval traces for admin debugging. Append-only. Auto-purge after 30
 | `vector_candidates` | `jsonb` | | Pre-MMR candidates: `[{chunk_id, score}]` |
 | `mmr_selections` | `jsonb` | | Post-MMR selections |
 | `rerank_scores` | `jsonb` | | V1 — null in MVP |
-| `gating_decision` | `text` | `NOT NULL` | `injected` or `below_threshold` (MVP) |
+| `gating_decision` | `text` | `NOT NULL` | `injected`, `below_threshold`, or `error` (MVP) |
 | `injected_chunks` | `jsonb` | | Final chunks: `[{chunk_id, score, text_preview}]` |
+| `error_message` | `text` | | Populated on embedding failure; null for successful retrievals |
 | `created_at` | `timestamptz` | `NOT NULL DEFAULT now()` | |
+
+**Indexes:**
+- `idx_retrieval_debug_logs_created_at` on `(created_at DESC)`
 
 **RLS:**
 - SELECT: admin role only

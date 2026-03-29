@@ -1,0 +1,611 @@
+{
+  "eval": "linked_upload_extraction_accuracy",
+  "ticket": "KIN-328",
+  "timestamp": "2026-03-23-14-06",
+  "dry_run": true,
+  "config": {
+    "judge_model": "gpt-4o",
+    "surface_filter": null
+  },
+  "summary": {
+    "total_documents": 30,
+    "errors": 0,
+    "name_precision": 0.2105,
+    "relevance_mean": 3.0,
+    "name_precision_pass": false,
+    "relevance_pass": true,
+    "verdict": "DRY_RUN_OK"
+  },
+  "per_surface": {
+    "profile": {
+      "total": 10,
+      "name_precision": 0.1111111111111111,
+      "relevance_mean": 3.0,
+      "passed": 1
+    },
+    "company": {
+      "total": 10,
+      "name_precision": 0.3,
+      "relevance_mean": 3.0,
+      "passed": 3
+    },
+    "agent": {
+      "total": 10,
+      "name_precision": null,
+      "relevance_mean": 3.0,
+      "passed": 0
+    }
+  },
+  "results": [
+    {
+      "doc_id": "user-001",
+      "label": "software-engineer-linkedin",
+      "surface": "profile",
+      "edge_case": null,
+      "name": {
+        "extracted": "Sarah Chen",
+        "expected": "Sarah Chen",
+        "precise": true,
+        "note": ""
+      },
+      "content": {
+        "field": "bio",
+        "extracted_snippet": "A software engineer with expertise in distributed systems.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": true
+    },
+    {
+      "doc_id": "user-002",
+      "label": "product-manager-cv",
+      "surface": "profile",
+      "edge_case": null,
+      "name": {
+        "extracted": "Sarah Chen",
+        "expected": "Marcus Williams",
+        "precise": false,
+        "note": ""
+      },
+      "content": {
+        "field": "bio",
+        "extracted_snippet": "A software engineer with expertise in distributed systems.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "user-003",
+      "label": "founder-bio",
+      "surface": "profile",
+      "edge_case": null,
+      "name": {
+        "extracted": "Sarah Chen",
+        "expected": "Alex Rivera",
+        "precise": false,
+        "note": ""
+      },
+      "content": {
+        "field": "bio",
+        "extracted_snippet": "A software engineer with expertise in distributed systems.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "user-004",
+      "label": "designer-about-page",
+      "surface": "profile",
+      "edge_case": null,
+      "name": {
+        "extracted": "Sarah Chen",
+        "expected": "Priya Nair",
+        "precise": false,
+        "note": ""
+      },
+      "content": {
+        "field": "bio",
+        "extracted_snippet": "A software engineer with expertise in distributed systems.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "user-005",
+      "label": "vc-partner-bio",
+      "surface": "profile",
+      "edge_case": null,
+      "name": {
+        "extracted": "Sarah Chen",
+        "expected": "Thomas Berg",
+        "precise": false,
+        "note": ""
+      },
+      "content": {
+        "field": "bio",
+        "extracted_snippet": "A software engineer with expertise in distributed systems.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "user-006",
+      "label": "researcher-profile",
+      "surface": "profile",
+      "edge_case": null,
+      "name": {
+        "extracted": "Sarah Chen",
+        "expected": "Yuki Tanaka",
+        "precise": false,
+        "note": ""
+      },
+      "content": {
+        "field": "bio",
+        "extracted_snippet": "A software engineer with expertise in distributed systems.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "user-007",
+      "label": "consultant-bios",
+      "surface": "profile",
+      "edge_case": null,
+      "name": {
+        "extracted": "Sarah Chen",
+        "expected": "Diana Okonkwo",
+        "precise": false,
+        "note": ""
+      },
+      "content": {
+        "field": "bio",
+        "extracted_snippet": "A software engineer with expertise in distributed systems.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "user-008",
+      "label": "journalist-profile",
+      "surface": "profile",
+      "edge_case": null,
+      "name": {
+        "extracted": "Sarah Chen",
+        "expected": "Ben Kowalski",
+        "precise": false,
+        "note": ""
+      },
+      "content": {
+        "field": "bio",
+        "extracted_snippet": "A software engineer with expertise in distributed systems.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "user-009",
+      "label": "short-linkedin-bio",
+      "surface": "profile",
+      "edge_case": null,
+      "name": {
+        "extracted": "Sarah Chen",
+        "expected": "Jamie Cortez",
+        "precise": false,
+        "note": ""
+      },
+      "content": {
+        "field": "bio",
+        "extracted_snippet": "A software engineer with expertise in distributed systems.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "user-010",
+      "label": "no-clear-author",
+      "surface": "profile",
+      "edge_case": "no_individual_author",
+      "name": {
+        "extracted": "Sarah Chen",
+        "expected": null,
+        "precise": false,
+        "note": "edge: expected null"
+      },
+      "content": {
+        "field": "bio",
+        "extracted_snippet": "A software engineer with expertise in distributed systems.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "company-001",
+      "label": "saas-one-pager",
+      "surface": "company",
+      "edge_case": null,
+      "name": {
+        "extracted": "Lattice \u2014 People Management Pl",
+        "expected": "Lattice",
+        "precise": false,
+        "note": ""
+      },
+      "content": {
+        "field": "description",
+        "extracted_snippet": "A technology company building innovative products.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "company-002",
+      "label": "early-stage-pitch",
+      "surface": "company",
+      "edge_case": null,
+      "name": {
+        "extracted": "Meridian AI",
+        "expected": "Meridian AI",
+        "precise": true,
+        "note": ""
+      },
+      "content": {
+        "field": "description",
+        "extracted_snippet": "A technology company building innovative products.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": true
+    },
+    {
+      "doc_id": "company-003",
+      "label": "about-page",
+      "surface": "company",
+      "edge_case": null,
+      "name": {
+        "extracted": "About Northstar Security",
+        "expected": "Northstar Security",
+        "precise": false,
+        "note": ""
+      },
+      "content": {
+        "field": "description",
+        "extracted_snippet": "A technology company building innovative products.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "company-004",
+      "label": "investor-memo",
+      "surface": "company",
+      "edge_case": null,
+      "name": {
+        "extracted": "Flux \u2014 Infrastructure for AI A",
+        "expected": "Flux",
+        "precise": false,
+        "note": ""
+      },
+      "content": {
+        "field": "description",
+        "extracted_snippet": "A technology company building innovative products.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "company-005",
+      "label": "press-release",
+      "surface": "company",
+      "edge_case": null,
+      "name": {
+        "extracted": "FOR IMMEDIATE RELEASE",
+        "expected": "Greenleaf Logistics",
+        "precise": false,
+        "note": ""
+      },
+      "content": {
+        "field": "description",
+        "extracted_snippet": "A technology company building innovative products.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "company-006",
+      "label": "product-hunt-launch",
+      "surface": "company",
+      "edge_case": null,
+      "name": {
+        "extracted": "Introducing Copywright AI \ud83d\ude80",
+        "expected": "Copywright AI",
+        "precise": false,
+        "note": ""
+      },
+      "content": {
+        "field": "description",
+        "extracted_snippet": "A technology company building innovative products.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "company-007",
+      "label": "linkedin-company-page",
+      "surface": "company",
+      "edge_case": null,
+      "name": {
+        "extracted": "Vantage Point Analytics",
+        "expected": "Vantage Point Analytics",
+        "precise": true,
+        "note": ""
+      },
+      "content": {
+        "field": "description",
+        "extracted_snippet": "A technology company building innovative products.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": true
+    },
+    {
+      "doc_id": "company-008",
+      "label": "bootstrap-company",
+      "surface": "company",
+      "edge_case": null,
+      "name": {
+        "extracted": "Pixel & Thread Studio",
+        "expected": "Pixel & Thread Studio",
+        "precise": true,
+        "note": ""
+      },
+      "content": {
+        "field": "description",
+        "extracted_snippet": "A technology company building innovative products.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": true
+    },
+    {
+      "doc_id": "company-009",
+      "label": "nonprofit-overview",
+      "surface": "company",
+      "edge_case": null,
+      "name": {
+        "extracted": "Code Forward \u2014 About Us",
+        "expected": "Code Forward",
+        "precise": false,
+        "note": ""
+      },
+      "content": {
+        "field": "description",
+        "extracted_snippet": "A technology company building innovative products.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "company-010",
+      "label": "ambiguous-company-name",
+      "surface": "company",
+      "edge_case": "product_vs_company_name",
+      "name": {
+        "extracted": "Introducing our new platform: ",
+        "expected": "Meridian Group",
+        "precise": false,
+        "note": ""
+      },
+      "content": {
+        "field": "description",
+        "extracted_snippet": "A technology company building innovative products.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "agent-001",
+      "label": "paul-graham-essays",
+      "surface": "agent",
+      "edge_case": null,
+      "name": {
+        "extracted": "Paul Graham",
+        "expected": null,
+        "precise": false,
+        "note": "edge: expected null"
+      },
+      "content": {
+        "field": "instructions",
+        "extracted_snippet": "You are Paul Graham. Think like an investor and founder.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "agent-002",
+      "label": "naval-ravikant-tweetstorm",
+      "surface": "agent",
+      "edge_case": null,
+      "name": {
+        "extracted": "Paul Graham",
+        "expected": null,
+        "precise": false,
+        "note": "edge: expected null"
+      },
+      "content": {
+        "field": "instructions",
+        "extracted_snippet": "You are Paul Graham. Think like an investor and founder.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "agent-003",
+      "label": "andy-grove-management",
+      "surface": "agent",
+      "edge_case": null,
+      "name": {
+        "extracted": "Paul Graham",
+        "expected": null,
+        "precise": false,
+        "note": "edge: expected null"
+      },
+      "content": {
+        "field": "instructions",
+        "extracted_snippet": "You are Paul Graham. Think like an investor and founder.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "agent-004",
+      "label": "ben-horowitz-blog",
+      "surface": "agent",
+      "edge_case": null,
+      "name": {
+        "extracted": "Paul Graham",
+        "expected": null,
+        "precise": false,
+        "note": "edge: expected null"
+      },
+      "content": {
+        "field": "instructions",
+        "extracted_snippet": "You are Paul Graham. Think like an investor and founder.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "agent-005",
+      "label": "ryan-holiday-stoicism",
+      "surface": "agent",
+      "edge_case": null,
+      "name": {
+        "extracted": "Paul Graham",
+        "expected": null,
+        "precise": false,
+        "note": "edge: expected null"
+      },
+      "content": {
+        "field": "instructions",
+        "extracted_snippet": "You are Paul Graham. Think like an investor and founder.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "agent-006",
+      "label": "charity-majors-observability",
+      "surface": "agent",
+      "edge_case": null,
+      "name": {
+        "extracted": "Paul Graham",
+        "expected": null,
+        "precise": false,
+        "note": "edge: expected null"
+      },
+      "content": {
+        "field": "instructions",
+        "extracted_snippet": "You are Paul Graham. Think like an investor and founder.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "agent-007",
+      "label": "first-person-essay-explicit-name",
+      "surface": "agent",
+      "edge_case": null,
+      "name": {
+        "extracted": "Paul Graham",
+        "expected": null,
+        "precise": false,
+        "note": "edge: expected null"
+      },
+      "content": {
+        "field": "instructions",
+        "extracted_snippet": "You are Paul Graham. Think like an investor and founder.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "agent-008",
+      "label": "ux-design-principles",
+      "surface": "agent",
+      "edge_case": null,
+      "name": {
+        "extracted": "Paul Graham",
+        "expected": null,
+        "precise": false,
+        "note": "edge: expected null"
+      },
+      "content": {
+        "field": "instructions",
+        "extracted_snippet": "You are Paul Graham. Think like an investor and founder.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "agent-009",
+      "label": "multi-author-essay",
+      "surface": "agent",
+      "edge_case": "multi_author",
+      "name": {
+        "extracted": "Paul Graham",
+        "expected": null,
+        "precise": false,
+        "note": "edge: expected null"
+      },
+      "content": {
+        "field": "instructions",
+        "extracted_snippet": "You are Paul Graham. Think like an investor and founder.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    },
+    {
+      "doc_id": "agent-010",
+      "label": "very-short-corpus",
+      "surface": "agent",
+      "edge_case": "very_short",
+      "name": {
+        "extracted": "Paul Graham",
+        "expected": null,
+        "precise": false,
+        "note": "edge: expected null"
+      },
+      "content": {
+        "field": "instructions",
+        "extracted_snippet": "You are Paul Graham. Think like an investor and founder.",
+        "score": 3,
+        "reason": "dry-run mock"
+      },
+      "pass": false
+    }
+  ]
+}

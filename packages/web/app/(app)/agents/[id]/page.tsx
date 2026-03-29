@@ -50,6 +50,10 @@ export default function AgentProfilePage({ params }: { params: { id: string } })
   const [generating, setGenerating] = useState(false);
   const [creatingKb, setCreatingKb] = useState(false);
 
+  // Visibility toggle state (KIN-374)
+  const [showVisibilityConfirm, setShowVisibilityConfirm] = useState(false);
+  const [togglingVisibility, setTogglingVisibility] = useState(false);
+
   useEffect(() => {
     void loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -191,6 +195,50 @@ export default function AgentProfilePage({ params }: { params: { id: string } })
     }
   }
 
+  async function handleToggleVisibility() {
+    if (!agent) return;
+    const newVisibility = agent.visibility === "private" ? "public" : "private";
+
+    // Require confirmation before making public
+    if (newVisibility === "public" && !showVisibilityConfirm) {
+      setShowVisibilityConfirm(true);
+      return;
+    }
+
+    setShowVisibilityConfirm(false);
+    setTogglingVisibility(true);
+    try {
+      const res = await apiFetch(`/api/v1/agents/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visibility: newVisibility }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        toast({
+          variant: "destructive",
+          title: "Error",
+          description: err?.detail || "Failed to update visibility.",
+        });
+        return;
+      }
+      const updated: AgentDefinition = await res.json();
+      setAgent(updated);
+      toast({
+        title: "Visibility updated",
+        description: `Agent is now ${updated.visibility}.`,
+      });
+    } catch {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: "An unexpected error occurred.",
+      });
+    } finally {
+      setTogglingVisibility(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -217,12 +265,57 @@ export default function AgentProfilePage({ params }: { params: { id: string } })
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 space-y-6">
+      {/* Visibility confirmation dialog (KIN-374) */}
+      {showVisibilityConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-background border rounded-lg shadow-lg p-6 max-w-sm w-full mx-4 space-y-4">
+            <h2 className="text-base font-semibold">Make agent public?</h2>
+            <p className="text-sm text-muted-foreground">
+              This will make your agent visible to all users. They can invoke it
+              in their conversations and access it via MCP.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowVisibilityConfirm(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => void handleToggleVisibility()}
+                disabled={togglingVisibility}
+              >
+                {togglingVisibility ? "Updating…" : "Make public"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold">{agent.name}</h1>
-        <p className="text-xs text-muted-foreground mt-1 capitalize">
-          {agent.type.replace("_", " ")} · {agent.visibility}
-        </p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">{agent.name}</h1>
+          <p className="text-xs text-muted-foreground mt-1 capitalize">
+            {agent.type.replace("_", " ")} · {agent.visibility}
+          </p>
+        </div>
+        {isOwner && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void handleToggleVisibility()}
+            disabled={togglingVisibility}
+          >
+            {togglingVisibility
+              ? "Updating…"
+              : agent.visibility === "private"
+                ? "Make public"
+                : "Make private"}
+          </Button>
+        )}
       </div>
 
       {/* Tabs */}

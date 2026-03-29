@@ -30,27 +30,22 @@ export async function middleware(req: NextRequest) {
   );
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession();
+    data: { user },
+  } = await supabase.auth.getUser();
 
-  if (!session) {
+  if (!user) {
     const loginUrl = new URL("/login", req.url);
     loginUrl.searchParams.set("redirectTo", req.nextUrl.pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  if (req.nextUrl.pathname.startsWith("/admin")) {
-    const role = session.user.app_metadata?.role;
-    if (role !== "admin") {
-      return NextResponse.redirect(new URL("/projects", req.url));
-    }
-  }
+  // Admin route protection is handled by the admin layout component.
 
   return res;
 }
 
 export const config = {
   matcher: [
-    "/((?!login|api|_next/static|_next/image|favicon.ico).*)",
+    "/((?!login|auth|api|_next/static|_next/image|favicon.ico).*)",
   ],
 };
