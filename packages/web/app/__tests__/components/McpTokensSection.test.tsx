@@ -33,6 +33,9 @@ vi.mock("@/components/ui/use-toast", () => ({
   useToast: () => ({ toast: vi.fn() }),
 }));
 
+// Stub NEXT_PUBLIC_SUPABASE_URL so MCP_BASE_URL resolves
+process.env.NEXT_PUBLIC_SUPABASE_URL = "https://test.supabase.co";
+
 import { apiFetch } from "@/lib/api";
 import ProfilePage from "@/app/(app)/profile/page";
 
@@ -193,8 +196,9 @@ describe("McpTokensSection", () => {
     await waitFor(() => {
       expect(screen.getByText("Token generated")).toBeInTheDocument();
     });
-    expect(screen.getByText("mcp_abc123def456")).toBeInTheDocument();
-    expect(screen.getByText(/Copy this token now/i)).toBeInTheDocument();
+    // Modal now shows the full connection URL, not just the raw token
+    expect(screen.getByText(/kinetic-mcp\?key=mcp_abc123def456/)).toBeInTheDocument();
+    expect(screen.getByText(/Copy this URL now/i)).toBeInTheDocument();
   });
 
   it("modal contains a copy button", async () => {

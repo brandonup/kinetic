@@ -47,6 +47,8 @@ import type {
   UserProfile,
 } from "@/lib/types/models";
 
+const MCP_BASE_URL = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/kinetic-mcp`;
+
 const PROVIDERS: ApiKeyProvider[] = ["openai", "anthropic", "google", "groq"];
 
 const PROVIDER_LABELS: Record<ApiKeyProvider, string> = {
@@ -331,9 +333,13 @@ export default function ProfilePage() {
     return new Date(ts).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
   }
 
-  async function copyToken(token: string) {
+  function buildMcpConnectionUrl(token: string): string {
+    return `${MCP_BASE_URL}?key=${token}`;
+  }
+
+  async function copyToClipboard(text: string) {
     try {
-      await navigator.clipboard.writeText(token);
+      await navigator.clipboard.writeText(text);
       setTokenCopied(true);
       setTimeout(() => setTokenCopied(false), 2000);
     } catch {
@@ -761,29 +767,35 @@ export default function ProfilePage() {
             }
           }}
         >
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>Token generated</DialogTitle>
             </DialogHeader>
             <div className="space-y-3 py-2">
               <p className="text-sm text-destructive font-medium">
-                Copy this token now. You won&apos;t be able to see it again.
+                Copy this URL now. You won&apos;t be able to see it again.
               </p>
-              <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2">
-                <code className="flex-1 text-xs font-mono break-all text-foreground select-all">
-                  {newToken.token}
-                </code>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="shrink-0"
-                  onClick={() => void copyToken(newToken.token)}
-                >
-                  {tokenCopied ? "Copied!" : "Copy"}
-                </Button>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1.5">Connection URL</p>
+                <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-2">
+                  <code className="flex-1 text-xs font-mono break-all text-foreground select-all">
+                    {buildMcpConnectionUrl(newToken.token)}
+                  </code>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0"
+                    onClick={() => void copyToClipboard(buildMcpConnectionUrl(newToken.token))}
+                  >
+                    {tokenCopied ? "Copied!" : "Copy"}
+                  </Button>
+                </div>
               </div>
               <p className="text-xs text-muted-foreground">
                 Token label: <span className="font-medium text-foreground">{newToken.name}</span>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Paste this URL into your MCP client&apos;s Connector settings.
               </p>
             </div>
             <DialogFooter>
