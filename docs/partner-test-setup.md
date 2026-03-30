@@ -61,8 +61,7 @@ This token lets Cowork connect to your Kinetic account.
 4. **Name:** `Kinetic`
 5. **Remote MCP server URL:** paste the connection URL you copied in Step 3
 6. Click **Add**
-
-The `/nate` command will appear automatically — no additional setup needed.
+7. When prompted about tool permissions, select **Always Allow** — this lets Nate's tools run without asking each time
 
 ---
 
