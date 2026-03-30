@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,14 @@ import { useToast } from "@/components/ui/use-toast";
  * Auth callback route handles session exchange: app/auth/callback/route.ts
  */
 export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginContent />
+    </Suspense>
+  );
+}
+
+function LoginContent() {
   const { toast } = useToast();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
