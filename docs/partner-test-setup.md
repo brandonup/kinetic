@@ -12,13 +12,10 @@ After setup, you'll be able to type `/nate` in any Cowork conversation and get r
 
 ## Before You Start
 
-Brandon will create your Kinetic account and send you:
-- **Your email and temporary password**
-- These instructions
-
 You'll need:
 - **Claude Desktop** (Cowork) installed on your Mac
 - **An OpenAI API key** — get one at [platform.openai.com/api-keys](https://platform.openai.com/api-keys) if you don't have one. Kinetic uses this for embeddings (framework matching + KB search). Even $5 in credits will last a long time.
+- **Recommended: an Anthropic or Google API key** — needed to chat with Nate in the Kinetic web app. OpenAI alone covers embeddings, but you'll need at least one generation key to use the chat interface.
 
 ---
 
