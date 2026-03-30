@@ -44,16 +44,10 @@ export default function AdminLayout({
           return;
         }
 
-        // Query public.users.role — app_metadata.role is not set for OAuth users.
-        // Consistent with middleware.ts admin check.
-        const { data: userRow, error } = await supabase
-          .from("users")
-          .select("role")
-          .eq("id", session.user.id)
-          .single();
-        console.log("[admin-layout] role query result:", { userRow, error, userId: session.user.id });
+        // Use RPC to check admin status — avoids RLS restrictions on the users table.
+        const { data: isAdminResult, error } = await supabase.rpc("is_admin");
         if (mounted) {
-          if (userRow?.role === "admin") {
+          if (isAdminResult === true) {
             setIsAdmin(true);
           } else {
             router.push("/projects");

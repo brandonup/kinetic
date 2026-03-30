@@ -47,7 +47,7 @@ import type {
   UserProfile,
 } from "@/lib/types/models";
 
-const PROVIDERS: ApiKeyProvider[] = ["anthropic", "openai", "google", "groq"];
+const PROVIDERS: ApiKeyProvider[] = ["openai", "anthropic", "google", "groq"];
 
 const PROVIDER_LABELS: Record<ApiKeyProvider, string> = {
   anthropic: "Anthropic",
@@ -342,6 +342,7 @@ export default function ProfilePage() {
   }
 
   const hasAnyKey = Object.keys(apiKeys).length > 0;
+  const hasOpenAiKey = !!apiKeys["openai"];
 
   // A model is selectable only if the user has a configured key for that provider
   function isModelEnabled(model: ModelConfiguration): boolean {
@@ -486,19 +487,31 @@ export default function ProfilePage() {
             </p>
           </div>
 
+          {!hasOpenAiKey && (
+            <div className="rounded-md border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
+              An OpenAI API key is required for agent features like framework selection and knowledge base search. Add one to get started.
+            </div>
+          )}
+
           <div className="space-y-3">
             {PROVIDERS.map((provider) => {
               const entry = apiKeys[provider];
               const isEditing = editingProvider === provider;
               const isSaving = savingKey === provider;
+              const isRequired = provider === "openai";
 
               return (
                 <div
                   key={provider}
                   className="flex items-center gap-3 rounded-md border border-border px-4 py-3"
                 >
-                  <span className="w-24 text-sm font-medium text-foreground">
+                  <span className="w-24 text-sm font-medium text-foreground flex items-center gap-1.5">
                     {PROVIDER_LABELS[provider]}
+                    {isRequired && (
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                        Required
+                      </span>
+                    )}
                   </span>
 
                   {entry && !isEditing ? (

@@ -45,6 +45,7 @@ from app.api.routes.mcp_tokens import router as mcp_tokens_router
 from app.api.routes.mcp import router as mcp_router
 from app.api.routes.admin_rag_debug import router as admin_rag_debug_router
 from app.api.routes.admin_request_trace import router as admin_request_trace_router
+from app.api.routes.admin_prompt_debug import router as admin_prompt_debug_router
 from app.api.routes.admin_backfill import router as admin_backfill_router
 from app.api.routes.kb_management import router as kb_management_router
 from app.api.routes.generation import router as generation_router
@@ -56,6 +57,12 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Railway / load balancer probes."""
+    return {"status": "ok"}
 
 # Log scrub must be added before CORS so it fires on every request
 app.add_middleware(LogScrubMiddleware)
@@ -84,6 +91,7 @@ app.include_router(mcp_tokens_router)
 app.include_router(mcp_router)
 app.include_router(admin_rag_debug_router)
 app.include_router(admin_request_trace_router)
+app.include_router(admin_prompt_debug_router)
 app.include_router(admin_backfill_router)
 app.include_router(kb_management_router)
 app.include_router(generation_router)

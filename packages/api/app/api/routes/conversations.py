@@ -7,6 +7,7 @@ Endpoints:
   GET    /api/v1/conversations/{conversation_id}          — get a single conversation
   PATCH  /api/v1/conversations/{conversation_id}          — update title or active agent
   DELETE /api/v1/conversations/{conversation_id}          — soft-delete (204)
+  GET    /api/v1/conversations/{conversation_id}/messages — list messages for a conversation
   POST   /api/v1/conversations/{conversation_id}/messages — store message + periodic proposal trigger
   POST   /api/v1/conversations/{conversation_id}/end      — fire conversation-end proposal bg job
 
@@ -933,7 +934,7 @@ async def _verify_company_ownership(company_id: str, user_id: str, client) -> No
             .select("id")
             .eq("id", company_id)
             .eq("user_id", user_id)
-            .single()
+            .maybe_single()
             .execute(),
     )
     if not result.data:
@@ -1180,6 +1181,48 @@ async def delete_conversation(
 # ---------------------------------------------------------------------------
 # Message + Proposal Endpoints
 # ---------------------------------------------------------------------------
+
+
+@router.get("/{conversation_id}/messages")
+async def list_messages(
+    conversation_id: str,
+    current_user: CurrentUser = Depends(get_current_user),
+) -> dict:
+    """
+    List messages for a conversation, ordered by sequence.
+
+    Returns { messages: [...] } where each message has id, role, content, model,
+    sequence, and created_at.
+
+    Schema: docs/db-schema-spec.md §6 (messages)
+    """
+    loop = asyncio.get_running_loop()
+    client = get_supabase_client()
+
+    # Verify conversation ownership
+    conv_res = await loop.run_in_executor(
+        None,
+        lambda: client.table("conversations")
+        .select("id")
+        .eq("id", conversation_id)
+        .eq("user_id", current_user.user_id)
+        .is_("deleted_at", "null")
+        .maybe_single()
+        .execute(),
+    )
+    if not conv_res.data:
+        raise NotFoundError("Conversation not found")
+
+    msg_res = await loop.run_in_executor(
+        None,
+        lambda: client.table("messages")
+        .select("id, role, content, model, sequence, created_at")
+        .eq("conversation_id", conversation_id)
+        .order("sequence")
+        .execute(),
+    )
+
+    return {"messages": msg_res.data or []}
 
 
 @router.post("/{conversation_id}/messages", status_code=201)

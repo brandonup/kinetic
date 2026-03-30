@@ -38,7 +38,7 @@ router = APIRouter(prefix="/api/v1/agents", tags=["agents"])
 # ---------------------------------------------------------------------------
 
 _AGENT_FIELDS = (
-    "id, owner_id, name, instructions, type, visibility, created_at, updated_at"
+    "id, owner_id, name, slug, instructions, type, visibility, created_at, updated_at"
 )
 _INSTANCE_FIELDS = (
     "id, agent_definition_id, user_id, framework_overrides, created_at, updated_at"
@@ -104,6 +104,48 @@ class UploadFrameworksRequest(BaseModel):
 
 def _slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "framework"
+
+
+def _agent_slug(name: str) -> str:
+    """Generate a slug for an agent definition: lowercase, hyphens, max 60 chars."""
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+    if len(slug) > 60:
+        slug = slug[:60].rstrip("-")
+    return slug or "agent"
+
+
+async def _ensure_unique_slug(client, slug: str) -> str:
+    """Check slug uniqueness globally. If taken, append -2, -3, etc."""
+    loop = asyncio.get_running_loop()
+    candidate = slug
+
+    result = await loop.run_in_executor(
+        None,
+        lambda: client
+            .table("agent_definitions")
+            .select("id")
+            .eq("slug", candidate)
+            .maybe_single()
+            .execute(),
+    )
+    if not result.data:
+        return candidate
+
+    suffix = 2
+    while True:
+        candidate = f"{slug}-{suffix}"
+        result = await loop.run_in_executor(
+            None,
+            lambda c=candidate: client
+                .table("agent_definitions")
+                .select("id")
+                .eq("slug", c)
+                .maybe_single()
+                .execute(),
+        )
+        if not result.data:
+            return candidate
+        suffix += 1
 
 
 def get_supabase_client():
@@ -184,16 +226,20 @@ async def create_agent(
     if body.visibility == "public" and not body.instructions:
         raise ValidationError("Cannot set visibility=public with empty instructions")
 
+    loop = asyncio.get_running_loop()
+    client = get_supabase_client()
+
+    slug = await _ensure_unique_slug(client, _agent_slug(body.name))
+
     row = {
         "owner_id": current_user.user_id,
         "name": body.name,
+        "slug": slug,
         "instructions": body.instructions,
         "type": body.type,
         "visibility": body.visibility,
     }
 
-    loop = asyncio.get_running_loop()
-    client = get_supabase_client()
     result = await loop.run_in_executor(
         None,
         lambda: client.table("agent_definitions").insert(row).execute(),
@@ -761,6 +807,10 @@ async def update_agent(
     updates: dict = {}
     if body.name is not None:
         updates["name"] = body.name
+        # Regenerate slug when name changes
+        new_slug = _agent_slug(body.name)
+        if new_slug != agent.get("slug", ""):
+            updates["slug"] = await _ensure_unique_slug(client, new_slug)
     if body.instructions is not None:
         updates["instructions"] = body.instructions
     if body.type is not None:

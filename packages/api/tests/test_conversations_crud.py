@@ -51,13 +51,13 @@ def _make_mock_db():
 def _wire_company_owned(mock_db: MagicMock) -> None:
     """Wire the company ownership check to succeed."""
     chain = mock_db.table.return_value.select.return_value.eq.return_value.eq.return_value
-    chain.single.return_value.execute.return_value = MagicMock(data={"id": TEST_COMPANY_ID})
+    chain.maybe_single.return_value.execute.return_value = MagicMock(data={"id": TEST_COMPANY_ID})
 
 
 def _wire_company_not_owned(mock_db: MagicMock) -> None:
     """Wire the company ownership check to fail."""
     chain = mock_db.table.return_value.select.return_value.eq.return_value.eq.return_value
-    chain.single.return_value.execute.return_value = MagicMock(data=None)
+    chain.maybe_single.return_value.execute.return_value = MagicMock(data=None)
 
 
 # ---------------------------------------------------------------------------

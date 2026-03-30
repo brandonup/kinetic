@@ -114,6 +114,8 @@ Context Injection into Prompt (Layer 8 or 9)
 
 The user's query is embedded using `text-embedding-3-large` and compared against all chunk embeddings in the active scope (filtered by `project_id` or `agent_definition_id`) using cosine similarity. Returns top-K candidates.
 
+**Production implementation:** The `match_chunks` Supabase RPC function handles scoped vector search with dynamic column filtering. The `retrieval.py` fallback select path exists as a safety net. See `db-schema-spec.md` § RPC Functions for the function signature. Framework trigger matching uses the separate `match_framework_triggers` RPC.
+
 **Parameter:** `VECTOR_TOP_K` (default 20) — candidates returned from vector search.
 
 ### MMR Selection (Maximal Marginal Relevance)

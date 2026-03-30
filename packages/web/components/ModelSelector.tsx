@@ -27,6 +27,8 @@ interface ModelSelectorProps {
   onModelChange: (modelId: string) => void;
 }
 
+const DEFAULT_MODEL_ID = "llama-3.1-8b-instant";
+
 const PROVIDER_LABELS: Record<ModelProvider, string> = {
   anthropic: "Anthropic",
   openai: "OpenAI",
@@ -42,6 +44,8 @@ export function ModelSelector({ selectedModelId, onModelChange }: ModelSelectorP
   const [focusedIndex, setFocusedIndex] = useState(-1);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const [dropdownPos, setDropdownPos] = useState<{ left: number; bottom: number } | null>(null);
   const listboxId = "model-selector-listbox";
 
   // ---------------------------------------------------------------------------
@@ -58,9 +62,15 @@ export function ModelSelector({ selectedModelId, onModelChange }: ModelSelectorP
 
       if (modelsRes.ok) {
         const data = await modelsRes.json();
-        const generationModels = (data.models ?? data ?? []).filter(
-          (m: ModelConfiguration) => m.category === "generation" && m.enabled,
-        );
+        const generationModels = (data.models ?? data ?? [])
+          .filter(
+            (m: ModelConfiguration) => m.category === "generation" && m.enabled,
+          )
+          .sort((a: ModelConfiguration, b: ModelConfiguration) => {
+            const providerCmp = a.provider.localeCompare(b.provider);
+            if (providerCmp !== 0) return providerCmp;
+            return a.display_name.localeCompare(b.display_name);
+          });
         setModels(generationModels);
       }
 
@@ -79,6 +89,20 @@ export function ModelSelector({ selectedModelId, onModelChange }: ModelSelectorP
   useEffect(() => {
     void fetchData();
   }, [fetchData]);
+
+  // Auto-select model when none is selected: prefer DEFAULT_MODEL_ID, fall back to first available
+  useEffect(() => {
+    if (!loading && !selectedModelId && models.length > 0) {
+      const defaultModel = models.find(
+        (m) => m.model_id === DEFAULT_MODEL_ID && userProviders.has(m.provider),
+      );
+      const fallback = models.find((m) => userProviders.has(m.provider));
+      const pick = defaultModel ?? fallback;
+      if (pick) {
+        onModelChange(pick.id);
+      }
+    }
+  }, [loading, selectedModelId, models, userProviders, onModelChange]);
 
   // ---------------------------------------------------------------------------
   // Outside click + Escape dismiss
@@ -164,7 +188,15 @@ export function ModelSelector({ selectedModelId, onModelChange }: ModelSelectorP
     <TooltipProvider>
       <div className="relative" ref={containerRef}>
         <button
+          ref={buttonRef}
           onClick={() => {
+            if (!open && buttonRef.current) {
+              const rect = buttonRef.current.getBoundingClientRect();
+              setDropdownPos({
+                left: rect.left,
+                bottom: window.innerHeight - rect.top + 4,
+              });
+            }
             setOpen(!open);
             if (!open) setFocusedIndex(models.findIndex((m) => m.id === selectedModelId));
           }}
@@ -193,7 +225,8 @@ export function ModelSelector({ selectedModelId, onModelChange }: ModelSelectorP
         {open && (
           <div
             id={listboxId}
-            className="absolute left-0 top-full mt-1 z-50 w-64 rounded-md border bg-popover shadow-md"
+            style={dropdownPos ? { left: dropdownPos.left, bottom: dropdownPos.bottom } : undefined}
+            className="fixed z-50 w-64 max-h-72 overflow-y-auto rounded-md border bg-popover shadow-md"
             role="listbox"
             aria-label="Available models"
             aria-activedescendant={

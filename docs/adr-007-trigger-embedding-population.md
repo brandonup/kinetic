@@ -1,6 +1,6 @@
 # ADR-007: Trigger Embedding Population Strategy
 
-**Status:** Proposed
+**Status:** Accepted (2026-03-29 — background job + admin backfill shipped, KIN-412/413)
 **Author:** Gilfoyle
 **Date:** 2026-03-28
 **Project:** Kinetic

@@ -1,8 +1,8 @@
 # Kinetic MVP — Database Schema Specification
 
 **Status:** Draft
-**Author:** Gilfoyle
-**Date:** 2026-03-22
+**Author:** Gilfoyle (updated by Richard 2026-03-29)
+**Date:** 2026-03-29
 **Project:** Kinetic
 
 ---
@@ -195,6 +195,7 @@ Append-only. No `updated_at`.
 | `model` | `text` | | Model string used for generation, e.g., `claude-sonnet-4-6` |
 | `token_count` | `int` | | Approximate token count of content |
 | `sequence` | `int` | `NOT NULL` | Ordering within conversation (0-indexed) |
+| `debug_prompt` | `text` | | Full assembled prompt sent to the LLM (written on assistant messages for admin observability, KIN-419) |
 | `created_at` | `timestamptz` | `NOT NULL DEFAULT now()` | |
 
 **Indexes:**
@@ -234,6 +235,7 @@ Rolling compression summaries. Append-only.
 | `id` | `uuid` | `PK DEFAULT gen_random_uuid()` | |
 | `owner_id` | `uuid` | `NOT NULL REFERENCES users(id) ON DELETE CASCADE` | Creator/owner |
 | `name` | `text` | `NOT NULL` | e.g., "Strategist", "Nate Jones" |
+| `slug` | `text` | `NOT NULL DEFAULT ''` | Slugified agent name (lowercase, hyphens, max 60 chars). Used for MCP agent resolution by friendly name. Globally unique — one slug per agent platform-wide. |
 | `instructions` | `text` | | System prompt. ~500 tokens. Layer 5 context. |
 | `type` | `agent_type` | `NOT NULL DEFAULT 'custom'` | custom or thought_leader |
 | `visibility` | `agent_visibility` | `NOT NULL DEFAULT 'private'` | private or public (MVP) |
@@ -243,6 +245,7 @@ Rolling compression summaries. Append-only.
 **Indexes:**
 - `idx_agent_definitions_owner` on `(owner_id)`
 - `idx_agent_definitions_visibility` on `(visibility)` WHERE `visibility = 'public'`
+- `uq_agent_definitions_slug` UNIQUE on `(slug)`
 
 **RLS:**
 - SELECT: `auth.uid() = owner_id` OR `visibility = 'public'`
@@ -508,7 +511,7 @@ Per-user bearer tokens for MCP access. Token plaintext shown once on generation,
 |---|---|---|---|
 | `id` | `uuid` | `PK DEFAULT gen_random_uuid()` | |
 | `user_id` | `uuid` | `NOT NULL REFERENCES users(id) ON DELETE CASCADE` | |
-| `token_hash` | `text` | `NOT NULL` | bcrypt hash of the bearer token |
+| `token_hash` | `text` | `NOT NULL` | SHA-256 hash of the bearer token |
 | `name` | `text` | | User label, e.g., "Claude Desktop" |
 | `last_used_at` | `timestamptz` | | |
 | `revoked_at` | `timestamptz` | | Null = active |
@@ -658,6 +661,74 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 ```
+
+---
+
+## RPC Functions (Stored Procedures)
+
+### `match_framework_triggers`
+
+Vector similarity search on framework trigger phrases, scoped to an agent.
+
+```sql
+CREATE OR REPLACE FUNCTION public.match_framework_triggers(
+  query_embedding extensions.vector(3072),
+  p_agent_id uuid,
+  match_count integer DEFAULT 20
+)
+RETURNS TABLE (
+  framework_db_id uuid,
+  trigger_text text,
+  similarity double precision
+)
+```
+
+**Migration:** `20260328000006_add_match_framework_triggers_rpc.sql`
+**Note:** Must use `extensions.vector(3072)` (not `vector(3072)`) because pgvector is installed in the `extensions` schema. Function includes `SET search_path = public, extensions`.
+
+### `match_chunks`
+
+Vector similarity search on knowledge base chunks with dynamic scope filtering.
+
+```sql
+CREATE OR REPLACE FUNCTION public.match_chunks(
+  query_embedding extensions.vector(3072),
+  scope_column text,
+  scope_value text,
+  match_count integer DEFAULT 20
+)
+RETURNS TABLE (
+  id uuid,
+  document_title text,
+  section_path text,
+  text text,
+  similarity double precision
+)
+```
+
+**Usage:** Called by the RAG retrieval pipeline and the kinetic-brain MCP server. `scope_column` is typically `agent_definition_id`; `scope_value` is the agent UUID.
+**Note:** Uses `EXECUTE format(...)` for dynamic column filtering. Same `extensions.vector` requirement as `match_framework_triggers`.
+
+---
+
+### `mcp_check_and_increment_rate_limit`
+
+Atomic rate-limit check and increment for MCP token-authenticated requests.
+
+```sql
+CREATE OR REPLACE FUNCTION public.mcp_check_and_increment_rate_limit(
+  p_user_id uuid,
+  p_date date
+)
+RETURNS TABLE (
+  allowed boolean,
+  request_count int,
+  daily_cap int
+)
+```
+
+**Usage:** Called by the MCP server on every authenticated request. Performs `INSERT ... ON CONFLICT DO UPDATE SET request_count = request_count + 1` on `mcp_rate_limits`, then returns whether the post-increment count is within cap.
+**Note:** `SECURITY DEFINER` — called from service-role context, not through RLS.
 
 ---
 

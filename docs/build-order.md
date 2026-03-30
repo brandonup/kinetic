@@ -1,8 +1,8 @@
 # Kinetic MVP — Build Order
 
 **Status:** Draft
-**Author:** Jared
-**Date:** 2026-03-21
+**Author:** Jared (updated by Richard 2026-03-29)
+**Date:** 2026-03-29
 **Project:** Kinetic
 
 ---
@@ -17,62 +17,23 @@ This document sequences the Kinetic MVP build sprint by sprint. It tells every a
 
 ## Agent Ownership
 
+_Updated 2026-03-29 — reflects consolidated agent system (see `agents/` for current files)._
+
 | Agent | Domain |
 |---|---|
-| **Gilfoyle** | Architecture, ADRs, db-schema-spec.md, code reviews, security |
-| **Dinesh** | Interaction flows — all UI + API endpoints the user touches directly |
-| **Big Head** | Workflow pipelines — ingestion, RAG retrieval, context stack assembly, generation, background jobs, MCP server |
-| **Jìan** | Test plans, test coverage, evals |
-| **Jared** | Specs (one sprint ahead of implementation), sprint prep |
+| **Dinesh** (Builder) | All implementation — UI, API, pipelines, ingestion, RAG, generation, MCP, background jobs, tests |
+| **Reviewer** | Code review (spawned as subagent by Dinesh — not standalone) |
+| **Jared** | Specs, sprint prep, ticket translation, product questions |
+| **Richard** | Process audits, velocity analysis, bottleneck diagnosis, policy creation |
+| **Monica** | AI systems advisory — architecture, eval design, context engineering (advisory only, not in dev workflow) |
 
-**Parallelism rule:** Dinesh and Big Head almost never share files. When both have unblocked work, open them simultaneously.
+**Historical note:** Sprints 1–6 below reference the prior agent system (Gilfoyle, Big Head, Jìan, Bachman). Those agents were archived on 2026-03-28 and consolidated into Dinesh (Builder) + Reviewer. The sprint details below are retained for historical context but should not be used for new sprint planning — all implementation work is now assigned to Dinesh.
 
 ---
 
 ## Skills Reference
 
-Every agent must invoke the relevant skill before starting work. Skills are invoked via the `Skill` tool in the session. The table below maps agent + task type → skill to invoke.
-
-### Jared
-
-| Task type | Skill to invoke |
-|---|---|
-| Writing any feature spec | `product-management:feature-spec` |
-| Writing user stories within a spec | `anthropic-skills:user-story` |
-| Breaking a large feature into tickets | `anthropic-skills:epic-breakdown-advisor` |
-| Writing an implementation plan | `anthropic-skills:writing-plans` |
-| Feature ideation (before any new feature) | `anthropic-skills:brainstorming` |
-
-### Gilfoyle
-
-| Task type | Skill to invoke |
-|---|---|
-| Writing ADRs or implementation plans | `anthropic-skills:writing-plans` |
-| Writing pgvector queries, schema DDL, migration SQL, or any complex SQL | `data:sql-queries` |
-
-### Dinesh
-
-| Task type | Skill to invoke |
-|---|---|
-| Before starting any implementation ticket | `anthropic-skills:writing-plans` |
-| Building any UI component, page, or layout | `anthropic-skills:frontend-design` |
-| Writing error messages, empty states, tooltips, button labels, or any microcopy | `design:ux-writing` |
-| Before marking any frontend ticket Done | `design:accessibility-review` |
-
-### Big Head
-
-| Task type | Skill to invoke |
-|---|---|
-| Before starting any implementation ticket | `anthropic-skills:writing-plans` |
-| Writing pgvector cosine similarity queries or any complex SQL in the RAG or ingestion pipeline | `data:sql-queries` |
-
-### Jìan
-
-| Task type | Skill to invoke |
-|---|---|
-| Scaffolding test plans | `anthropic-skills:writing-plans` |
-| Reviewing eval methodology or analysis accuracy | `data:data-validation` |
-| Analyzing eval scores, precision/recall metrics (framework selection, RAG retrieval) | `data:statistical-analysis` |
+Every agent must invoke the relevant skill before starting work. See each agent's file (`agents/*.md` § Skills) for the current mapping. The canonical skill directories are listed in `CLAUDE.md`.
 
 ---
 

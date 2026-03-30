@@ -127,6 +127,7 @@ export default function AgentChatPage() {
   const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [chatInput, setChatInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [companyId, setCompanyId] = useState<string | null>(null);
 
   // Right panel state
   const [instructions, setInstructions] = useState<string>("");
@@ -192,6 +193,23 @@ export default function AgentChatPage() {
     }
   }, [agentId]);
 
+  // Load user's active company (needed for conversation creation)
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await apiFetch("/api/v1/companies");
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setCompanyId(data[0].id);
+          }
+        }
+      } catch {
+        // read-path fail-open
+      }
+    })();
+  }, []);
+
   useEffect(() => {
     void loadAgent();
     void loadConversations();
@@ -204,7 +222,7 @@ export default function AgentChatPage() {
 
   async function handleSubmitChat(e: React.FormEvent) {
     e.preventDefault();
-    if (!chatInput.trim() || submitting || !agent) return;
+    if (!chatInput.trim() || submitting || !agent || !companyId) return;
 
     setSubmitting(true);
     try {
@@ -212,25 +230,19 @@ export default function AgentChatPage() {
       const convRes = await apiFetch("/api/v1/conversations", {
         method: "POST",
         body: JSON.stringify({
-          company_id: agent.owner_id, // agent's owner context
+          company_id: companyId,
           active_agent_id: agentId,
         }),
       });
       if (!convRes.ok) return;
       const conv = await convRes.json();
 
-      // Store the user message
-      await apiFetch(`/api/v1/conversations/${conv.id}/messages`, {
-        method: "POST",
-        body: JSON.stringify({
-          role: "user",
-          content: chatInput,
-          model: selectedModel,
-        }),
-      });
-
-      // Navigate to the conversation
-      router.push(`/agents/${agentId}/chat/${conv.id}`);
+      // Navigate to the conversation with the pending message as a query param.
+      // The conversation page will call the generate endpoint which handles
+      // storing both user and assistant messages.
+      const params = new URLSearchParams({ message: chatInput });
+      if (selectedModel) params.set("model", selectedModel);
+      router.push(`/agents/${agentId}/chat/${conv.id}?${params.toString()}`);
     } catch {
       // error handling — will show toast in future
     } finally {
@@ -331,10 +343,10 @@ export default function AgentChatPage() {
                   />
                   <button
                     type="submit"
-                    disabled={!chatInput.trim() || submitting}
+                    disabled={!chatInput.trim() || submitting || !companyId}
                     className={cn(
                       "p-1.5 rounded-md transition-colors",
-                      chatInput.trim() && !submitting
+                      chatInput.trim() && !submitting && companyId
                         ? "text-foreground hover:bg-muted"
                         : "text-muted-foreground/40 cursor-not-allowed"
                     )}

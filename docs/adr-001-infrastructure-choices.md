@@ -1,6 +1,6 @@
 # ADR-001: Infrastructure Choices
 
-**Status:** Proposed
+**Status:** Accepted (2026-03-29 — all decisions implemented and shipping)
 **Author:** Gilfoyle
 **Date:** 2026-03-22
 **Project:** Kinetic

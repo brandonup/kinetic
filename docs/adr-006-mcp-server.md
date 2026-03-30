@@ -14,6 +14,8 @@
 
 Kinetic exposes AgentDefinitions via MCP so external AI clients (Claude Desktop, ChatGPT, Cursor) can use Kinetic's context stack without using Kinetic's chat UI. The MCP server is read-only — it assembles and returns context; the external client handles generation. Sprint 6 implements the full MCP server.
 
+**Scope:** This ADR covers Kinetic's hosted MCP server (multi-user, token-authenticated, rate-limited). A separate local MCP server (`kinetic-brain`) was shipped for direct Cowork integration — see `son_of_anton/kinetic-brain/docs/deployment-guide.md` and `docs/specs/kinetic-brain-plugin-spec.md`.
+
 Key constraints from locked decisions (MEMORY.md):
 - Per-user bearer tokens, revocable, generated in-app
 - Platform-owned keys for all MCP pipeline calls (embedding, framework reranker)

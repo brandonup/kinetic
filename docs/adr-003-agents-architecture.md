@@ -1,6 +1,6 @@
 # ADR-003: AgentDefinition + AgentInstance Architecture
 
-**Status:** Proposed
+**Status:** Accepted (2026-03-29 — AgentDefinition/AgentInstance split live)
 **Author:** Gilfoyle
 **Date:** 2026-03-22
 **Project:** Kinetic

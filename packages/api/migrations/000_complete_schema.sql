@@ -197,6 +197,7 @@ CREATE TABLE IF NOT EXISTS public.agent_definitions (
   id           uuid             NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   owner_id     uuid             NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   name         text             NOT NULL,
+  slug         text             NOT NULL DEFAULT '',
   instructions text,
   type         agent_type       NOT NULL DEFAULT 'custom',
   visibility   agent_visibility NOT NULL DEFAULT 'private',
@@ -205,6 +206,9 @@ CREATE TABLE IF NOT EXISTS public.agent_definitions (
 );
 CREATE INDEX IF NOT EXISTS idx_agent_definitions_owner ON public.agent_definitions (owner_id);
 CREATE INDEX IF NOT EXISTS idx_agent_definitions_visibility ON public.agent_definitions (visibility) WHERE visibility = 'public';
+ALTER TABLE public.agent_definitions DROP CONSTRAINT IF EXISTS uq_agent_definitions_owner_slug;
+ALTER TABLE public.agent_definitions DROP CONSTRAINT IF EXISTS uq_agent_definitions_slug;
+ALTER TABLE public.agent_definitions ADD CONSTRAINT uq_agent_definitions_slug UNIQUE (slug);
 DO $$ BEGIN CREATE TRIGGER trg_agent_definitions_updated_at BEFORE UPDATE ON public.agent_definitions FOR EACH ROW EXECUTE FUNCTION set_updated_at(); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 ALTER TABLE public.agent_definitions ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN CREATE POLICY "agent_definitions_select" ON public.agent_definitions FOR SELECT USING (auth.uid() = owner_id OR visibility = 'public'); EXCEPTION WHEN duplicate_object THEN NULL; END $$;

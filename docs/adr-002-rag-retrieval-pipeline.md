@@ -1,6 +1,6 @@
 # ADR-002: RAG Retrieval Pipeline Architecture
 
-**Status:** Proposed
+**Status:** Accepted (2026-03-29 — pipeline implemented, 565 tests passing)
 **Author:** Gilfoyle
 **Date:** 2026-03-22
 **Project:** Kinetic
@@ -90,6 +90,12 @@ Chunks are ordered by MMR score (which already balances relevance and diversity)
 - **Cleanup job** runs as a background task, purging chunks where the parent document's `deleted_at` is older than 7 days.
 
 **Implementation ref:** `retrieval.py:261-276` — two `deleted_at` filters in the fallback select path (chunks and documents).
+
+### RPC Functions for Vector Search
+
+**Decision:** Production vector search uses Supabase RPC functions (`match_framework_triggers`, `match_chunks`) instead of inline SQL. The `retrieval.py` fallback select path remains as a safety net.
+
+**pgvector schema note (2026-03-29):** Supabase installs pgvector in the `extensions` schema, not `public`. RPC functions must declare embedding parameters as `extensions.vector(3072)` and include `SET search_path = public, extensions`. Using `vector(3072)` without the schema qualifier causes `operator does not exist: extensions.vector <=> extensions.vector`. See `db-schema-spec.md` § RPC Functions for full signatures.
 
 ### pgvector Choice
 

@@ -5,7 +5,7 @@
 -- See ADR-007 §5 for full rationale.
 
 CREATE OR REPLACE FUNCTION public.match_framework_triggers(
-  query_embedding vector(3072),
+  query_embedding extensions.vector(3072),
   p_agent_id uuid,
   match_count integer DEFAULT 20
 )
@@ -16,7 +16,7 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
 BEGIN
   RETURN QUERY

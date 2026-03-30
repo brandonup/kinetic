@@ -13,7 +13,7 @@ All Supabase calls are mocked. Uses client fixture from conftest.py.
 Schema ref: docs/db-schema-spec.md (agent_definitions, agent_instances)
 """
 
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import AsyncMock, MagicMock, call, patch
 from uuid import uuid4
 
 import pytest
@@ -26,6 +26,7 @@ OTHER_USER_ID = str(uuid4())
 
 PATCH_TARGET = "app.api.routes.agents.get_supabase_client"
 PATCH_DISPATCHER = "app.api.routes.agents.get_task_dispatcher"
+PATCH_UNIQUE_SLUG = "app.api.routes.agents._ensure_unique_slug"
 
 
 def _agent_row(
@@ -34,12 +35,14 @@ def _agent_row(
     visibility: str = "private",
     instructions: str = "Do the thing",
     name: str = "Test Agent",
+    slug: str = "test-agent",
     agent_type: str = "custom",
 ) -> dict:
     return {
         "id": agent_id,
         "owner_id": owner_id,
         "name": name,
+        "slug": slug,
         "instructions": instructions,
         "type": agent_type,
         "visibility": visibility,
@@ -101,6 +104,43 @@ class TestListAgents:
 
 
 # ---------------------------------------------------------------------------
+# Slug generation (unit tests for _agent_slug)
+# ---------------------------------------------------------------------------
+
+
+class TestAgentSlug:
+    def test_basic_slug(self):
+        from app.api.routes.agents import _agent_slug
+        assert _agent_slug("My Cool Agent") == "my-cool-agent"
+
+    def test_special_chars(self):
+        from app.api.routes.agents import _agent_slug
+        assert _agent_slug("Nate B. Jones (v2)") == "nate-b-jones-v2"
+
+    def test_leading_trailing_hyphens(self):
+        from app.api.routes.agents import _agent_slug
+        assert _agent_slug("---hello---") == "hello"
+
+    def test_empty_name(self):
+        from app.api.routes.agents import _agent_slug
+        assert _agent_slug("!!!") == "agent"
+
+    def test_truncation_at_60(self):
+        from app.api.routes.agents import _agent_slug
+        long_name = "a" * 80
+        slug = _agent_slug(long_name)
+        assert len(slug) <= 60
+
+    def test_truncation_strips_trailing_hyphen(self):
+        from app.api.routes.agents import _agent_slug
+        # Name that produces a slug ending in hyphen at position 60
+        name = "a" * 59 + " b" * 20
+        slug = _agent_slug(name)
+        assert len(slug) <= 60
+        assert not slug.endswith("-")
+
+
+# ---------------------------------------------------------------------------
 # Create agent
 # ---------------------------------------------------------------------------
 
@@ -112,7 +152,8 @@ class TestCreateAgent:
         mock_db.table.return_value.insert.return_value.execute.return_value = MagicMock(
             data=[row]
         )
-        with patch(PATCH_TARGET, return_value=mock_db):
+        with patch(PATCH_TARGET, return_value=mock_db), \
+             patch(PATCH_UNIQUE_SLUG, new_callable=AsyncMock, return_value="test-agent"):
             response = client.post(
                 "/api/v1/agents",
                 json={
@@ -125,6 +166,7 @@ class TestCreateAgent:
         data = response.json()
         assert data["name"] == "Test Agent"
         assert data["type"] == "custom"
+        assert data["slug"] == "test-agent"
 
     def test_create_rejects_public_without_instructions(self, client):
         with patch(PATCH_TARGET, return_value=MagicMock()):
@@ -141,12 +183,13 @@ class TestCreateAgent:
 
     def test_create_allows_empty_instructions_for_private(self, client):
         """KIN-365: instructions defaults to "" — private agents can be created without instructions."""
-        row = _agent_row(instructions="", name="Draft Agent")
+        row = _agent_row(instructions="", name="Draft Agent", slug="draft-agent")
         mock_db = MagicMock()
         mock_db.table.return_value.insert.return_value.execute.return_value = MagicMock(
             data=[row]
         )
-        with patch(PATCH_TARGET, return_value=mock_db):
+        with patch(PATCH_TARGET, return_value=mock_db), \
+             patch(PATCH_UNIQUE_SLUG, new_callable=AsyncMock, return_value="draft-agent"):
             response = client.post(
                 "/api/v1/agents",
                 json={
@@ -165,7 +208,8 @@ class TestCreateAgent:
         mock_db.table.return_value.insert.return_value.execute.return_value = MagicMock(
             data=[row]
         )
-        with patch(PATCH_TARGET, return_value=mock_db):
+        with patch(PATCH_TARGET, return_value=mock_db), \
+             patch(PATCH_UNIQUE_SLUG, new_callable=AsyncMock, return_value="test-agent"):
             response = client.post(
                 "/api/v1/agents",
                 json={
@@ -224,7 +268,7 @@ class TestGetAgent:
 class TestUpdateAgent:
     def test_patch_name(self, client):
         original = _agent_row()
-        updated = {**original, "name": "Renamed Agent"}
+        updated = {**original, "name": "Renamed Agent", "slug": "renamed-agent"}
         mock_db = MagicMock()
         # Fetch for ownership check
         mock_db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = (
@@ -234,12 +278,14 @@ class TestUpdateAgent:
         mock_db.table.return_value.update.return_value.eq.return_value.execute.return_value = (
             MagicMock(data=[updated])
         )
-        with patch(PATCH_TARGET, return_value=mock_db):
+        with patch(PATCH_TARGET, return_value=mock_db), \
+             patch(PATCH_UNIQUE_SLUG, new_callable=AsyncMock, return_value="renamed-agent"):
             response = client.patch(
                 f"/api/v1/agents/{TEST_AGENT_ID}", json={"name": "Renamed Agent"}
             )
         assert response.status_code == 200
         assert response.json()["name"] == "Renamed Agent"
+        assert response.json()["slug"] == "renamed-agent"
 
     def test_patch_403_non_owner(self, client):
         row = _agent_row(owner_id=OTHER_USER_ID, visibility="public")
