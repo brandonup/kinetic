@@ -65,7 +65,7 @@ The `ContextAssembler` assembles layers based on conversation scope and agent st
 
 | Layer | Source | Present when | Assembly |
 |---|---|---|---|
-| L1 | `users.name` + `users.bio` | Always | `"User: {name}. {bio}"` |
+| L1 | `users.name` + `users.email` + `users.bio` | Always | `"User: {name}. Email: {email}. {bio}"` |
 | L2 | `companies.name` + `companies.description` | Always (active company from conversation) | `"Company: {name}. {description}"` |
 | L3 | `projects.instructions` | `project_id IS NOT NULL` | `"Project instructions: {instructions}"` |
 | L4 | `active_memory_entries` (project scope) | `project_id IS NOT NULL` AND entries exist | `"Project memory:\n{entries joined by newline}"` |

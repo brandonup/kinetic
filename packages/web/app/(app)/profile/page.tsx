@@ -71,6 +71,7 @@ export default function ProfilePage() {
 
   // Profile state
   const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
   const [bio, setBio] = useState("");
   const [defaultModelId, setDefaultModelId] = useState<string | null>(null);
   const [profileLoaded, setProfileLoaded] = useState(false);
@@ -119,6 +120,7 @@ export default function ProfilePage() {
       if (profileRes.ok) {
         const profile: UserProfile = await profileRes.json();
         setName(profile.name ?? "");
+        setEmail(profile.email ?? "");
         setBio(profile.bio ?? "");
         setDefaultModelId(profile.default_model_id);
         setProfileLoaded(true);
@@ -370,6 +372,19 @@ export default function ProfilePage() {
         {/* ── Name + Bio ── */}
         <section className="space-y-4">
           <h2 className="text-base font-medium text-foreground">Identity</h2>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              value={email}
+              disabled
+              className="bg-muted text-muted-foreground cursor-not-allowed"
+            />
+            <p className="text-xs text-muted-foreground">
+              Set by your login provider. Cannot be changed here.
+            </p>
+          </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="name">Name</Label>

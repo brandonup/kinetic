@@ -17,17 +17,18 @@ This document sequences the Kinetic MVP build sprint by sprint. It tells every a
 
 ## Agent Ownership
 
-_Updated 2026-03-29 — reflects consolidated agent system (see `agents/` for current files)._
+_Updated 2026-03-30 — reflects current agent system (see `agents/` for current files)._
 
 | Agent | Domain |
 |---|---|
 | **Dinesh** (Builder) | All implementation — UI, API, pipelines, ingestion, RAG, generation, MCP, background jobs, tests |
+| **Gilfoyle** | Pre-implementation spec review, ADR ownership, schema spec ownership |
 | **Reviewer** | Code review (spawned as subagent by Dinesh — not standalone) |
 | **Jared** | Specs, sprint prep, ticket translation, product questions |
 | **Richard** | Process audits, velocity analysis, bottleneck diagnosis, policy creation |
 | **Monica** | AI systems advisory — architecture, eval design, context engineering (advisory only, not in dev workflow) |
 
-**Historical note:** Sprints 1–6 below reference the prior agent system (Gilfoyle, Big Head, Jìan, Bachman). Those agents were archived on 2026-03-28 and consolidated into Dinesh (Builder) + Reviewer. The sprint details below are retained for historical context but should not be used for new sprint planning — all implementation work is now assigned to Dinesh.
+**Historical note:** Sprints 1–6 below reference the prior agent system (Big Head, Jìan, Bachman). Those agents were archived on 2026-03-28 and consolidated into Dinesh (Builder). The sprint details below are retained for historical context but should not be used for new sprint planning — all implementation work is now assigned to Dinesh. Gilfoyle was restored on 2026-03-30 in a scoped role (spec review + ADR/schema ownership, no code review).
 
 ---
 

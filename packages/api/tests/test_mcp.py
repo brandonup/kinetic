@@ -70,7 +70,7 @@ PROJECT_ID = str(uuid4())
 AGENT_ID = str(uuid4())
 
 MCP_TOKEN_ROW = {"id": MCP_TOKEN_ID, "user_id": MCP_USER_ID, "revoked_at": None}
-USER_ROW = {"id": MCP_USER_ID, "name": "Alice", "bio": "Builder and maker."}
+USER_ROW = {"id": MCP_USER_ID, "name": "Alice", "email": "alice@example.com", "bio": "Builder and maker."}
 COMPANY_ROW = {
     "id": COMPANY_ID,
     "user_id": MCP_USER_ID,

@@ -4,6 +4,7 @@ export type ApiKeyProvider = "anthropic" | "openai" | "google" | "groq";
 export interface UserProfile {
   id: string;
   name: string;
+  email: string;
   bio: string | null;
   default_model_id: string | null;
 }

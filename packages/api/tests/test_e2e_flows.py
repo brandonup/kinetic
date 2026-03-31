@@ -105,6 +105,7 @@ class TestJourney1Onboarding:
         profile_row = {
             "id": TEST_USER_ID,
             "name": "Alice",
+            "email": "alice@example.com",
             "bio": None,
             "default_model_id": None,
         }
@@ -582,7 +583,7 @@ class TestJourney6MCP:
         token_hash = hashlib.sha256(token_value.encode()).hexdigest()
 
         mcp_token_row = {"id": _TOKEN_ID, "user_id": _MCP_USER_ID, "revoked_at": None}
-        user_row = {"id": _MCP_USER_ID, "name": "Alice", "bio": "Builder"}
+        user_row = {"id": _MCP_USER_ID, "name": "Alice", "email": "alice@example.com", "bio": "Builder"}
         company_row = {"id": _COMPANY_ID, "name": "ACME Corp", "description": "Test"}
         project_row = {
             "id": _PROJECT_ID, "company_id": _COMPANY_ID,
@@ -953,7 +954,7 @@ class TestJourney10ContextLayers:
     def _make_mcp_db(self, token_user_id, project_row=None, company_row=None, agent_row=None):
         """Build an MCP DB mock with table routing for the given scope entities."""
         mcp_token_row = {"id": _MCP_TOKEN_ID, "user_id": token_user_id, "revoked_at": None}
-        user_row = {"id": token_user_id, "name": "Alice", "bio": "Builder"}
+        user_row = {"id": token_user_id, "name": "Alice", "email": "alice@example.com", "bio": "Builder"}
 
         def _table(name):
             chain = MagicMock()
@@ -1127,7 +1128,7 @@ class TestJourney12MCPPrivateAccess:
     def _make_mcp_db_for_access(self, token_user_id, agent_owner_id, agent_visibility):
         """Build MCP DB mock for access control tests."""
         mcp_token_row = {"id": _MCP_TOKEN_ID, "user_id": token_user_id, "revoked_at": None}
-        user_row = {"id": token_user_id, "name": "User", "bio": "Test"}
+        user_row = {"id": token_user_id, "name": "User", "email": "user@example.com", "bio": "Test"}
         project_row = {
             "id": _PROJECT_ID, "company_id": _COMPANY_ID,
             "user_id": token_user_id, "name": "P", "instructions": "X",

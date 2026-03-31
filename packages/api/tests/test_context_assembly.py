@@ -94,7 +94,7 @@ class TestAssembleProjectConversationAllLayers:
             ],
             # L1: user profile
             "users": [
-                {"name": "Alice", "bio": "Product designer"},
+                {"name": "Alice", "email": "alice@example.com", "bio": "Product designer"},
             ],
             # L2: company
             "companies": [
@@ -153,7 +153,7 @@ class TestAssembleCompanyConversation:
                 {"company_id": COMPANY_ID, "project_id": None, "active_agent_id": None},
             ],
             "users": [
-                {"name": "Bob", "bio": "Engineer"},
+                {"name": "Bob", "email": "bob@example.com", "bio": "Engineer"},
             ],
             "companies": [
                 {"name": "Widgets Inc", "description": "Making widgets"},
@@ -190,7 +190,7 @@ class TestAssembleProjectNoAgent:
                 {"company_id": COMPANY_ID, "project_id": PROJECT_ID, "active_agent_id": None},
             ],
             "users": [
-                {"name": "Carol", "bio": "Analyst"},
+                {"name": "Carol", "email": "carol@example.com", "bio": "Analyst"},
             ],
             "companies": [
                 {"name": "DataCo", "description": None},
@@ -233,7 +233,7 @@ class TestAssembleAgentNoProject:
                 {"company_id": COMPANY_ID, "project_id": None, "active_agent_id": AGENT_DEF_ID},
             ],
             "users": [
-                {"name": "Dave", "bio": "Manager"},
+                {"name": "Dave", "email": "dave@example.com", "bio": "Manager"},
             ],
             "companies": [
                 {"name": "TechStart", "description": "Early-stage startup"},
@@ -279,7 +279,7 @@ class TestMissingBioGraceful:
                 {"company_id": COMPANY_ID, "project_id": None, "active_agent_id": None},
             ],
             "users": [
-                {"name": "Eve", "bio": None},
+                {"name": "Eve", "email": "eve@example.com", "bio": None},
             ],
             "companies": [
                 {"name": "NullBioCo", "description": "Testing null bio"},
@@ -314,7 +314,7 @@ class TestAgentInstanceAutoCreated:
                 {"company_id": COMPANY_ID, "project_id": None, "active_agent_id": AGENT_DEF_ID},
             ],
             "users": [
-                {"name": "Frank", "bio": "Developer"},
+                {"name": "Frank", "email": "frank@example.com", "bio": "Developer"},
             ],
             "companies": [
                 {"name": "NewAgentCo", "description": "Testing auto-create"},
@@ -371,7 +371,7 @@ def _base_mock_sb_with_agent(framework_overrides=None):
         "conversations": [
             {"company_id": COMPANY_ID, "project_id": PROJECT_ID, "active_agent_id": AGENT_DEF_ID},
         ],
-        "users": [{"name": "Tester", "bio": "QA"}],
+        "users": [{"name": "Tester", "email": "tester@example.com", "bio": "QA"}],
         "companies": [{"name": "TestCo", "description": "Testing"}],
         "projects": [{"instructions": "Test instructions"}],
         "active_memory_entries": [
@@ -657,7 +657,7 @@ def _base_mock_sb_company_only(messages_data=None, summary_data=None):
         "conversations": [
             {"company_id": COMPANY_ID, "project_id": None, "active_agent_id": None},
         ],
-        "users": [{"name": "HistUser", "bio": "Test"}],
+        "users": [{"name": "HistUser", "email": "histuser@example.com", "bio": "Test"}],
         "companies": [{"name": "HistCo", "description": "History tests"}],
         "messages": [messages_data if messages_data is not None else []],
         "conversation_summaries": [summary_data if summary_data is not None else []],
@@ -868,7 +868,7 @@ class TestL7OverrideNoInstance:
             "conversations": [
                 {"company_id": COMPANY_ID, "project_id": PROJECT_ID, "active_agent_id": AGENT_DEF_ID},
             ],
-            "users": [{"name": "Tester", "bio": "QA"}],
+            "users": [{"name": "Tester", "email": "tester@example.com", "bio": "QA"}],
             "companies": [{"name": "TestCo", "description": "Testing"}],
             "projects": [{"instructions": "Test instructions"}],
             "active_memory_entries": [

@@ -23,23 +23,18 @@ PATCH_TARGET = "app.api.routes.admin_users.get_supabase_client"
 def _user_row(
     user_id: str = TEST_USER_ID,
     name: str = "Alice",
+    email: str = "alice@example.com",
     role: str = "user",
     disabled_at=None,
 ) -> dict:
     return {
         "id": user_id,
         "name": name,
+        "email": email,
         "role": role,
         "disabled_at": disabled_at,
         "created_at": "2026-01-01T00:00:00+00:00",
     }
-
-
-def _auth_user(user_id: str = TEST_USER_ID, email: str = "alice@example.com"):
-    u = MagicMock()
-    u.id = user_id
-    u.email = email
-    return u
 
 
 # ---------------------------------------------------------------------------
@@ -57,7 +52,6 @@ class TestListUsers:
             .order.return_value
             .execute.return_value
         ) = MagicMock(data=[row])
-        mock_db.auth.admin.list_users.return_value = [_auth_user()]
         with patch(PATCH_TARGET, return_value=mock_db):
             response = admin_client.get("/api/v1/admin/users")
         assert response.status_code == 200
@@ -74,7 +68,6 @@ class TestListUsers:
             .order.return_value
             .execute.return_value
         ) = MagicMock(data=[])
-        mock_db.auth.admin.list_users.return_value = []
         with patch(PATCH_TARGET, return_value=mock_db):
             response = admin_client.get("/api/v1/admin/users")
         assert response.status_code == 200
@@ -94,24 +87,6 @@ class TestListUsers:
         finally:
             del app.dependency_overrides[require_admin]
         assert response.status_code == 403
-
-    def test_list_merges_email_by_user_id(self, admin_client):
-        """Email lookup merges by user ID — unknown IDs get empty email."""
-        other_id = str(uuid4())
-        row = _user_row()
-        mock_db = MagicMock()
-        (
-            mock_db.table.return_value
-            .select.return_value
-            .order.return_value
-            .execute.return_value
-        ) = MagicMock(data=[row])
-        # Auth returns a different user ID — no match
-        mock_db.auth.admin.list_users.return_value = [_auth_user(user_id=other_id, email="other@example.com")]
-        with patch(PATCH_TARGET, return_value=mock_db):
-            response = admin_client.get("/api/v1/admin/users")
-        assert response.status_code == 200
-        assert response.json()["users"][0]["email"] == ""
 
 
 # ---------------------------------------------------------------------------

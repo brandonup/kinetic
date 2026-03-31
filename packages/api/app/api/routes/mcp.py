@@ -257,7 +257,7 @@ async def mcp_context(
         None,
         lambda: client
             .table("users")
-            .select("id, name, bio")
+            .select("id, name, email, bio")
             .eq("id", user_id)
             .single()
             .execute(),
@@ -396,6 +396,8 @@ async def mcp_context(
 
     # L1: user profile
     user_section = f"User: {user.get('name', '')}"
+    if user.get("email"):
+        user_section += f"\nEmail: {user['email']}"
     if user.get("bio"):
         user_section += f"\nBio: {user['bio']}"
     parts.append(user_section)

@@ -99,7 +99,7 @@ async def get_profile(
         None,
         lambda: client
             .table("users")
-            .select("id, name, bio, default_model_id")
+            .select("id, name, email, bio, default_model_id")
             .eq("id", current_user.user_id)
             .single()
             .execute(),
@@ -134,7 +134,7 @@ async def update_profile(
             None,
             lambda: client
                 .table("users")
-                .select("id, name, bio, default_model_id")
+                .select("id, name, email, bio, default_model_id")
                 .eq("id", current_user.user_id)
                 .single()
                 .execute(),

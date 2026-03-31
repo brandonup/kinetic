@@ -416,7 +416,7 @@ class TestAssemblerSummaryCoverage:
                 )
             elif name == "users":
                 chain.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
-                    data={"name": "Test", "bio": None, "default_model_id": None}
+                    data={"name": "Test", "email": "test@example.com", "bio": None, "default_model_id": None}
                 )
             elif name == "companies":
                 chain.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
@@ -468,7 +468,7 @@ class TestAssemblerSummaryCoverage:
                 )
             elif name == "users":
                 chain.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
-                    data={"name": "Test", "bio": None, "default_model_id": None}
+                    data={"name": "Test", "email": "test@example.com", "bio": None, "default_model_id": None}
                 )
             elif name == "companies":
                 chain.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(

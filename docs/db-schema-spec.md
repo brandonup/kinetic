@@ -83,7 +83,8 @@ Extends Supabase `auth.users`. A trigger creates a row here on auth signup.
 | Column | Type | Constraints | Notes |
 |---|---|---|---|
 | `id` | `uuid` | `PK, REFERENCES auth.users(id) ON DELETE CASCADE` | Same ID as auth.users — not auto-generated |
-| `name` | `text` | `NOT NULL` | Full name |
+| `name` | `text` | `NOT NULL` | Display name (editable by user) |
+| `email` | `text` | `NOT NULL, UNIQUE` | From auth.users.email. Read-only in app (set by trigger). Layer 1 context. |
 | `bio` | `text` | `CHECK (char_length(bio) <= 1000)` | Optional. 500–1000 chars. Layer 1 context. |
 | `role` | `user_role` | `NOT NULL DEFAULT 'user'` | `admin` or `user` |
 | `default_model_id` | `uuid` | `REFERENCES llm_models(id) ON DELETE SET NULL` | User's preferred generation model |

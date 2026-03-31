@@ -220,7 +220,7 @@ class TestBYOKKeyNeverExposed:
         """GET /profile returns only id, name, bio, default_model_id."""
         db = MagicMock()
         db.table.return_value.select.return_value.eq.return_value.single.return_value.execute.return_value = MagicMock(
-            data={"id": TEST_USER_ID, "name": "Alice", "bio": "Builder", "default_model_id": None}
+            data={"id": TEST_USER_ID, "name": "Alice", "email": "alice@example.com", "bio": "Builder", "default_model_id": None}
         )
         with patch(_PROFILE_DB, return_value=db):
             resp = client.get("/api/v1/profile")

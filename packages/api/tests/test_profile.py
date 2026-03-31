@@ -213,6 +213,7 @@ class TestProfileEndpoints:
         user_row = {
             "id": TEST_USER_ID,
             "name": "Alice",
+            "email": "alice@example.com",
             "bio": "Engineer",
             "default_model_id": None,
         }
@@ -237,7 +238,7 @@ class TestProfileEndpoints:
         assert response.status_code == 404
 
     def test_patch_profile_updates_name_and_bio(self, client):
-        updated = {"id": TEST_USER_ID, "name": "Bob", "bio": "Updated", "default_model_id": None}
+        updated = {"id": TEST_USER_ID, "name": "Bob", "email": "bob@example.com", "bio": "Updated", "default_model_id": None}
         mock_db = MagicMock()
         mock_db.table.return_value.update.return_value.eq.return_value.execute.return_value = MagicMock(
             data=[updated]

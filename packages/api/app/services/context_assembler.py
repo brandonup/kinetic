@@ -188,7 +188,7 @@ class ContextAssembler:
         user_res = await loop.run_in_executor(
             None,
             lambda: supabase.table("users")
-            .select("name, bio")
+            .select("name, email, bio")
             .eq("id", user_id)
             .single()
             .execute(),
@@ -198,6 +198,8 @@ class ContextAssembler:
             return
 
         parts = [f"[User Profile]\nName: {user_res.data['name']}"]
+        if user_res.data.get("email"):
+            parts.append(f"Email: {user_res.data['email']}")
         if user_res.data.get("bio"):
             parts.append(f"Bio: {user_res.data['bio']}")
         ctx.system_parts.append("\n".join(parts))

@@ -95,7 +95,7 @@ Rate limit before scope: prevents entity enumeration at scale.
 
 | Layer | Source | Content |
 |---|---|---|
-| L1 | User profile | `users.name` + `users.bio` |
+| L1 | User profile | `users.name` + `users.email` + `users.bio` |
 | L2 | Company | `companies.name` + `companies.description` |
 | L3 | Project instructions | `projects.instructions` |
 | L4 | _(omitted)_ | No conversation history in MCP — stateless (ADR-006 §6) |

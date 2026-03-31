@@ -30,7 +30,7 @@ Context-rich AI workspace SaaS for knowledge workers. Persistent, layered contex
 
 ---
 
-## Implementation Status (as of 2026-03-29)
+## Implementation Status (as of 2026-03-30)
 
 Codebase at `projects/kinetic/packages/`. 565 API tests passing, 6 skipped, TypeScript clean.
 
@@ -38,11 +38,15 @@ Codebase at `projects/kinetic/packages/`. 565 API tests passing, 6 skipped, Type
 
 **Kinetic Brain (MCP):** Shipped 2026-03-29. Local MCP server (`son_of_anton/kinetic-brain/`) connects Cowork to Kinetic's Supabase. All 4 tools live: persona, memory, framework selection, KB search. Configured via `claude_desktop_config.json`, not Cowork plugin system. Created `match_chunks` RPC and fixed `match_framework_triggers` vector schema (`extensions.vector`). See `kinetic-brain/docs/deployment-guide.md`.
 
-**Remote MCP Server:** Implementation complete 2026-03-30 (KIN-428, KIN-429, KIN-433). Supabase Edge Function at `kinetic-brain/supabase/functions/kinetic-mcp/`. Auth (Bearer token + SHA-256), BYOK crypto (HKDF-SHA256 + AES-256-GCM ported to Deno Web Crypto), 5 MCP tools, dynamic prompts per user's agents, Hono + JSON-RPC 2.0. Cross-language crypto test vectors validated. Pending: Brandon deploys via `supabase functions deploy kinetic-mcp --no-verify-jwt`.
+**Remote MCP Server:** Live 2026-03-30 (KIN-428, KIN-429, KIN-433, KIN-438). Supabase Edge Function at `kinetic-brain/supabase/functions/kinetic-mcp/`. All 5 tools + dynamic prompts working end-to-end via **native Connectors** (paste URL, no local setup). Transport: SSE response negotiation, `Mcp-Session-Id` header, spec-compliant CORS/DELETE/GET. Slug migration applied (`nate` slug, public visibility). BYOK crypto validated in production.
 
-**Railway Deployment:** Config files ready 2026-03-30 (KIN-434). Dockerfile (multi-stage, handles `unstructured[all-docs]` native deps), `railway.toml`, `Procfile`, health endpoint at `/health`. Pending: Brandon creates Railway project, sets env vars, triggers first deploy. Guide at `docs/deploy-railway.md`.
+**Railway Deployment:** Live 2026-03-30 (KIN-434). URL: `https://kinetic-production-b568.up.railway.app`. Health check passing. Dockerfile handles `unstructured[all-docs]` native deps. Guide at `docs/deploy-railway.md`.
+
+**Vercel Deployment:** Live 2026-03-30 (KIN-436). URL: `https://kinetic-ashy-beta.vercel.app`. Login page renders, Google OAuth working. Root directory: `packages/web`, Framework Preset: Next.js. Remaining: update Railway CORS_ORIGINS + ADMIN_PORTAL_URL to Vercel URL (Step 6 of KIN-436), then KIN-437 smoke test.
 
 **Known issue:** L7/L8/L9 (framework selection + RAG retrieval) not firing in the Kinetic web app despite user having BYOK OpenAI key configured. `fetch_user_key_async` returning None — root cause undiagnosed. (Note: these layers work correctly in the MCP server, which uses the service role key directly.)
+
+**Dev Environment:** Live 2026-03-30 (KIN-455). Separate dev Supabase instance, Docker API (`kinetic-api-dev`), local frontend. `git push` auto-deploys to prod (Railway + Vercel) — dev verification is mandatory before push. See `docs/environment-architecture.md`.
 
 **Pending commits:** Various commit scripts at `packages/api/commit_kin3XX.sh` and `/private/tmp/claude-501/`.
 
@@ -58,7 +62,7 @@ Codebase at `projects/kinetic/packages/`. 565 API tests passing, 6 skipped, Type
 
 ---
 
-## Open Questions (as of 2026-03-29)
+## Open Questions (as of 2026-03-30)
 
 | Question | Owner |
 |---|---|
@@ -66,4 +70,4 @@ Codebase at `projects/kinetic/packages/`. 565 API tests passing, 6 skipped, Type
 | Nate B. Jones system prompt — who authors it and when? | Brandon |
 | Cluster-aware trigger refinement — before or after launch? | Monica → Brandon |
 | Token profiling of framework injection payloads | Monica |
-| MCP conversation logging — reuse `messages` table or new table? | Jared (spec in progress) |
+| ~~MCP conversation logging — reuse `messages` table or new table?~~ | **Decided 2026-03-30:** New `messages_mcp` table (Gilfoyle identified 7 schema friction issues with reusing `messages`). One row per `assemble_context` call, fire-and-forget write. Implementation: KIN-452 (blocked by KIN-454). Future Option C revisit: KIN-453. |

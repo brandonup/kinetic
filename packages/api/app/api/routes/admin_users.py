@@ -71,26 +71,13 @@ async def list_users(
         None,
         lambda: client
             .table("users")
-            .select("id, name, role, disabled_at, created_at")
+            .select("id, name, email, role, disabled_at, created_at")
             .order("created_at", desc=True)
             .execute(),
     )
     rows = result.data or []
 
-    # Fetch emails from auth.users via admin API
-    try:
-        auth_users = await loop.run_in_executor(
-            None,
-            lambda: client.auth.admin.list_users(),
-        )
-        email_by_id = {str(u.id): u.email for u in (auth_users or [])}
-    except Exception:
-        logger.warning("list_users: failed to fetch auth emails — returning empty emails")
-        email_by_id = {}
-
-    # Merge email into each row
-    users = [{**row, "email": email_by_id.get(row["id"], "")} for row in rows]
-    return {"users": users}
+    return {"users": rows}
 
 
 @router.patch("/{user_id}/disable", status_code=204)

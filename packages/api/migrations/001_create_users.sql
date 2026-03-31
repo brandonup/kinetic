@@ -24,6 +24,7 @@ CREATE TYPE user_role AS ENUM ('admin', 'user');
 CREATE TABLE public.users (
   id                uuid        PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   name              text        NOT NULL,
+  email             text        NOT NULL UNIQUE,
   bio               text        CHECK (char_length(bio) <= 1000),
   role              user_role   NOT NULL DEFAULT 'user',
   default_model_id  uuid,       -- FK to llm_models added in migration 00X_create_llm_models
@@ -56,13 +57,14 @@ CREATE TRIGGER trg_users_updated_at
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.users (id, name, role)
+  INSERT INTO public.users (id, name, email, role)
   VALUES (
     NEW.id,
     COALESCE(
       NULLIF(TRIM(NEW.raw_user_meta_data->>'name'), ''),
       split_part(NEW.email, '@', 1)
     ),
+    NEW.email,
     'user'
   );
   RETURN NEW;
