@@ -4,7 +4,6 @@
  * Decrypts user's OpenAI key from user_api_keys, calls OpenAI embeddings API.
  * Returns embedding as number[] for use with match_chunks / match_framework_triggers RPCs.
  *
- * Port from: packages/mcp/server.py (embed_query helper)
  * Schema ref: db-schema-spec.md §2 (user_api_keys)
  */
 
