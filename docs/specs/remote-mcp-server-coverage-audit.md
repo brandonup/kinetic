@@ -22,7 +22,7 @@
 
 | # | Behavior | Ticket |
 |---|----------|--------|
-| 1.1 | `kinetic-brain/supabase/functions/kinetic-mcp/` directory exists | T3 |
+| 1.1 | `supabase/functions/kinetic-mcp/` directory exists | T3 |
 | 1.2 | `index.ts` — Hono app + MCP server + route handler | T2 |
 | 1.3 | `deno.json` — import map (supabase-js, mcp sdk, hono) | T3 |
 | 1.4 | `auth.ts` — token validation + rate limiting | T1 |
@@ -82,7 +82,7 @@
 | 5.3 | Prompt name = agent slug (e.g., "nate") | T2 |
 | 5.4 | Prompt description = agent's description or first line of instructions | T2 |
 | 5.5 | Prompt body = orchestration instructions (call all 4 tools, adopt persona, use frameworks/KB as internal reasoning) | T2 |
-| 5.6 | Port orchestration logic from `kinetic-brain/skills/nate/SKILL.md` | T2 |
+| 5.6 | Port orchestration logic from the `/nate` skill pattern | T2 |
 | 5.7 | Prompts generated per-request based on authenticated user | T2 |
 | 5.8 | New agent created in Kinetic → appears in MCP on next request (no reconfiguration) | T2 |
 
@@ -182,7 +182,7 @@
 | CS.5 | Test: `byteaToUint8Array("\\xaabb...")` parses correctly | T1 |
 | CS.6 | If test vectors fail: fall back to proxying decryption through FastAPI (see spike §Recommendation fallback) | T1 |
 | CS.7 | `deriveKey` vs `deriveBits` — use `deriveBits` for exportable key comparison in tests, `deriveKey` for production decrypt | T1 |
-| CS.8 | Create test vector scripts at `kinetic-brain/supabase/functions/kinetic-mcp/test-vectors/` | T1 |
+| CS.8 | Create test vector scripts at `supabase/functions/kinetic-mcp/test-vectors/` | T1 |
 
 ---
 
@@ -316,7 +316,7 @@
 **Estimate:** 1 (half day)
 
 **Done-when:**
-1. `kinetic-brain/supabase/functions/kinetic-mcp/` directory created (1.1)
+1. `supabase/functions/kinetic-mcp/` directory created (1.1)
 2. `deno.json` with import map for supabase-js, mcp sdk, hono (1.3)
 3. Migration: `ALTER TABLE agent_definitions ADD COLUMN slug text NOT NULL DEFAULT ''` (9.1)
 4. Constraint: `UNIQUE (slug)` — globally unique (9.2)

@@ -8,7 +8,7 @@
 
 ## Context
 
-Kinetic's MCP server (kinetic-brain) currently runs locally via stdio, is hardcoded to one agent (Nate), and requires manual Cowork skill setup. Users need to interact with Kinetic agents via MCP from any client (Cowork, ChatGPT, Claude Code) with zero client-side configuration per agent.
+Kinetic's MCP server currently runs locally via stdio, is hardcoded to one agent (Nate), and requires manual Cowork skill setup. Users need to interact with Kinetic agents via MCP from any client (Cowork, ChatGPT, Claude Code) with zero client-side configuration per agent.
 
 **Goal:** Deploy a remote MCP server as a Supabase Edge Function that exposes all of a user's agents as auto-discovered slash commands via MCP prompts.
 
@@ -44,7 +44,7 @@ Supabase DB (same project)
 
 ### Step 1: Create Edge Function scaffold
 
-**New directory:** `kinetic-brain/supabase/functions/kinetic-mcp/`
+**New directory:** `supabase/functions/kinetic-mcp/`
 
 | File | Purpose |
 |------|---------|
@@ -74,7 +74,7 @@ Port from `projects/kinetic/packages/api/app/services/encryption.py`:
 - Handle Supabase bytea format (`\x`-prefixed hex -> binary)
 - Deno Web Crypto API equivalents for all operations
 
-> **Note (from local MCP build):** The `match_chunks` and `match_framework_triggers` RPCs use `extensions.vector(3072)`, not `public.vector`. Verify that JSON arrays returned from the OpenAI embeddings API and passed via `supabase.rpc()` cast correctly to `extensions.vector` in Deno — this was a real bug during the kinetic-brain build that required explicit schema qualification.
+> **Note (from local MCP build):** The `match_chunks` and `match_framework_triggers` RPCs use `extensions.vector(3072)`, not `public.vector`. Verify that JSON arrays returned from the OpenAI embeddings API and passed via `supabase.rpc()` cast correctly to `extensions.vector` in Deno — this was a real bug during the local MCP build that required explicit schema qualification.
 
 ### Step 4: Embedding helper (`embedding.ts`)
 
@@ -90,7 +90,7 @@ Register dynamic prompts so agents are discoverable in MCP clients:
 - For each agent, register a prompt with:
   - **Name:** agent slug/name (e.g., "nate")
   - **Description:** agent's description or first line of instructions
-  - **Body:** Generic orchestration template (below). Reference `kinetic-brain/skills/nate/SKILL.md` for the proven pattern, but use this agent-agnostic version:
+  - **Body:** Generic orchestration template (below). Reference the `/nate` skill pattern for the proven approach, but use this agent-agnostic version:
 - Prompts are generated per-request based on the authenticated user's agents
 
 **Prompt body template:**
@@ -201,8 +201,7 @@ User flow:
 
 | File | What to port/reference |
 |------|----------------------|
-| `kinetic-brain/mcp-server/server.py` | All 4 tool implementations, constants, business logic |
-| `kinetic-brain/skills/nate/SKILL.md` | Orchestration instructions for MCP prompts |
+| `packages/mcp/server.py` | All 5 tool implementations, constants, business logic |
 | `projects/kinetic/packages/api/app/api/routes/mcp.py` | Token auth + rate limiting logic |
 | `projects/kinetic/packages/api/app/services/encryption.py` | HKDF + AES-GCM encryption to port |
 | `projects/kinetic/packages/api/app/services/user_keys.py` | BYOK key fetch + bytea handling |

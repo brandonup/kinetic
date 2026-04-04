@@ -302,5 +302,5 @@ Python's `AESGCM.encrypt()` returns `ciphertext || tag` (tag appended). Web Cryp
 | File | Purpose |
 |---|---|
 | `docs/spike-crypto-port-deno.md` | This spike report |
-| (to be created by Dinesh) `kinetic-brain/supabase/functions/kinetic-mcp/crypto.ts` | Production crypto module |
-| (to be created by Dinesh) `kinetic-brain/supabase/functions/kinetic-mcp/test-vectors/` | Cross-language validation scripts |
+| `supabase/functions/kinetic-mcp/crypto.ts` | Production crypto module |
+| `supabase/functions/kinetic-mcp/test-vectors/` | Cross-language validation scripts |

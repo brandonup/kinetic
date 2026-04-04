@@ -19,7 +19,7 @@ This affects both:
 
 ## Two-System Sync Requirements
 
-Both the Python web app (`packages/api/`) and the TypeScript MCP server (`kinetic-brain/supabase/functions/kinetic-mcp/tools.ts`) implement framework selection and KB retrieval independently. They share the same Supabase RPCs but have separate threshold constants and pipeline logic. **Every change in this plan must be applied to both.**
+Both the Python web app (`packages/api/`) and the TypeScript MCP server (`supabase/functions/kinetic-mcp/tools.ts`) implement framework selection and KB retrieval independently. They share the same Supabase RPCs but have separate threshold constants and pipeline logic. **Every change in this plan must be applied to both.**
 
 **Shared constants that must stay in sync:**
 

@@ -15,7 +15,7 @@
 Kinetic has two MCP implementations today:
 
 1. **Hosted MCP endpoint** (`/api/v1/mcp/context`) — FastAPI route, token-authenticated, assembles context and returns it as a single JSON payload. Works but is not an MCP server — it's a REST endpoint that MCP clients can't discover or interact with natively.
-2. **Local MCP server** (`kinetic-brain/`) — Python stdio server, runs on the user's machine, hardcoded to one agent (Nate), requires manual Cowork configuration per agent.
+2. **Local MCP server** (`packages/mcp/`) — Python stdio server, runs on the user's machine, hardcoded to one agent (Nate), requires manual Cowork configuration per agent.
 
 Neither scales to the target experience: any MCP client connects to one URL and discovers all of a user's agents as slash commands. Three architectural decisions are needed before implementation.
 

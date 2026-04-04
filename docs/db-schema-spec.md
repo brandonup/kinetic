@@ -707,7 +707,7 @@ RETURNS TABLE (
 )
 ```
 
-**Usage:** Called by the RAG retrieval pipeline and the kinetic-brain MCP server. `scope_column` is typically `agent_definition_id`; `scope_value` is the agent UUID.
+**Usage:** Called by the RAG retrieval pipeline and the local MCP server (`packages/mcp/`). `scope_column` is typically `agent_definition_id`; `scope_value` is the agent UUID.
 **Note:** Uses `EXECUTE format(...)` for dynamic column filtering. Same `extensions.vector` requirement as `match_framework_triggers`.
 
 ---

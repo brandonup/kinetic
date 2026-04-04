@@ -1,6 +1,6 @@
 -- KIN-429: Add match_chunks RPC
 -- Vector similarity search on knowledge base chunks with dynamic scope filtering.
--- Called by RAG retrieval pipeline and kinetic-brain MCP server.
+-- Called by RAG retrieval pipeline and local MCP server (packages/mcp/).
 -- SECURITY DEFINER: bypasses RLS — called from service-role backend only.
 -- Uses EXECUTE format(...) for dynamic column filtering (scope_column).
 

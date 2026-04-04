@@ -4,7 +4,7 @@
 **Author:** Gilfoyle
 **Last updated:** 2026-03-31
 **Ticket:** KIN-452, KIN-454
-**Ref:** `db-schema-spec.md` (§16–17 active memory, §18 mcp_tokens, §21 mcp_rate_limits), `kinetic-brain/supabase/functions/kinetic-mcp/tools.ts`, `remote-mcp-server-spec.md`
+**Ref:** `db-schema-spec.md` (§16–17 active memory, §18 mcp_tokens, §21 mcp_rate_limits), `supabase/functions/kinetic-mcp/tools.ts`, `remote-mcp-server-spec.md`
 
 ---
 

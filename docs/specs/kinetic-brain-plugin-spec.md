@@ -277,4 +277,4 @@ The initial deployment used an MCP hash (`mcp_f4fd17e...`) instead of a Supabase
 
 ### Deployment guide
 
-Full setup instructions written at `kinetic-brain/docs/deployment-guide.md` based on the actual deployment experience, including all workarounds discovered during setup.
+Full setup instructions written at `packages/mcp/docs/deployment-guide.md` based on the actual deployment experience, including all workarounds discovered during setup.
