@@ -249,3 +249,52 @@ class TestTransferAgent:
         finally:
             del app.dependency_overrides[require_admin]
         assert response.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Promote user — admin only
+# ---------------------------------------------------------------------------
+
+
+class TestPromoteUser:
+    def test_promote_returns_200_with_admin_role(self, admin_client):
+        promoted_row = _user_row(role="admin")
+        mock_db = MagicMock()
+        (
+            mock_db.table.return_value
+            .update.return_value
+            .eq.return_value
+            .execute.return_value
+        ) = MagicMock(data=[promoted_row])
+        with patch(PATCH_TARGET, return_value=mock_db):
+            response = admin_client.patch(f"/api/v1/admin/users/{TEST_USER_ID}/promote")
+        assert response.status_code == 200
+        assert response.json()["role"] == "admin"
+        assert response.json()["id"] == TEST_USER_ID
+
+    def test_promote_not_found_returns_404(self, admin_client):
+        mock_db = MagicMock()
+        (
+            mock_db.table.return_value
+            .update.return_value
+            .eq.return_value
+            .execute.return_value
+        ) = MagicMock(data=[])
+        with patch(PATCH_TARGET, return_value=mock_db):
+            response = admin_client.patch(f"/api/v1/admin/users/{TEST_USER_ID}/promote")
+        assert response.status_code == 404
+
+    def test_promote_non_admin_returns_403(self, client):
+        from app.auth.deps import require_admin
+        from app.core.errors import AuthorizationError
+        from app.main import app
+
+        async def _raise_auth_error() -> None:
+            raise AuthorizationError()
+
+        app.dependency_overrides[require_admin] = _raise_auth_error
+        try:
+            response = client.patch(f"/api/v1/admin/users/{TEST_USER_ID}/promote")
+        finally:
+            del app.dependency_overrides[require_admin]
+        assert response.status_code == 403

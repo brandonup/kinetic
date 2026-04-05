@@ -540,9 +540,26 @@ DO $$ BEGIN CREATE POLICY "kb_chunks_delete_deny" ON public.knowledge_base_chunk
 
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
+DECLARE
+  v_role user_role;
 BEGIN
-  INSERT INTO public.users (id, name, role)
-  VALUES (NEW.id, COALESCE(NEW.raw_user_meta_data->>'name', NEW.email), 'user');
+  -- Auto-promote to admin if no users exist yet (first signup = first admin)
+  IF NOT EXISTS (SELECT 1 FROM public.users) THEN
+    v_role := 'admin';
+  ELSE
+    v_role := 'user';
+  END IF;
+
+  INSERT INTO public.users (id, name, email, role)
+  VALUES (
+    NEW.id,
+    COALESCE(
+      NULLIF(TRIM(NEW.raw_user_meta_data->>'name'), ''),
+      split_part(NEW.email, '@', 1)
+    ),
+    NEW.email,
+    v_role
+  );
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

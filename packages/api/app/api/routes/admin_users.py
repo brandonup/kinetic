@@ -158,6 +158,35 @@ async def enable_user(
     return result.data[0]
 
 
+@router.patch("/{user_id}/promote")
+async def promote_user(
+    user_id: str,
+    current_user: CurrentUser = Depends(require_admin),
+) -> dict:
+    """
+    Promote a user to admin role.
+
+    Schema ref: docs/db-schema-spec.md §1 (users.role)
+
+    Raises:
+        NotFoundError (404): User not found.
+    """
+    loop = asyncio.get_running_loop()
+    client = get_supabase_client()
+
+    result = await loop.run_in_executor(
+        None,
+        lambda: client
+            .table("users")
+            .update({"role": "admin"})
+            .eq("id", user_id)
+            .execute(),
+    )
+    if not result.data:
+        raise NotFoundError("User not found")
+    return result.data[0]
+
+
 @router.patch("/{user_id}/transfer-agent")
 async def transfer_agent(
     user_id: str,
