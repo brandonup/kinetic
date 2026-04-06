@@ -29,6 +29,52 @@ const KB_MATCH_COUNT = 20;
 const KB_SIMILARITY_THRESHOLD = 0.3;
 const KB_TOP_K = 8;
 
+// Context enrichment (KIN-447) — prefix cap ~50 tokens
+const MAX_CONTEXT_PREFIX_CHARS = 200;
+
+interface QueryContextFields {
+  companyName?: string | null;
+  companyDescription?: string | null;
+  userBio?: string | null;
+  projectName?: string | null;
+}
+
+/**
+ * Prepend available L1/L2/L3 context to the query before embedding.
+ * Template must match Python build_enriched_query() exactly.
+ */
+function buildEnrichedQuery(query: string, ctx?: QueryContextFields | null): string {
+  if (!ctx) return query;
+
+  const parts: string[] = [];
+
+  if (ctx.companyName) {
+    let line = `[Company: ${ctx.companyName}`;
+    if (ctx.companyDescription) {
+      line += ` — ${ctx.companyDescription.slice(0, 80).trim()}`;
+    }
+    line += "]";
+    parts.push(line);
+  }
+
+  if (ctx.userBio) {
+    parts.push(`[User: ${ctx.userBio.slice(0, 80).trim()}]`);
+  }
+
+  if (ctx.projectName) {
+    parts.push(`[Project: ${ctx.projectName}]`);
+  }
+
+  if (parts.length === 0) return query;
+
+  let prefix = parts.join("\n");
+  if (prefix.length > MAX_CONTEXT_PREFIX_CHARS) {
+    prefix = prefix.slice(0, MAX_CONTEXT_PREFIX_CHARS);
+  }
+
+  return prefix + "\n" + query;
+}
+
 // ---------------------------------------------------------------------------
 // resolve_agent — shared access control helper
 // ---------------------------------------------------------------------------
@@ -227,6 +273,50 @@ export async function getActiveMemory(
   return lines.join("\n");
 }
 
+/**
+ * Fetch lightweight L1/L2/L3 context for query enrichment (KIN-447).
+ * Returns null fields if data is missing — callers skip gracefully.
+ * No latency impact when user has no profile/company (queries return empty).
+ */
+async function fetchQueryContext(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<QueryContextFields> {
+  const ctx: QueryContextFields = {};
+
+  try {
+    // User bio (L1)
+    const { data: user } = await supabase
+      .from("users")
+      .select("bio")
+      .eq("id", userId)
+      .maybeSingle();
+    if (user?.bio) ctx.userBio = user.bio;
+
+    // Company (L2) — find user's active company
+    const { data: userRow } = await supabase
+      .from("users")
+      .select("active_company_id")
+      .eq("id", userId)
+      .maybeSingle();
+    if (userRow?.active_company_id) {
+      const { data: company } = await supabase
+        .from("companies")
+        .select("name, description")
+        .eq("id", userRow.active_company_id)
+        .maybeSingle();
+      if (company) {
+        ctx.companyName = company.name;
+        ctx.companyDescription = company.description;
+      }
+    }
+  } catch {
+    // Fail-open: enrichment is best-effort
+  }
+
+  return ctx;
+}
+
 // ---------------------------------------------------------------------------
 // Tool: select_framework
 // ---------------------------------------------------------------------------
@@ -254,10 +344,14 @@ export async function selectFramework(
     return "No framework library configured for this agent. Proceeding without framework guidance.";
   }
 
-  // Embed the query (uses user's BYOK OpenAI key)
+  // Fetch user/company/project context for query enrichment (KIN-447)
+  const queryCtx = await fetchQueryContext(supabase, userId);
+
+  // Embed the enriched query (uses user's BYOK OpenAI key)
+  const enrichedQuery = buildEnrichedQuery(query, queryCtx);
   let queryEmbedding: number[];
   try {
-    queryEmbedding = await embedQuery(supabase, userId, query);
+    queryEmbedding = await embedQuery(supabase, userId, enrichedQuery);
   } catch (err) {
     if (err instanceof Error) return err.message;
     return "Error: Embedding failed";
@@ -496,12 +590,16 @@ export async function assembleContext(
     ? `# ${agent.name}\n\n${agent.instructions}`
     : "";
 
-  // --- Single embedding call (eliminates redundant OpenAI request) ---
+  // --- Fetch context for query enrichment (KIN-447) ---
+  const queryCtx = await fetchQueryContext(supabase, userId);
+
+  // --- Single embedding call with enriched query (eliminates redundant OpenAI request) ---
+  const enrichedCtxQuery = buildEnrichedQuery(query, queryCtx);
   let queryEmbedding: number[] | null = null;
   let embeddingError: string | null = null;
   const embeddingStart = Date.now();
   try {
-    queryEmbedding = await embedQuery(supabase, userId, query);
+    queryEmbedding = await embedQuery(supabase, userId, enrichedCtxQuery);
   } catch (err) {
     embeddingError = err instanceof Error ? err.message : "Error: Embedding failed";
   }

@@ -16,8 +16,11 @@ import pytest
 from app.services.rag.framework_selection import (
     FRAMEWORK_MIN_SIMILARITY,
     HIGH_CONFIDENCE_THRESHOLD,
+    MAX_CONTEXT_PREFIX_CHARS,
     MULTI_TRIGGER_BOOST,
     FrameworkMatch,
+    QueryContext,
+    build_enriched_query,
     fetch_pinned_frameworks,
     select_framework,
 )
@@ -351,3 +354,134 @@ class TestFetchPinnedFrameworks:
 
         results = _run(fetch_pinned_frameworks([FRAMEWORK_ID, FRAMEWORK_ID_2], mock_db))
         assert len(results) == 2
+
+
+# ---------------------------------------------------------------------------
+# KIN-447: Context-enriched query
+# ---------------------------------------------------------------------------
+
+
+class TestBuildEnrichedQuery:
+    """KIN-447: build_enriched_query prepends L1/L2/L3 context."""
+
+    def test_no_context_returns_raw_query(self):
+        """No context → raw query unchanged."""
+        assert build_enriched_query("How should I price this?") == "How should I price this?"
+
+    def test_none_context_returns_raw_query(self):
+        """Explicit None context → raw query unchanged."""
+        assert build_enriched_query("query", None) == "query"
+
+    def test_empty_context_returns_raw_query(self):
+        """All-None fields → raw query unchanged."""
+        ctx = QueryContext()
+        assert build_enriched_query("query", ctx) == "query"
+
+    def test_full_context_all_fields(self):
+        """All fields present → all lines prepended."""
+        ctx = QueryContext(
+            company_name="Acme Corp",
+            company_description="B2B SaaS, 50 employees, Series A",
+            user_bio="Product manager with 10 years in fintech",
+            project_name="Q2 Launch",
+        )
+        result = build_enriched_query("How should I price this?", ctx)
+        assert result.startswith("[Company: Acme Corp")
+        assert "B2B SaaS" in result
+        assert "[User: Product manager" in result
+        assert "[Project: Q2 Launch]" in result
+        assert result.endswith("How should I price this?")
+
+    def test_partial_context_company_only(self):
+        """Only company name → single line prepended."""
+        ctx = QueryContext(company_name="Acme Corp")
+        result = build_enriched_query("query", ctx)
+        assert "[Company: Acme Corp]" in result
+        assert "[User:" not in result
+        assert "[Project:" not in result
+        assert result.endswith("query")
+
+    def test_partial_context_bio_only(self):
+        """Only user bio → single line prepended."""
+        ctx = QueryContext(user_bio="CEO, non-technical")
+        result = build_enriched_query("query", ctx)
+        assert "[User: CEO, non-technical]" in result
+        assert "[Company:" not in result
+
+    def test_partial_context_project_only(self):
+        """Only project name → single line prepended."""
+        ctx = QueryContext(project_name="AI Rollout")
+        result = build_enriched_query("query", ctx)
+        assert "[Project: AI Rollout]" in result
+
+    def test_company_name_without_description(self):
+        """Company name but no description → no dash suffix."""
+        ctx = QueryContext(company_name="Acme Corp")
+        result = build_enriched_query("query", ctx)
+        assert result.startswith("[Company: Acme Corp]")
+
+    def test_long_description_truncated(self):
+        """Long company description truncated to 80 chars."""
+        long_desc = "x" * 200
+        ctx = QueryContext(company_name="Co", company_description=long_desc)
+        result = build_enriched_query("query", ctx)
+        # Description in line should be at most 80 chars
+        company_line = result.split("\n")[0]
+        desc_part = company_line.split(" — ")[1].rstrip("]")
+        assert len(desc_part) <= 80
+
+    def test_total_prefix_capped(self):
+        """Total prefix stays under MAX_CONTEXT_PREFIX_CHARS."""
+        ctx = QueryContext(
+            company_name="A" * 100,
+            company_description="B" * 100,
+            user_bio="C" * 100,
+            project_name="D" * 100,
+        )
+        result = build_enriched_query("query", ctx)
+        # Split on the original query to get just the prefix
+        prefix = result[: result.rfind("\n")]
+        assert len(prefix) <= MAX_CONTEXT_PREFIX_CHARS
+
+
+class TestSelectFrameworkWithContext:
+    """KIN-447: select_framework accepts and uses context param."""
+
+    def test_context_enriches_embedding_input(self):
+        """When context is provided, the enriched query is passed to embedder."""
+        triggers = [
+            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.7, "trigger_text": "match"},
+        ]
+        mock_db = _mock_supabase(triggers=triggers)
+        mock_embedder = _mock_embedder()
+
+        ctx = QueryContext(company_name="Acme Corp", user_bio="CEO")
+
+        with patch(EMBED_PATCH, return_value=mock_embedder):
+            result = _run(
+                select_framework("pricing question", AGENT_ID, mock_db, context=ctx)
+            )
+
+        # Verify embedder was called with enriched query (not raw)
+        call_args = mock_embedder.embed_batch.call_args[0][0]
+        assert "[Company: Acme Corp]" in call_args[0]
+        assert "pricing question" in call_args[0]
+        assert result.matched_framework_id == FRAMEWORK_ID
+
+    def test_no_context_uses_raw_query(self):
+        """Without context, raw query is embedded (backward compatible)."""
+        triggers = [
+            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.7, "trigger_text": "match"},
+        ]
+        mock_db = _mock_supabase(triggers=triggers)
+        mock_embedder = _mock_embedder()
+
+        with patch(EMBED_PATCH, return_value=mock_embedder):
+            result = _run(
+                select_framework("pricing question", AGENT_ID, mock_db, context=None)
+            )
+
+        # Embedder should receive the raw query
+        call_args = mock_embedder.embed_batch.call_args[0][0]
+        assert call_args == ["pricing question"]
+        assert result.matched_framework_id == FRAMEWORK_ID

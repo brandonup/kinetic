@@ -30,6 +30,68 @@ FRAMEWORK_MIN_SIMILARITY = 0.62   # confidence gate (below = no match)
 HIGH_CONFIDENCE_THRESHOLD = 0.75  # above = inject normally; between MIN and this = caveat
 MULTI_TRIGGER_BOOST = 0.05        # boost per additional trigger match
 
+# Context enrichment (KIN-447)
+MAX_CONTEXT_PREFIX_CHARS = 200    # ~50 tokens; hard cap to avoid diluting query signal
+
+
+# ---------------------------------------------------------------------------
+# Context enrichment — KIN-447
+# ---------------------------------------------------------------------------
+
+@dataclass
+class QueryContext:
+    """Optional context for embedding enrichment.
+
+    Fields mirror L1 (user), L2 (company), L3 (project) data available
+    at query time. Null/empty fields are skipped in the prefix.
+    """
+    company_name: Optional[str] = None
+    company_description: Optional[str] = None
+    user_bio: Optional[str] = None
+    project_name: Optional[str] = None
+
+
+def build_enriched_query(query: str, context: QueryContext | None = None) -> str:
+    """Prepend available L1/L2/L3 context to query before embedding.
+
+    Template (fields skipped if null/empty):
+        [Company: {name} — {description_excerpt}]
+        [User: {bio_excerpt}]
+        [Project: {name}]
+        {original_query}
+
+    Keeps prefix under MAX_CONTEXT_PREFIX_CHARS (~50 tokens) to avoid
+    diluting the query signal.
+    """
+    if context is None:
+        return query
+
+    parts: list[str] = []
+
+    if context.company_name:
+        line = f"[Company: {context.company_name}"
+        if context.company_description:
+            # Truncate description to keep total short
+            desc = context.company_description[:80].strip()
+            line += f" — {desc}"
+        line += "]"
+        parts.append(line)
+
+    if context.user_bio:
+        parts.append(f"[User: {context.user_bio[:80].strip()}]")
+
+    if context.project_name:
+        parts.append(f"[Project: {context.project_name}]")
+
+    if not parts:
+        return query
+
+    prefix = "\n".join(parts)
+    if len(prefix) > MAX_CONTEXT_PREFIX_CHARS:
+        prefix = prefix[:MAX_CONTEXT_PREFIX_CHARS]
+
+    return prefix + "\n" + query
+
 
 # ---------------------------------------------------------------------------
 # Return type
@@ -109,6 +171,7 @@ async def select_framework(
     supabase,
     openai_key: str = "",
     excluded_ids: set[str] | None = None,
+    context: QueryContext | None = None,
 ) -> FrameworkMatch:
     """
     Run the 4-step framework selection pipeline for MCP context assembly (L7).
@@ -118,6 +181,9 @@ async def select_framework(
     Args:
         excluded_ids: Framework IDs to exclude from the candidate pool
             before ranking. Spec: docs/specs/agents.md §11.4.
+        context: Optional L1/L2/L3 context for query enrichment (KIN-447).
+            When provided, context is prepended to the query before embedding
+            to shift results toward contextually relevant frameworks.
 
     Returns FrameworkMatch with matched_framework_id=None if no framework
     matches above the confidence threshold.
@@ -129,11 +195,13 @@ async def select_framework(
     no_match = FrameworkMatch(matched_framework_id=None, matched_framework_name=None, framework_text=None)
 
     try:
-        # Step 1: Embed query
+        # Step 1: Enrich query with context, then embed (KIN-447)
+        enriched_query = build_enriched_query(query_text, context)
+
         from app.services.ingestion.embedder import EmbeddingService
         embedder = EmbeddingService(api_key=openai_key)
         query_embedding = await loop.run_in_executor(
-            None, lambda: embedder.embed_batch([query_text])[0]
+            None, lambda: embedder.embed_batch([enriched_query])[0]
         )
 
         # Step 2: Vector search on framework_trigger_embeddings

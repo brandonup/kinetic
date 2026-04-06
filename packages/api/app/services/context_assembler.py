@@ -53,6 +53,8 @@ class AssembledContext:
         model_context_window: From llm_models row.
         conversation_history: Recent messages (added in Task 4).
         rag_debug_contexts: Per-scope debug contexts for trace writes.
+        _company_name / _company_description / _user_bio / _project_name:
+            Structured L1/L2/L3 fields for query enrichment (KIN-447).
     """
 
     system_parts: list[str] = field(default_factory=list)
@@ -61,6 +63,11 @@ class AssembledContext:
     model_context_window: int = 100_000
     conversation_history: list[dict] = field(default_factory=list)
     rag_debug_contexts: list[tuple] = field(default_factory=list)
+    # Structured context for query enrichment (KIN-447)
+    _company_name: str | None = None
+    _company_description: str | None = None
+    _user_bio: str | None = None
+    _project_name: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -207,6 +214,7 @@ class ContextAssembler:
             parts.append(f"Email: {user_res.data['email']}")
         if user_res.data.get("bio"):
             parts.append(f"Bio: {user_res.data['bio']}")
+            ctx._user_bio = user_res.data["bio"]  # KIN-447: for query enrichment
         ctx.system_parts.append("\n".join(parts))
 
     async def _assemble_company(
@@ -229,9 +237,11 @@ class ContextAssembler:
             logger.warning("L2: company %s not found, skipping", company_id)
             return
 
+        ctx._company_name = comp_res.data["name"]  # KIN-447: for query enrichment
         block = f"[Company: {comp_res.data['name']}]"
         if comp_res.data.get("description"):
             block += f"\n{comp_res.data['description']}"
+            ctx._company_description = comp_res.data["description"]  # KIN-447
         ctx.system_parts.append(block)
 
     async def _assemble_project_instructions(
@@ -245,7 +255,7 @@ class ContextAssembler:
         proj_res = await loop.run_in_executor(
             None,
             lambda: supabase.table("projects")
-            .select("instructions")
+            .select("name, instructions")
             .eq("id", project_id)
             .single()
             .execute(),
@@ -254,6 +264,7 @@ class ContextAssembler:
             logger.warning("L3: project %s not found, skipping", project_id)
             return
 
+        ctx._project_name = proj_res.data.get("name")  # KIN-447: for query enrichment
         instructions = proj_res.data.get("instructions")
         if instructions:
             ctx.system_parts.append(f"[Project Instructions]\n{instructions}")
@@ -383,6 +394,7 @@ class ContextAssembler:
         Ticket: KIN-391
         """
         from app.services.rag.framework_selection import (
+            QueryContext,
             fetch_pinned_frameworks,
             select_framework,
         )
@@ -421,12 +433,21 @@ class ContextAssembler:
                         )
                 return
 
-            # Normal pipeline with exclusions
+            # Build query context from L1/L2/L3 data (KIN-447)
+            query_context = QueryContext(
+                company_name=ctx._company_name,
+                company_description=ctx._company_description,
+                user_bio=ctx._user_bio,
+                project_name=ctx._project_name,
+            )
+
+            # Normal pipeline with exclusions + context enrichment
             excluded = set(overrides.get("excluded", []))
             match = await select_framework(
                 query_text, active_agent_id, supabase,
                 openai_key=openai_key,
                 excluded_ids=excluded if excluded else None,
+                context=query_context,
             )
             if match.framework_text:
                 if match.high_confidence:
