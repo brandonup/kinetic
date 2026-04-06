@@ -34,3 +34,7 @@ __pycache__/
 *.egg-info/
 .venv/
 dist/
+
+# Eval outputs (generated per-run)
+packages/api/evals/**/dataset.jsonl
+packages/api/evals/**/results_*/
