@@ -253,7 +253,7 @@ async def create_agent(
         )
         raise ValidationError(f"Failed to create agent: {exc}")
 
-    if not result.data:
+    if result is None or not result.data:
         logger.error(
             "create_agent: no data returned from insert",
             extra={"user_id": current_user.user_id},
