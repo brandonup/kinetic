@@ -128,7 +128,7 @@ async def _ensure_unique_slug(client, slug: str) -> str:
             .maybe_single()
             .execute(),
     )
-    if not result.data:
+    if result is None or not result.data:
         return candidate
 
     suffix = 2
@@ -143,7 +143,7 @@ async def _ensure_unique_slug(client, slug: str) -> str:
                 .maybe_single()
                 .execute(),
         )
-        if not result.data:
+        if result is None or not result.data:
             return candidate
         suffix += 1
 
