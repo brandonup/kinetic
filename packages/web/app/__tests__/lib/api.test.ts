@@ -28,6 +28,17 @@ describe("parseApiError", () => {
     expect(message).toBe("Not found");
   });
 
+  it("extracts message from nested error object (AppException format)", async () => {
+    const response = new Response(
+      JSON.stringify({
+        error: { code: "VALIDATION_ERROR", message: "Failed to create agent", details: {} },
+      }),
+      { status: 400 }
+    );
+    const message = await parseApiError(response);
+    expect(message).toBe("Failed to create agent");
+  });
+
   it("falls back to generic message on non-JSON response", async () => {
     const response = new Response("Internal Server Error", { status: 500 });
     const message = await parseApiError(response);

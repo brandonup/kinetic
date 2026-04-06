@@ -88,6 +88,10 @@ export async function parseApiError(response: Response): Promise<string> {
         if (typeof detail.error === "string") return detail.error;
       }
       if (typeof d.message === "string") return d.message;
+      if (d.error && typeof d.error === "object") {
+        const err = d.error as Record<string, unknown>;
+        if (typeof err.message === "string") return err.message;
+      }
       if (typeof d.error === "string") return d.error;
       if (Array.isArray(d.detail)) {
         const first = d.detail[0] as Record<string, unknown> | undefined;

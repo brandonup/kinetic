@@ -240,16 +240,25 @@ async def create_agent(
         "visibility": body.visibility,
     }
 
-    result = await loop.run_in_executor(
-        None,
-        lambda: client.table("agent_definitions").insert(row).execute(),
-    )
+    try:
+        result = await loop.run_in_executor(
+            None,
+            lambda: client.table("agent_definitions").insert(row).execute(),
+        )
+    except Exception as exc:
+        logger.error(
+            "create_agent: insert failed — %s",
+            exc,
+            extra={"user_id": current_user.user_id},
+        )
+        raise ValidationError(f"Failed to create agent: {exc}")
+
     if not result.data:
         logger.error(
             "create_agent: no data returned from insert",
             extra={"user_id": current_user.user_id},
         )
-        raise ValidationError("Failed to create agent")
+        raise ValidationError("Failed to create agent — no data returned")
     return result.data[0]
 
 
