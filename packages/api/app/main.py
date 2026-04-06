@@ -50,6 +50,7 @@ from app.api.routes.admin_backfill import router as admin_backfill_router
 from app.api.routes.admin_mcp_logs import router as admin_mcp_logs_router
 from app.api.routes.kb_management import router as kb_management_router
 from app.api.routes.generation import router as generation_router
+from app.api.routes.scrape_sources import router as scrape_sources_router
 from app.middleware.log_scrub import LogScrubMiddleware
 
 app = FastAPI(
@@ -97,3 +98,4 @@ app.include_router(admin_backfill_router)
 app.include_router(admin_mcp_logs_router)
 app.include_router(kb_management_router)
 app.include_router(generation_router)
+app.include_router(scrape_sources_router)
