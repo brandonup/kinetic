@@ -33,5 +33,9 @@ openai>=1.14
 tenacity>=8.2
 python-multipart>=0.0.9
 
+# Scheduled KB scraping (KIN-459)
+apscheduler>=3.10
+feedparser>=6.0
+
 # FastAPI TestClient transport
 # httpx already listed above — starlette TestClient uses it automatically

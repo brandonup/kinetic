@@ -643,6 +643,63 @@ MCP invocation logs. One row per `assemble_context` call. Append-only — no `up
 
 ---
 
+### 23. `scrape_sources`
+
+Configured scraping sources for automated KB content ingestion. One row per source (Substack blog, RSS feed).
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `id` | `uuid` | `PK DEFAULT gen_random_uuid()` | |
+| `knowledge_base_id` | `uuid` | `NOT NULL REFERENCES knowledge_bases(id) ON DELETE CASCADE` | Target KB for ingested content |
+| `user_id` | `uuid` | `NOT NULL REFERENCES users(id) ON DELETE CASCADE` | Denormalized for RLS |
+| `source_type` | `text` | `NOT NULL, CHECK IN ('substack', 'rss')` | Extensible via CHECK update |
+| `source_url` | `text` | `NOT NULL` | Substack base URL or RSS feed URL |
+| `frequency` | `text` | `NOT NULL, CHECK IN ('daily', 'weekly', 'monthly')` | |
+| `credential_ciphertext` | `bytea` | | AES-256-GCM encrypted cookie/token. NULL for public feeds |
+| `credential_nonce` | `bytea` | | Encryption nonce. NULL when ciphertext is NULL |
+| `is_active` | `boolean` | `NOT NULL DEFAULT true` | Pause/resume without deleting |
+| `last_scraped_at` | `timestamptz` | | NULL until first successful run |
+| `next_run_at` | `timestamptz` | `NOT NULL` | Set on creation based on frequency. Poller checks this |
+| `last_error` | `text` | | NULL on success. Set on failure |
+| `consecutive_failures` | `int` | `NOT NULL DEFAULT 0` | Auto-deactivates after 5. Reset on success |
+| `created_at` | `timestamptz` | `NOT NULL DEFAULT now()` | |
+| `updated_at` | `timestamptz` | `NOT NULL DEFAULT now()` | |
+
+**Constraints:**
+- `chk_scrape_sources_credential_pair`: both credential columns NULL or both NOT NULL
+
+**Indexes:**
+- `idx_scrape_sources_poll` on `(is_active, next_run_at)` WHERE `is_active = true` — poller query
+- `idx_scrape_sources_kb` on `(knowledge_base_id)` — list sources for a KB
+
+**RLS:**
+- SELECT/INSERT/UPDATE/DELETE: `auth.uid() = user_id`
+
+---
+
+### 24. `scrape_source_posts`
+
+Deduplication tracker for scraped posts. One row per successfully scraped post. No `updated_at` — append-only.
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `id` | `uuid` | `PK DEFAULT gen_random_uuid()` | |
+| `scrape_source_id` | `uuid` | `NOT NULL REFERENCES scrape_sources(id) ON DELETE CASCADE` | |
+| `user_id` | `uuid` | `NOT NULL REFERENCES users(id) ON DELETE CASCADE` | Denormalized for RLS |
+| `external_id` | `text` | `NOT NULL` | Substack post ID or RSS entry GUID |
+| `document_id` | `uuid` | `REFERENCES knowledge_base_documents(id) ON DELETE SET NULL` | Links to ingested KB doc |
+| `url` | `text` | | Post URL for reference |
+| `title` | `text` | | Post title for display |
+| `scraped_at` | `timestamptz` | `NOT NULL DEFAULT now()` | |
+
+**Constraints:**
+- `uq_scrape_source_posts_source_external`: UNIQUE on `(scrape_source_id, external_id)`
+
+**RLS:**
+- SELECT/INSERT/UPDATE/DELETE: `auth.uid() = user_id`
+
+---
+
 ## Configuration Parameters
 
 These are application-level settings, not database columns. Listed here for completeness since they affect query behavior.
