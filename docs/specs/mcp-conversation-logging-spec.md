@@ -32,8 +32,8 @@ Append-only. No `updated_at`. No soft-delete.
 |---|---|---|---|
 | `id` | `uuid` | `PK DEFAULT gen_random_uuid()` | |
 | `user_id` | `uuid` | `NOT NULL REFERENCES users(id) ON DELETE CASCADE` | From MCP token auth |
-| `agent_definition_id` | `uuid` | `NOT NULL REFERENCES agent_definitions(id) ON DELETE CASCADE` | Resolved from slug |
-| `agent_instance_id` | `uuid` | `NOT NULL REFERENCES agent_instances(id) ON DELETE CASCADE` | Per-user agent instance |
+| `agent_definition_id` | `uuid` | `REFERENCES agent_definitions(id) ON DELETE CASCADE` | Resolved from slug (null if resolution failed) |
+| `agent_instance_id` | `uuid` | `REFERENCES agent_instances(id) ON DELETE CASCADE` | Per-user agent instance (null if resolution failed) |
 | `query` | `text` | `NOT NULL` | User's original question |
 | `agent_slug` | `text` | `NOT NULL` | Agent slug used (denormalized for admin readability) |
 | `context_payload` | `text` | | Full assembled response sent to client (persona + memory + framework + KB concatenated). Null if invocation failed before assembly. |

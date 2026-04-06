@@ -137,7 +137,8 @@ async function handleMcpMethod(
   method: string,
   params: Record<string, unknown>,
   userId: string,
-  supabase: ReturnType<typeof createClient>
+  supabase: ReturnType<typeof createClient>,
+  sessionId: string | null = null
 ): Promise<unknown> {
   switch (method) {
     case "initialize":
@@ -165,7 +166,7 @@ async function handleMcpMethod(
       }
 
       try {
-        const result = await executeTool(supabase, userId, toolName, toolArgs);
+        const result = await executeTool(supabase, userId, toolName, toolArgs, sessionId);
         return {
           content: [{ type: "text", text: result }],
         };
@@ -271,10 +272,13 @@ Deno.serve(async (req: Request) => {
   const id = rpcRequest.id ?? null;
   const params = rpcRequest.params || {};
 
+  // Extract session ID from request header (client echoes it back after initialize)
+  const sessionId = req.headers.get("Mcp-Session-Id") || null;
+
   // Notifications (no id) get 202 Accepted per spec
   if (id === null || id === undefined) {
     try {
-      await handleMcpMethod(rpcRequest.method, params, userId, supabase);
+      await handleMcpMethod(rpcRequest.method, params, userId, supabase, sessionId);
     } catch {
       // Notifications don't get error responses
     }
@@ -294,7 +298,8 @@ Deno.serve(async (req: Request) => {
       rpcRequest.method,
       params,
       userId,
-      supabase
+      supabase,
+      sessionId
     );
     return jsonRpcResponse(id, result, req, extraHeaders);
   } catch (err) {

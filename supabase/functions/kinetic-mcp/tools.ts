@@ -446,10 +446,40 @@ export async function assembleContext(
   supabase: SupabaseClient,
   userId: string,
   slug: string,
-  query: string
+  query: string,
+  sessionId: string | null = null
 ): Promise<string> {
+  const startTime = Date.now();
+  let topLevelError: string | null = null;
+
   // Single agent resolution (eliminates 3 redundant lookups)
-  const agent = await resolveAgent(supabase, userId, slug);
+  let agent: ResolvedAgent;
+  try {
+    agent = await resolveAgent(supabase, userId, slug);
+  } catch (err) {
+    topLevelError = err instanceof Error ? err.message : String(err);
+    // Log the failed invocation
+    const logRow = {
+      user_id: userId,
+      agent_definition_id: null,
+      agent_instance_id: null,
+      query,
+      agent_slug: slug,
+      context_payload: null,
+      layer_persona: null,
+      layer_memory: null,
+      layer_framework: null,
+      layer_kb: null,
+      layer_status: { persona: "error", memory: "error", framework: "error", kb: "error" },
+      latency_ms: Date.now() - startTime,
+      embedding_latency_ms: null,
+      token_count_estimate: null,
+      error: topLevelError,
+      mcp_session_id: sessionId,
+    };
+    fireAndForgetLog(supabase, logRow);
+    throw err;
+  }
 
   // --- Persona: already available from resolveAgent ---
   const persona = agent.instructions
@@ -459,11 +489,13 @@ export async function assembleContext(
   // --- Single embedding call (eliminates redundant OpenAI request) ---
   let queryEmbedding: number[] | null = null;
   let embeddingError: string | null = null;
+  const embeddingStart = Date.now();
   try {
     queryEmbedding = await embedQuery(supabase, userId, query);
   } catch (err) {
     embeddingError = err instanceof Error ? err.message : "Error: Embedding failed";
   }
+  const embeddingLatency = queryEmbedding ? Date.now() - embeddingStart : null;
 
   // --- Fan out: memory + framework + KB in parallel via Promise.allSettled ---
   const [memoryResult, frameworkResult, kbResult] = await Promise.allSettled([
@@ -488,24 +520,92 @@ export async function assembleContext(
   }
 
   // Active Memory
-  const memory = memoryResult.status === "fulfilled"
+  const memoryText = memoryResult.status === "fulfilled"
     ? memoryResult.value
     : "No active memories";
-  sections.push("## Active Memory\n\n" + memory);
+  sections.push("## Active Memory\n\n" + memoryText);
 
   // Framework
-  const framework = frameworkResult.status === "fulfilled"
+  const frameworkText = frameworkResult.status === "fulfilled"
     ? frameworkResult.value
     : "No matching framework found";
-  sections.push("## Framework\n\n" + framework);
+  sections.push("## Framework\n\n" + frameworkText);
 
   // Knowledge Base
-  const kb = kbResult.status === "fulfilled"
+  const kbText = kbResult.status === "fulfilled"
     ? kbResult.value
     : "No relevant knowledge base entries found";
-  sections.push("## Knowledge Base\n\n" + kb);
+  sections.push("## Knowledge Base\n\n" + kbText);
 
-  return sections.join("\n\n---\n\n");
+  const result = sections.join("\n\n---\n\n");
+
+  // --- Build layer_status and fire-and-forget log ---
+  const layerStatus = {
+    persona: persona ? "ok" : "empty",
+    memory: getLayerStatus(memoryResult, !queryEmbedding, "No active memories"),
+    framework: getLayerStatus(frameworkResult, !queryEmbedding, "No matching framework found"),
+    kb: getLayerStatus(kbResult, !queryEmbedding, "No relevant knowledge base entries found"),
+  };
+
+  const logRow = {
+    user_id: userId,
+    agent_definition_id: agent.definitionId,
+    agent_instance_id: agent.instanceId,
+    query,
+    agent_slug: slug,
+    context_payload: result,
+    layer_persona: persona || null,
+    layer_memory: memoryText !== "No active memories" ? memoryText : null,
+    layer_framework: frameworkText !== "No matching framework found" ? frameworkText : null,
+    layer_kb: kbText !== "No relevant knowledge base entries found" ? kbText : null,
+    layer_status: layerStatus,
+    latency_ms: Date.now() - startTime,
+    embedding_latency_ms: embeddingLatency,
+    token_count_estimate: null,
+    error: topLevelError,
+    mcp_session_id: sessionId,
+  };
+  fireAndForgetLog(supabase, logRow);
+
+  return result;
+}
+
+/**
+ * Determine layer status from a Promise.allSettled result.
+ */
+function getLayerStatus(
+  result: PromiseSettledResult<string>,
+  embeddingFailed: boolean,
+  emptyMarker: string
+): string {
+  if (result.status === "rejected") return "error";
+  if (embeddingFailed && (result.value.includes("skipping") || result.value.includes("No embedding"))) return "skipped";
+  if (result.value === emptyMarker || result.value.includes("No ") || result.value.includes("Proceeding without")) return "empty";
+  return "ok";
+}
+
+/**
+ * Fire-and-forget log write to messages_mcp.
+ * Uses EdgeRuntime.waitUntil to keep the promise alive after response.
+ */
+function fireAndForgetLog(
+  supabase: SupabaseClient,
+  logRow: Record<string, unknown>
+): void {
+  const logPromise = supabase
+    .from("messages_mcp")
+    .insert(logRow)
+    .then(() => {})
+    .catch((err: Error) => console.warn("MCP log write failed:", err));
+
+  if (typeof (globalThis as Record<string, unknown>).EdgeRuntime !== "undefined") {
+    try {
+      (globalThis as Record<string, unknown> & { EdgeRuntime: { waitUntil: (p: Promise<void>) => void } })
+        .EdgeRuntime.waitUntil(logPromise);
+    } catch {
+      // Fallback: dangling promise
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -796,7 +896,8 @@ export async function executeTool(
   supabase: SupabaseClient,
   userId: string,
   toolName: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
+  sessionId: string | null = null
 ): Promise<string> {
   // Validate required 'agent' param for agent-scoped tools
   const agentTools = [
@@ -842,7 +943,8 @@ export async function executeTool(
         supabase,
         userId,
         args.agent as string,
-        args.query as string
+        args.query as string,
+        sessionId
       );
     default:
       return `Error: Unknown tool '${toolName}'`;

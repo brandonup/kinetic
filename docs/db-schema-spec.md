@@ -485,7 +485,8 @@ Queued AI-generated memory proposals awaiting user review.
 |---|---|---|---|
 | `id` | `uuid` | `PK DEFAULT gen_random_uuid()` | |
 | `user_id` | `uuid` | `NOT NULL REFERENCES users(id) ON DELETE CASCADE` | |
-| `conversation_id` | `uuid` | `NOT NULL REFERENCES conversations(id) ON DELETE CASCADE` | Source conversation |
+| `conversation_id` | `uuid` | `REFERENCES conversations(id) ON DELETE CASCADE` | Source conversation (nullable — null for MCP-sourced proposals) |
+| `mcp_message_id` | `uuid` | `REFERENCES messages_mcp(id) ON DELETE CASCADE` | Source MCP invocation (nullable — null for conversation-sourced proposals) |
 | `project_id` | `uuid` | `REFERENCES projects(id) ON DELETE CASCADE` | Target scope (nullable) |
 | `agent_instance_id` | `uuid` | `REFERENCES agent_instances(id) ON DELETE CASCADE` | Target scope (nullable) |
 | `proposed_content` | `text` | `NOT NULL` | |
@@ -493,6 +494,9 @@ Queued AI-generated memory proposals awaiting user review.
 | `trigger_type` | `proposal_trigger` | `NOT NULL` | conversation_end or periodic |
 | `created_at` | `timestamptz` | `NOT NULL DEFAULT now()` | |
 | `reviewed_at` | `timestamptz` | | When user acted on it |
+
+**Constraints:**
+- `chk_memory_proposals_source`: `CHECK (conversation_id IS NOT NULL OR mcp_message_id IS NOT NULL)` — every proposal must have a source
 
 **Indexes:**
 - `idx_memory_proposals_pending` on `(user_id, project_id)` WHERE `status = 'pending'`
@@ -599,6 +603,43 @@ Per-user daily request counter for MCP rate limiting.
 
 **RLS:**
 - SELECT/INSERT/UPDATE: service role only (MCP server operates with service key)
+
+---
+
+### 22. `messages_mcp`
+
+MCP invocation logs. One row per `assemble_context` call. Append-only — no `updated_at`, no soft-delete.
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| `id` | `uuid` | `PK DEFAULT gen_random_uuid()` | |
+| `user_id` | `uuid` | `NOT NULL REFERENCES users(id) ON DELETE CASCADE` | From MCP token auth |
+| `agent_definition_id` | `uuid` | `REFERENCES agent_definitions(id) ON DELETE CASCADE` | Resolved from slug (null if resolution failed) |
+| `agent_instance_id` | `uuid` | `REFERENCES agent_instances(id) ON DELETE CASCADE` | Per-user agent instance (null if resolution failed) |
+| `query` | `text` | `NOT NULL` | User's original question |
+| `agent_slug` | `text` | `NOT NULL` | Agent slug used (denormalized for admin readability) |
+| `context_payload` | `text` | | Full assembled response sent to client |
+| `layer_persona` | `text` | | Persona text returned, or null if empty/failed |
+| `layer_memory` | `text` | | Active memory text returned, or null if empty |
+| `layer_framework` | `text` | | Framework text returned, or null if no match |
+| `layer_kb` | `text` | | KB search results returned, or null if no match |
+| `layer_status` | `jsonb` | `NOT NULL` | Per-layer status: `"ok"`, `"empty"`, `"error"`, `"skipped"` |
+| `latency_ms` | `int` | | Total wall-clock time for assemble_context in ms |
+| `embedding_latency_ms` | `int` | | OpenAI embedding call latency in ms (null if skipped) |
+| `token_count_estimate` | `int` | | Estimated token count of context_payload (nullable) |
+| `error` | `text` | | Top-level error message if invocation failed |
+| `mcp_session_id` | `text` | | Mcp-Session-Id header value (nullable) |
+| `created_at` | `timestamptz` | `NOT NULL DEFAULT now()` | |
+
+**Indexes:**
+- `idx_messages_mcp_user` on `(user_id)` — admin queries by user
+- `idx_messages_mcp_agent_instance` on `(agent_instance_id)` — memory extraction scoped to agent
+- `idx_messages_mcp_created` on `(created_at)` — time-range admin queries
+
+**RLS:**
+- SELECT: `auth.uid() = user_id` (user can see their own MCP history)
+- INSERT: open (service role writes via Edge Function)
+- UPDATE/DELETE: denied (append-only)
 
 ---
 

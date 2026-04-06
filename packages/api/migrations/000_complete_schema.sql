@@ -367,14 +367,16 @@ DO $$ BEGIN CREATE POLICY "active_memory_entries_delete_own" ON public.active_me
 CREATE TABLE IF NOT EXISTS public.memory_proposals (
   id                 uuid             NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id            uuid             NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
-  conversation_id    uuid             NOT NULL REFERENCES public.conversations(id) ON DELETE CASCADE,
+  conversation_id    uuid             REFERENCES public.conversations(id) ON DELETE CASCADE,
+  mcp_message_id     uuid             REFERENCES public.messages_mcp(id) ON DELETE CASCADE,
   project_id         uuid             REFERENCES public.projects(id) ON DELETE CASCADE,
   agent_instance_id  uuid             REFERENCES public.agent_instances(id) ON DELETE CASCADE,
   proposed_content   text             NOT NULL,
   status             proposal_status  NOT NULL DEFAULT 'pending',
   trigger_type       proposal_trigger NOT NULL,
   created_at         timestamptz      NOT NULL DEFAULT now(),
-  reviewed_at        timestamptz
+  reviewed_at        timestamptz,
+  CONSTRAINT chk_memory_proposals_source CHECK (conversation_id IS NOT NULL OR mcp_message_id IS NOT NULL)
 );
 CREATE INDEX IF NOT EXISTS idx_memory_proposals_pending ON public.memory_proposals (user_id, project_id) WHERE status = 'pending';
 CREATE INDEX IF NOT EXISTS idx_memory_proposals_agent_pending ON public.memory_proposals (user_id, agent_instance_id) WHERE status = 'pending';
@@ -417,7 +419,37 @@ DO $$ BEGIN CREATE POLICY "mcp_rate_limits_insert_deny" ON public.mcp_rate_limit
 DO $$ BEGIN CREATE POLICY "mcp_rate_limits_update_deny" ON public.mcp_rate_limits FOR UPDATE USING (false); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "mcp_rate_limits_delete_deny" ON public.mcp_rate_limits FOR DELETE USING (false); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
--- 4.17 retrieval_debug_logs (append-only)
+-- 4.17 messages_mcp (append-only — no updated_at, no soft-delete)
+CREATE TABLE IF NOT EXISTS public.messages_mcp (
+  id                    uuid        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id               uuid        NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  agent_definition_id   uuid        REFERENCES public.agent_definitions(id) ON DELETE CASCADE,
+  agent_instance_id     uuid        REFERENCES public.agent_instances(id) ON DELETE CASCADE,
+  query                 text        NOT NULL,
+  agent_slug            text        NOT NULL,
+  context_payload       text,
+  layer_persona         text,
+  layer_memory          text,
+  layer_framework       text,
+  layer_kb              text,
+  layer_status          jsonb       NOT NULL,
+  latency_ms            int,
+  embedding_latency_ms  int,
+  token_count_estimate  int,
+  error                 text,
+  mcp_session_id        text,
+  created_at            timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_messages_mcp_user ON public.messages_mcp (user_id);
+CREATE INDEX IF NOT EXISTS idx_messages_mcp_agent_instance ON public.messages_mcp (agent_instance_id);
+CREATE INDEX IF NOT EXISTS idx_messages_mcp_created ON public.messages_mcp (created_at);
+ALTER TABLE public.messages_mcp ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN CREATE POLICY "messages_mcp_select_own" ON public.messages_mcp FOR SELECT USING (auth.uid() = user_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "messages_mcp_insert_service" ON public.messages_mcp FOR INSERT WITH CHECK (true); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "messages_mcp_update_deny" ON public.messages_mcp FOR UPDATE USING (false); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN CREATE POLICY "messages_mcp_delete_deny" ON public.messages_mcp FOR DELETE USING (false); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- 4.18 retrieval_debug_logs (append-only)
 CREATE TABLE IF NOT EXISTS public.retrieval_debug_logs (
   id              uuid        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   message_id      uuid        NOT NULL REFERENCES public.messages(id) ON DELETE CASCADE,
@@ -437,7 +469,7 @@ ALTER TABLE public.retrieval_debug_logs ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN CREATE POLICY "admin_select_retrieval_debug_logs" ON public.retrieval_debug_logs FOR SELECT USING (EXISTS (SELECT 1 FROM public.users u WHERE u.id = auth.uid() AND u.role = 'admin')); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "deny_user_insert_retrieval_debug_logs" ON public.retrieval_debug_logs FOR INSERT WITH CHECK (false); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
--- 4.18 knowledge_bases
+-- 4.19 knowledge_bases
 CREATE TABLE IF NOT EXISTS public.knowledge_bases (
   id                    uuid        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   project_id            uuid        REFERENCES public.projects(id) ON DELETE CASCADE,
@@ -457,7 +489,7 @@ DO $$ BEGIN CREATE POLICY "kb_insert" ON public.knowledge_bases FOR INSERT WITH 
 DO $$ BEGIN CREATE POLICY "kb_update" ON public.knowledge_bases FOR UPDATE USING (auth.uid() = user_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "kb_delete" ON public.knowledge_bases FOR DELETE USING (auth.uid() = user_id); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
--- 4.19 knowledge_base_folders
+-- 4.20 knowledge_base_folders
 CREATE TABLE IF NOT EXISTS public.knowledge_base_folders (
   id                uuid        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   knowledge_base_id uuid        NOT NULL REFERENCES public.knowledge_bases(id) ON DELETE CASCADE,
@@ -472,7 +504,7 @@ DO $$ BEGIN CREATE POLICY "kb_folders_insert" ON public.knowledge_base_folders F
 DO $$ BEGIN CREATE POLICY "kb_folders_update" ON public.knowledge_base_folders FOR UPDATE USING (knowledge_base_id IN (SELECT id FROM public.knowledge_bases WHERE auth.uid() = user_id)); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "kb_folders_delete" ON public.knowledge_base_folders FOR DELETE USING (knowledge_base_id IN (SELECT id FROM public.knowledge_bases WHERE auth.uid() = user_id)); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
--- 4.20 knowledge_base_documents
+-- 4.21 knowledge_base_documents
 CREATE TABLE IF NOT EXISTS public.knowledge_base_documents (
   id                uuid            NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   knowledge_base_id uuid            NOT NULL REFERENCES public.knowledge_bases(id) ON DELETE CASCADE,
@@ -503,7 +535,7 @@ DO $$ BEGIN CREATE POLICY "kb_docs_insert" ON public.knowledge_base_documents FO
 DO $$ BEGIN CREATE POLICY "kb_docs_update" ON public.knowledge_base_documents FOR UPDATE USING (knowledge_base_id IN (SELECT id FROM public.knowledge_bases WHERE auth.uid() = user_id)); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "kb_docs_delete" ON public.knowledge_base_documents FOR DELETE USING (knowledge_base_id IN (SELECT id FROM public.knowledge_bases WHERE auth.uid() = user_id)); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
--- 4.21 knowledge_base_chunks
+-- 4.22 knowledge_base_chunks
 CREATE TABLE IF NOT EXISTS public.knowledge_base_chunks (
   id                    uuid        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   document_id           uuid        NOT NULL REFERENCES public.knowledge_base_documents(id) ON DELETE CASCADE,
