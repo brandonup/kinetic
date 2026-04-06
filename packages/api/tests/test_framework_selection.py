@@ -378,15 +378,17 @@ class TestBuildEnrichedQuery:
         assert build_enriched_query("query", ctx) == "query"
 
     def test_full_context_all_fields(self):
-        """All fields present → all lines prepended."""
+        """All fields present → all lines prepended in order."""
         ctx = QueryContext(
+            agent_name="Nate",
             company_name="Acme Corp",
             company_description="B2B SaaS, 50 employees, Series A",
             user_bio="Product manager with 10 years in fintech",
             project_name="Q2 Launch",
         )
         result = build_enriched_query("How should I price this?", ctx)
-        assert result.startswith("[Company: Acme Corp")
+        assert result.startswith("[Agent: Nate]")  # Agent first
+        assert "[Company: Acme Corp" in result
         assert "B2B SaaS" in result
         assert "[User: Product manager" in result
         assert "[Project: Q2 Launch]" in result
@@ -413,6 +415,26 @@ class TestBuildEnrichedQuery:
         ctx = QueryContext(project_name="AI Rollout")
         result = build_enriched_query("query", ctx)
         assert "[Project: AI Rollout]" in result
+
+    def test_agent_name_only(self):
+        """Only agent name → single line prepended."""
+        ctx = QueryContext(agent_name="Nate")
+        result = build_enriched_query("query", ctx)
+        assert "[Agent: Nate]" in result
+        assert "[Company:" not in result
+        assert result.endswith("query")
+
+    def test_agent_comes_first(self):
+        """Agent line always appears before other context lines."""
+        ctx = QueryContext(
+            agent_name="Nate",
+            company_name="Acme",
+            user_bio="CEO",
+        )
+        result = build_enriched_query("query", ctx)
+        lines = result.split("\n")
+        assert lines[0] == "[Agent: Nate]"
+        assert "[Company: Acme]" in lines[1]
 
     def test_company_name_without_description(self):
         """Company name but no description → no dash suffix."""

@@ -389,6 +389,7 @@ async def retrieve(
     mmr_lambda: float = MMR_LAMBDA,
     similarity_threshold: float = SIMILARITY_THRESHOLD,
     debug_ctx: "RetrievalDebugContext | None" = None,
+    context: "QueryContext | None" = None,
 ) -> List[RetrievedChunk]:
     """
     Run the full MVP RAG retrieval pipeline for one scope.
@@ -412,6 +413,9 @@ async def retrieve(
         debug_ctx: Optional RetrievalDebugContext for timing instrumentation.
             When provided, each stage records wall-clock timing. When None
             (default), no timing overhead. Existing callers are unaffected.
+        context: Optional QueryContext for embedding enrichment (KIN-450).
+            When provided, context is prepended to query before embedding.
+            Does NOT affect MMR (MMR compares chunk-to-chunk).
 
     Returns:
         List of RetrievedChunk objects ordered by MMR score (best first).
@@ -427,13 +431,17 @@ async def retrieve(
     if scope_id is None:
         raise ValueError("scope_id must not be null — pass a valid project/agent UUID.")
 
-    # --- Step 1: Embed query ---
+    # --- Step 1: Enrich query with context, then embed (KIN-450) ---
+    from app.services.rag.framework_selection import build_enriched_query
+
+    enriched_query = build_enriched_query(query_text, context)
+
     embedder = _get_embedder(api_key=openai_key)
     loop = asyncio.get_running_loop()
     try:
         _t = debug_ctx.start_step("embed") if debug_ctx else None
         query_embeddings: List[List[float]] = await loop.run_in_executor(
-            None, lambda: embedder.embed_batch([query_text])
+            None, lambda: embedder.embed_batch([enriched_query])
         )
         if _t:
             _t.stop()

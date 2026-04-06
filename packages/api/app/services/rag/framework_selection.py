@@ -42,24 +42,27 @@ MAX_CONTEXT_PREFIX_CHARS = 200    # ~50 tokens; hard cap to avoid diluting query
 class QueryContext:
     """Optional context for embedding enrichment.
 
-    Fields mirror L1 (user), L2 (company), L3 (project) data available
-    at query time. Null/empty fields are skipped in the prefix.
+    Fields mirror L1 (user), L2 (company), L3 (project), L5 (agent)
+    data available at query time. Null/empty fields are skipped.
     """
-    company_name: Optional[str] = None
-    company_description: Optional[str] = None
-    user_bio: Optional[str] = None
-    project_name: Optional[str] = None
+    agent_name: Optional[str] = None       # L5 — strongest scoping signal for KB
+    company_name: Optional[str] = None     # L2
+    company_description: Optional[str] = None  # L2
+    user_bio: Optional[str] = None         # L1
+    project_name: Optional[str] = None     # L3
 
 
 def build_enriched_query(query: str, context: QueryContext | None = None) -> str:
-    """Prepend available L1/L2/L3 context to query before embedding.
+    """Prepend available context to query before embedding.
 
     Template (fields skipped if null/empty):
+        [Agent: {name}]
         [Company: {name} — {description_excerpt}]
         [User: {bio_excerpt}]
         [Project: {name}]
         {original_query}
 
+    Agent goes first — strongest scoping signal for KB retrieval (KIN-450).
     Keeps prefix under MAX_CONTEXT_PREFIX_CHARS (~50 tokens) to avoid
     diluting the query signal.
     """
@@ -67,6 +70,10 @@ def build_enriched_query(query: str, context: QueryContext | None = None) -> str
         return query
 
     parts: list[str] = []
+
+    # Agent first — strongest scope signal for KB (KIN-450)
+    if context.agent_name:
+        parts.append(f"[Agent: {context.agent_name}]")
 
     if context.company_name:
         line = f"[Company: {context.company_name}"

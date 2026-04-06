@@ -63,11 +63,12 @@ class AssembledContext:
     model_context_window: int = 100_000
     conversation_history: list[dict] = field(default_factory=list)
     rag_debug_contexts: list[tuple] = field(default_factory=list)
-    # Structured context for query enrichment (KIN-447)
+    # Structured context for query enrichment (KIN-447, KIN-450)
     _company_name: str | None = None
     _company_description: str | None = None
     _user_bio: str | None = None
     _project_name: str | None = None
+    _agent_name: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -312,6 +313,7 @@ class ContextAssembler:
             return
 
         name = agent_res.data["name"]
+        ctx._agent_name = name  # KIN-450: for query enrichment
         instructions = agent_res.data.get("instructions")
         if instructions:
             ctx.system_parts.append(f"[Agent: {name}]\n{instructions}")
@@ -476,7 +478,17 @@ class ContextAssembler:
     ) -> None:
         """L8 (Project KB) + L9 (Agent KB): RAG retrieval via retrieve()."""
         from app.services.rag.debug_context import RetrievalDebugContext
+        from app.services.rag.framework_selection import QueryContext
         from app.services.rag.retrieval import RetrievalScope, retrieve
+
+        # Build query context from L1/L2/L3/L5 for enrichment (KIN-450)
+        query_context = QueryContext(
+            agent_name=ctx._agent_name,
+            company_name=ctx._company_name,
+            company_description=ctx._company_description,
+            user_bio=ctx._user_bio,
+            project_name=ctx._project_name,
+        )
 
         all_chunks = []
 
@@ -492,6 +504,7 @@ class ContextAssembler:
                     openai_key=openai_key,
                     model_context_window=model_context_window,
                     debug_ctx=debug_ctx,
+                    context=query_context,
                 )
                 all_chunks.extend(chunks)
             except Exception as exc:
@@ -512,6 +525,7 @@ class ContextAssembler:
                     openai_key=openai_key,
                     model_context_window=model_context_window,
                     debug_ctx=debug_ctx,
+                    context=query_context,
                 )
                 all_chunks.extend(chunks)
             except Exception as exc:

@@ -33,20 +33,27 @@ const KB_TOP_K = 8;
 const MAX_CONTEXT_PREFIX_CHARS = 200;
 
 interface QueryContextFields {
-  companyName?: string | null;
-  companyDescription?: string | null;
-  userBio?: string | null;
-  projectName?: string | null;
+  agentName?: string | null;     // L5 — strongest scoping signal for KB
+  companyName?: string | null;   // L2
+  companyDescription?: string | null; // L2
+  userBio?: string | null;       // L1
+  projectName?: string | null;   // L3
 }
 
 /**
- * Prepend available L1/L2/L3 context to the query before embedding.
+ * Prepend available context to the query before embedding.
  * Template must match Python build_enriched_query() exactly.
+ * Agent goes first — strongest scoping signal for KB retrieval (KIN-450).
  */
 function buildEnrichedQuery(query: string, ctx?: QueryContextFields | null): string {
   if (!ctx) return query;
 
   const parts: string[] = [];
+
+  // Agent first — strongest scope signal for KB (KIN-450)
+  if (ctx.agentName) {
+    parts.push(`[Agent: ${ctx.agentName}]`);
+  }
 
   if (ctx.companyName) {
     let line = `[Company: ${ctx.companyName}`;
@@ -344,8 +351,9 @@ export async function selectFramework(
     return "No framework library configured for this agent. Proceeding without framework guidance.";
   }
 
-  // Fetch user/company/project context for query enrichment (KIN-447)
+  // Fetch user/company/project context for query enrichment (KIN-447, KIN-450)
   const queryCtx = await fetchQueryContext(supabase, userId);
+  queryCtx.agentName = agent.name;  // L5: agent scope signal
 
   // Embed the enriched query (uses user's BYOK OpenAI key)
   const enrichedQuery = buildEnrichedQuery(query, queryCtx);
@@ -477,10 +485,15 @@ export async function searchKnowledgeBase(
     return "No knowledge base configured for this agent. Proceeding without KB context.";
   }
 
-  // Embed the query
+  // Fetch user/company context + add agent name for query enrichment (KIN-450)
+  const queryCtx = await fetchQueryContext(supabase, userId);
+  queryCtx.agentName = agent.name;
+
+  // Embed the enriched query
+  const enrichedQuery = buildEnrichedQuery(query, queryCtx);
   let queryEmbedding: number[];
   try {
-    queryEmbedding = await embedQuery(supabase, userId, query);
+    queryEmbedding = await embedQuery(supabase, userId, enrichedQuery);
   } catch (err) {
     if (err instanceof Error) return err.message;
     return "Error: Embedding failed";
@@ -590,8 +603,9 @@ export async function assembleContext(
     ? `# ${agent.name}\n\n${agent.instructions}`
     : "";
 
-  // --- Fetch context for query enrichment (KIN-447) ---
+  // --- Fetch context for query enrichment (KIN-447, KIN-450) ---
   const queryCtx = await fetchQueryContext(supabase, userId);
+  queryCtx.agentName = agent.name;  // L5: strongest scope signal for KB
 
   // --- Single embedding call with enriched query (eliminates redundant OpenAI request) ---
   const enrichedCtxQuery = buildEnrichedQuery(query, queryCtx);
