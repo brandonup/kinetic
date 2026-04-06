@@ -155,18 +155,23 @@ class ContextAssembler:
                     "No OpenAI BYOK key for user %s — skipping L7/L8/L9", user_id
                 )
 
-        # L7: Framework selection (if active_agent_id + OpenAI key)
+        # L7 + L8/L9: Run in parallel (both need OpenAI key, both fail-open)
         if active_agent_id and openai_key:
-            await self._assemble_framework(
+            framework_task = self._assemble_framework(
                 supabase, active_agent_id, user_id, query_text, openai_key, ctx
             )
+        else:
+            framework_task = asyncio.sleep(0)  # no-op
 
-        # L8-L9: RAG retrieval (if OpenAI key)
         if openai_key:
-            await self._assemble_rag(
+            rag_task = self._assemble_rag(
                 supabase, query_text, project_id, active_agent_id,
                 openai_key, model_context_window, ctx,
             )
+        else:
+            rag_task = asyncio.sleep(0)  # no-op
+
+        await asyncio.gather(framework_task, rag_task)
 
         # Conversation history (messages + optional summary)
         await self._assemble_conversation_history(loop, supabase, conversation_id, ctx)
@@ -424,9 +429,17 @@ class ContextAssembler:
                 excluded_ids=excluded if excluded else None,
             )
             if match.framework_text:
-                ctx.system_parts.append(
-                    f"[Framework: {match.matched_framework_name}]\n{match.framework_text}"
-                )
+                if match.high_confidence:
+                    ctx.system_parts.append(
+                        f"[Framework: {match.matched_framework_name}]\n{match.framework_text}"
+                    )
+                else:
+                    ctx.system_parts.append(
+                        f"[Framework: {match.matched_framework_name} (moderate confidence match)]\n"
+                        "This framework was matched with moderate confidence. Apply it only if it\n"
+                        "directly addresses the user's question. If it seems tangential, ignore it\n"
+                        f"and reason without a framework.\n\n{match.framework_text}"
+                    )
         except Exception as exc:
             logger.warning("L7 framework selection failed — skipping: %s", exc)
 

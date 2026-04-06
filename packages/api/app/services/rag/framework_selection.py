@@ -26,7 +26,8 @@ logger = logging.getLogger(__name__)
 
 FRAMEWORK_TRIGGER_TOP_K = 20      # candidates from vector search
 FRAMEWORK_TOP_K = 5               # after grouping, before reranker
-FRAMEWORK_MIN_SIMILARITY = 0.55   # confidence gate
+FRAMEWORK_MIN_SIMILARITY = 0.62   # confidence gate (below = no match)
+HIGH_CONFIDENCE_THRESHOLD = 0.75  # above = inject normally; between MIN and this = caveat
 MULTI_TRIGGER_BOOST = 0.05        # boost per additional trigger match
 
 
@@ -40,6 +41,8 @@ class FrameworkMatch:
     matched_framework_id: Optional[str]
     matched_framework_name: Optional[str]
     framework_text: Optional[str]    # Full framework assembled as L7 context
+    confidence_score: float = 0.0
+    high_confidence: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -180,7 +183,8 @@ async def select_framework(
 
         # Step 4: Confidence gate (skip Haiku reranker for MVP — use boosted score)
         top_fid, top_scores = ranked[0]
-        if top_scores["boosted_score"] < FRAMEWORK_MIN_SIMILARITY:
+        boosted = top_scores["boosted_score"]
+        if boosted < FRAMEWORK_MIN_SIMILARITY:
             return no_match
 
         # Fetch the winning framework
@@ -203,6 +207,8 @@ async def select_framework(
             matched_framework_id=fw["id"],
             matched_framework_name=fw["name"],
             framework_text=framework_text,
+            confidence_score=boosted,
+            high_confidence=boosted >= HIGH_CONFIDENCE_THRESHOLD,
         )
 
     except Exception:

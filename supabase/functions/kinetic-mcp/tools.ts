@@ -17,8 +17,14 @@ import { embedQuery } from "./embedding.ts";
 // ---------------------------------------------------------------------------
 
 const FRAMEWORK_TRIGGER_TOP_K = 20;
-const FRAMEWORK_MIN_SIMILARITY = 0.55;
+const FRAMEWORK_MIN_SIMILARITY = 0.62;
+const HIGH_CONFIDENCE_THRESHOLD = 0.75;
 const MULTI_TRIGGER_BOOST = 0.05;
+
+const MODERATE_CONFIDENCE_CAVEAT =
+  "This framework was matched with moderate confidence. Apply it only if it\n" +
+  "directly addresses the user's question. If it seems tangential, ignore it\n" +
+  "and reason without a framework.";
 const KB_MATCH_COUNT = 20;
 const KB_SIMILARITY_THRESHOLD = 0.3;
 const KB_TOP_K = 8;
@@ -227,7 +233,7 @@ export async function getActiveMemory(
 
 /**
  * Select the best-matching framework for a query using embedding similarity.
- * Multi-trigger boost + confidence gate at 0.55.
+ * Multi-trigger boost + confidence gate at 0.62, caveat for 0.62–0.75 band.
  */
 export async function selectFramework(
   supabase: SupabaseClient,
@@ -307,7 +313,11 @@ export async function selectFramework(
     return "No matching framework found";
   }
 
-  return assembleFrameworkText(fw);
+  const text = assembleFrameworkText(fw);
+  if (topScore < HIGH_CONFIDENCE_THRESHOLD) {
+    return `[Framework: ${fw.name} (moderate confidence match)]\n${MODERATE_CONFIDENCE_CAVEAT}\n\n${text}`;
+  }
+  return text;
 }
 
 function assembleFrameworkText(fw: Record<string, unknown>): string {
@@ -711,7 +721,11 @@ async function fetchFramework(
     return "No matching framework found";
   }
 
-  return assembleFrameworkText(fw);
+  const text = assembleFrameworkText(fw);
+  if (topScore < HIGH_CONFIDENCE_THRESHOLD) {
+    return `[Framework: ${fw.name} (moderate confidence match)]\n${MODERATE_CONFIDENCE_CAVEAT}\n\n${text}`;
+  }
+  return text;
 }
 
 /**

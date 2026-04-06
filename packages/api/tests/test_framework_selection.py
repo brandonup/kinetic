@@ -15,6 +15,7 @@ import pytest
 
 from app.services.rag.framework_selection import (
     FRAMEWORK_MIN_SIMILARITY,
+    HIGH_CONFIDENCE_THRESHOLD,
     MULTI_TRIGGER_BOOST,
     FrameworkMatch,
     fetch_pinned_frameworks,
@@ -126,15 +127,15 @@ class TestFrameworkSelectionMatch:
 
     def test_multi_trigger_boost_pushes_over_threshold(self):
         """Two triggers just below threshold → boost pushes above."""
-        # Single trigger at 0.52 is below 0.55. Two triggers add 0.05 boost → 0.57.
+        # Single trigger at 0.59 is below 0.62. Two triggers add 0.05 boost → 0.64.
         triggers = [
-            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.52, "trigger_text": "trigger a"},
-            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.50, "trigger_text": "trigger b"},
+            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.59, "trigger_text": "trigger a"},
+            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.55, "trigger_text": "trigger b"},
         ]
         mock_db = _mock_supabase(triggers=triggers)
         with patch(EMBED_PATCH, return_value=_mock_embedder()):
             result = _run(select_framework("test query", AGENT_ID, mock_db))
-        # max_sim=0.52 + 1 extra trigger * 0.05 = 0.57 > 0.55
+        # max_sim=0.59 + 1 extra trigger * 0.05 = 0.64 > 0.62
         assert result.matched_framework_id == FRAMEWORK_ID
 
     def test_highest_score_framework_wins(self):
@@ -150,6 +151,46 @@ class TestFrameworkSelectionMatch:
         # other_id has 0.8 > FRAMEWORK_ID's 0.6, but mock returns FRAMEWORK_ROW for all
         # The important assertion: a match is returned (highest score wins)
         assert result.matched_framework_id is not None
+
+
+class TestConfidenceBands:
+    """KIN-445: confidence_score and high_confidence fields."""
+
+    def test_high_confidence_above_threshold(self):
+        """Score >= 0.75 → high_confidence=True."""
+        triggers = [
+            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.8, "trigger_text": "strong match"},
+        ]
+        mock_db = _mock_supabase(triggers=triggers)
+        with patch(EMBED_PATCH, return_value=_mock_embedder()):
+            result = _run(select_framework("test query", AGENT_ID, mock_db))
+        assert result.matched_framework_id == FRAMEWORK_ID
+        assert result.high_confidence is True
+        assert result.confidence_score >= HIGH_CONFIDENCE_THRESHOLD
+
+    def test_moderate_confidence_in_maybe_band(self):
+        """Score 0.62–0.75 → high_confidence=False."""
+        triggers = [
+            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.68, "trigger_text": "moderate match"},
+        ]
+        mock_db = _mock_supabase(triggers=triggers)
+        with patch(EMBED_PATCH, return_value=_mock_embedder()):
+            result = _run(select_framework("test query", AGENT_ID, mock_db))
+        assert result.matched_framework_id == FRAMEWORK_ID
+        assert result.high_confidence is False
+        assert FRAMEWORK_MIN_SIMILARITY <= result.confidence_score < HIGH_CONFIDENCE_THRESHOLD
+
+    def test_no_match_below_gate(self):
+        """Score < 0.62 → no match, defaults."""
+        triggers = [
+            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.5, "trigger_text": "weak match"},
+        ]
+        mock_db = _mock_supabase(triggers=triggers)
+        with patch(EMBED_PATCH, return_value=_mock_embedder()):
+            result = _run(select_framework("test query", AGENT_ID, mock_db))
+        assert result.matched_framework_id is None
+        assert result.confidence_score == 0.0
+        assert result.high_confidence is True  # default
 
 
 class TestFrameworkSelectionTextAssembly:
