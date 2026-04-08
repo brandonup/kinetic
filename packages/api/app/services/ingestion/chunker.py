@@ -1,51 +1,46 @@
 """
-Fixed-size token-based chunker.
+Fixed-size word-based chunker.
 
-Target: ~500 tokens per chunk, ~50 token overlap.
-Encoding: cl100k_base (tiktoken) — same encoder used by text-embedding-3-large.
+Target: ~375 words per chunk (~500 tokens), ~75 word overlap (~100 tokens).
+Tokenizer: local word-count approximation (~1.33 tokens/word).
+
+KIN-467: replaced tiktoken cl100k_base with word-count proxy to avoid
+dependency on OpenAI's tokenizer. Gemini uses SentencePiece — no local
+tokenizer available, and the API count_tokens() call is too slow for
+the chunker loop (dozens of calls per document).
 
 Strategy:
   1. Split on double-newline paragraph boundaries.
-  2. Accumulate paragraphs into a buffer until CHUNK_TARGET_TOKENS is reached.
-  3. Flush: carry the last N paragraphs (up to CHUNK_OVERLAP_TOKENS) into the next chunk.
-  4. Single paragraphs that exceed CHUNK_TARGET_TOKENS are split by sentence.
-
-V1 enhancements (semantic chunking, per-chunk enrichment) are config-flag stubs —
-implement chunker.py swap when SEMANTIC_CHUNKING_ENABLED is true.
+  2. Accumulate paragraphs into a buffer until CHUNK_TARGET_WORDS is reached.
+  3. Flush: carry the last N paragraphs (up to CHUNK_OVERLAP_WORDS) into the next chunk.
+  4. Single paragraphs that exceed CHUNK_TARGET_WORDS are split by sentence.
 """
 
 from __future__ import annotations
 
 import re
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional
-
-import tiktoken
 
 logger = logging.getLogger(__name__)
 
-CHUNK_TARGET_TOKENS: int = 500
-CHUNK_OVERLAP_TOKENS: int = 50
-_ENCODING_NAME: str = "cl100k_base"
+CHUNK_TARGET_WORDS: int = 375     # ~500 tokens
+CHUNK_OVERLAP_WORDS: int = 75     # ~100 tokens — preserves concluding thought across chunk boundaries for prose/transcript content
 
 
 @dataclass
 class Chunk:
     text: str
     chunk_index: int
-    token_count: int
+    token_count: int  # word count (proxy for tokens)
     section_path: Optional[str] = None
     page_range: Optional[str] = None
 
 
-def _get_encoding() -> tiktoken.Encoding:
-    return tiktoken.get_encoding(_ENCODING_NAME)
-
-
-def count_tokens(text: str) -> int:
-    """Count tokens in text using cl100k_base encoding."""
-    return len(_get_encoding().encode(text))
+def count_words(text: str) -> int:
+    """Count words in text. Used as token-count proxy (~1.33 tokens/word)."""
+    return len(text.split())
 
 
 def _split_sentences(text: str) -> List[str]:
@@ -55,21 +50,20 @@ def _split_sentences(text: str) -> List[str]:
 
 
 def _split_large_paragraph(para: str, target: int) -> List[str]:
-    """Split a single paragraph that exceeds target tokens into sentence-based sub-chunks."""
-    enc = _get_encoding()
+    """Split a single paragraph that exceeds target words into sentence-based sub-chunks."""
     sentences = _split_sentences(para)
     sub_chunks: List[str] = []
     buffer: List[str] = []
-    buf_tokens = 0
+    buf_words = 0
 
     for sentence in sentences:
-        t = len(enc.encode(sentence))
-        if buffer and buf_tokens + t > target:
+        w = count_words(sentence)
+        if buffer and buf_words + w > target:
             sub_chunks.append(" ".join(buffer))
             buffer = []
-            buf_tokens = 0
+            buf_words = 0
         buffer.append(sentence)
-        buf_tokens += t
+        buf_words += w
 
     if buffer:
         sub_chunks.append(" ".join(buffer))
@@ -77,26 +71,29 @@ def _split_large_paragraph(para: str, target: int) -> List[str]:
     return sub_chunks
 
 
-def chunk_document(text: str, total_tokens: int) -> List[Chunk]:
+def chunk_document(
+    text: str, total_tokens: int, document_title: str = "",
+) -> List[Chunk]:
     """
     Split document text into fixed-size chunks with overlap.
 
     Args:
         text: Full extracted document text.
         total_tokens: Pre-computed token count (used for logging only).
+        document_title: Document title for contextual chunk headers.
+            When provided, each chunk gets a header prepended before embedding:
+            "Source: {title}\\n{section_path}\\n(Part X of Y)\\n\\n{text}"
 
     Returns:
         List of Chunk objects ordered by chunk_index.
     """
-    enc = _get_encoding()
-
     # Split into paragraphs; further split any oversized paragraphs.
     raw_paragraphs = [p.strip() for p in re.split(r"\n{2,}", text) if p.strip()]
     paragraphs: List[str] = []
     for para in raw_paragraphs:
-        t = len(enc.encode(para))
-        if t > CHUNK_TARGET_TOKENS:
-            paragraphs.extend(_split_large_paragraph(para, CHUNK_TARGET_TOKENS))
+        w = count_words(para)
+        if w > CHUNK_TARGET_WORDS:
+            paragraphs.extend(_split_large_paragraph(para, CHUNK_TARGET_WORDS))
         else:
             paragraphs.append(para)
 
@@ -106,7 +103,7 @@ def chunk_document(text: str, total_tokens: int) -> List[Chunk]:
 
     chunks: List[Chunk] = []
     buffer: List[str] = []
-    buf_tokens = 0
+    buf_words = 0
     idx = 0
 
     def _flush() -> Chunk:
@@ -114,34 +111,46 @@ def chunk_document(text: str, total_tokens: int) -> List[Chunk]:
         return Chunk(
             text=joined,
             chunk_index=idx,
-            token_count=len(enc.encode(joined)),
+            token_count=count_words(joined),
         )
 
     for para in paragraphs:
-        para_tokens = len(enc.encode(para))
+        para_words = count_words(para)
 
-        if buffer and buf_tokens + para_tokens > CHUNK_TARGET_TOKENS:
+        if buffer and buf_words + para_words > CHUNK_TARGET_WORDS:
             chunks.append(_flush())
             idx += 1
 
-            # Build overlap: keep last paragraphs up to CHUNK_OVERLAP_TOKENS
+            # Build overlap: keep last paragraphs up to CHUNK_OVERLAP_WORDS
             overlap: List[str] = []
-            overlap_tokens = 0
+            overlap_words = 0
             for prev in reversed(buffer):
-                t = len(enc.encode(prev))
-                if overlap_tokens + t > CHUNK_OVERLAP_TOKENS:
+                w = count_words(prev)
+                if overlap_words + w > CHUNK_OVERLAP_WORDS:
                     break
                 overlap.insert(0, prev)
-                overlap_tokens += t
+                overlap_words += w
 
             buffer = overlap
-            buf_tokens = overlap_tokens
+            buf_words = overlap_words
 
         buffer.append(para)
-        buf_tokens += para_tokens
+        buf_words += para_words
 
     if buffer:
         chunks.append(_flush())
+
+    # Second pass: prepend contextual headers (KIN-468).
+    # Requires total chunk count, so must run after first pass completes.
+    if document_title:
+        for i, chunk in enumerate(chunks):
+            header_parts = [f"Source: {document_title}"]
+            if chunk.section_path:
+                header_parts.append(chunk.section_path)
+            header_parts.append(f"(Part {i + 1} of {len(chunks)})")
+            header = "\n".join(header_parts)
+            chunk.text = f"{header}\n\n{chunk.text}"
+            chunk.token_count = count_words(chunk.text)
 
     logger.info("Chunked document into %d chunks (total_tokens=%d)", len(chunks), total_tokens)
     return chunks

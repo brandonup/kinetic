@@ -1,10 +1,12 @@
 """
 Application configuration and settings for Kinetic.
 
-All LLM/embedding keys are BYOK — they come from the user's encrypted
-profile (user_api_keys table), not platform env vars. There are no
-platform-owned keys. Embedding, enrichment, and RAG use the user's keys
-fetched at request time via app.services.user_keys.
+LLM keys are BYOK — they come from the user's encrypted profile
+(user_api_keys table). Embedding uses a platform-owned Gemini key
+(GEMINI_API_KEY env var) so users don't need a configured key for
+document upload or RAG retrieval. Enrichment uses the user's BYOK
+Anthropic key. Chat generation uses the user's BYOK key for their
+chosen model provider.
 """
 
 import os
@@ -52,15 +54,27 @@ class Settings(BaseSettings):
     # Must be 32 bytes base64-encoded. Never expose in logs or responses.
     API_KEY_ENCRYPTION_KEY: str
 
+    # Platform embedding — Gemini Embedding 001 via server-side key (KIN-467)
+    GEMINI_API_KEY: str = ""
+    EMBEDDING_MODEL: str = "gemini-embedding-001"
+    EMBEDDING_DIMS: int = 1024
+
     # Pipeline models (not user-facing — users pick generation model per query)
     FRAMEWORK_RERANKER_MODEL: str = "claude-haiku-3-5"
-    EMBEDDING_MODEL: str = "text-embedding-3-large"
     CONVERSATION_COMPRESSION_MODEL: str = "claude-haiku-3-5"
 
     # Feature flags
     LLM_ENABLED: bool = True
     RAG_ENABLED: bool = True
     ENRICHMENT_ENABLED: bool = True  # Document-level AI summary at ingestion time
+    SEMANTIC_CHUNKING_ENABLED: bool = False  # KIN-470: topic-based chunking via embeddings
+
+    # Semantic chunking parameters (KIN-470, word-count proxy per KIN-467)
+    SEMANTIC_WINDOW_WORDS: int = 112       # sliding window size for topic detection (~150 tokens)
+    SEMANTIC_WINDOW_STRIDE: int = 3        # slide every N sentences (reduces embedding cost)
+    SEMANTIC_BREAKPOINT_THRESHOLD: float = 1.5  # stddev multiplier for breakpoint detection
+    SEMANTIC_MIN_CHUNK_WORDS: int = 150    # merge smaller chunks (~200 tokens)
+    SEMANTIC_MAX_CHUNK_WORDS: int = 750    # split larger chunks (~1000 tokens)
 
     # Ingestion job controls
     INGESTION_TOKEN_LIMIT: int = 1_000_000  # max tokens per document (mirrors PRD)
@@ -103,6 +117,7 @@ def validate_settings(s: Settings) -> None:
         "SUPABASE_ANON_KEY",
         "SUPABASE_JWT_SECRET",
         "API_KEY_ENCRYPTION_KEY",
+        "GEMINI_API_KEY",
     ]
 
     missing = []

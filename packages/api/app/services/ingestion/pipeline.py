@@ -10,6 +10,9 @@ Supports stage-resumption for retry (KIN-336): run_ingestion_from_stage allows
 restarting from chunking when extraction already succeeded. Extracted text is
 persisted to Supabase Storage after extraction for this purpose.
 
+KIN-467: Embedding uses platform Gemini key (no user BYOK required).
+Token counting uses Gemini count_tokens API (low-frequency path).
+
 Schema ref: db-schema-spec.md §12 (knowledge_base_documents)
 """
 
@@ -19,8 +22,6 @@ import asyncio
 import logging
 from typing import Optional
 from uuid import UUID
-
-import tiktoken
 
 from app.core.config import settings
 from app.services.ingestion.chunker import chunk_document
@@ -112,6 +113,33 @@ async def _run_enrichment(
         logger.warning("Tag suggestion failed (non-fatal) for %s: %s", document_id, exc)
 
 
+async def _fetch_document_title(
+    supabase, document_id: UUID, fallback: str = "",
+) -> str:
+    """
+    Fetch document title from DB for contextual chunk headers (KIN-468).
+    Returns fallback (typically filename) if title is empty or lookup fails.
+    Non-fatal — empty title means chunks get no header (backward-compatible).
+    """
+    try:
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(
+            None,
+            lambda: supabase.table("knowledge_base_documents")
+            .select("title")
+            .eq("id", str(document_id))
+            .maybe_single()
+            .execute(),
+        )
+        title = (result.data or {}).get("title", "") if result.data else ""
+        return title or fallback
+    except Exception as exc:
+        logger.warning(
+            "Failed to fetch document title for %s (non-fatal): %s", document_id, exc,
+        )
+        return fallback
+
+
 async def _run_pipeline_stages(
     supabase,
     document_id: UUID,
@@ -120,11 +148,13 @@ async def _run_pipeline_stages(
     agent_definition_id: Optional[UUID],
     text: str,
     total_tokens: int,
-    openai_key: str = "",
+    document_title: str = "",
 ) -> None:
     """
     Run chunking → embedding → indexing → completed.
     Shared between full ingestion and stage-resume retry.
+
+    Embedding uses platform Gemini key (no user BYOK required).
     """
     retry_count = 0
 
@@ -198,14 +228,19 @@ async def _run_pipeline_stages(
     # --- Stage: chunking ---
     async def _chunk():
         _loop = asyncio.get_running_loop()
+        if settings.SEMANTIC_CHUNKING_ENABLED:
+            from app.services.ingestion.semantic_chunker import chunk_document_semantic
+            return await _loop.run_in_executor(
+                None, lambda: chunk_document_semantic(text, total_tokens, document_title=document_title)
+            )
         return await _loop.run_in_executor(
-            None, lambda: chunk_document(text, total_tokens)
+            None, lambda: chunk_document(text, total_tokens, document_title=document_title)
         )
 
     chunks = await _run_stage("chunking", _chunk)
 
     # --- Stage: embedding ---
-    embedder = EmbeddingService(api_key=openai_key)
+    embedder = EmbeddingService()
 
     async def _embed():
         loop = asyncio.get_running_loop()
@@ -260,7 +295,6 @@ async def run_ingestion(
     file_content: bytes,
     filename: str,
     content_type: str,
-    openai_key: str = "",
     anthropic_key: Optional[str] = None,
 ) -> None:
     """
@@ -269,8 +303,8 @@ async def run_ingestion(
     Stages:
       1. extracting  — text extraction via unstructured
       [optional]     — document-level summary + tag suggestions (ENRICHMENT_ENABLED)
-      2. chunking    — fixed-size token chunking (~500 tokens, ~50 overlap)
-      3. embedding   — text-embedding-3-large via user's BYOK OpenAI key
+      2. chunking    — word-based chunking (~375 words, ~75 word overlap)
+      3. embedding   — Gemini Embedding 001 via platform key (KIN-467)
       4. indexing    — write chunks to knowledge_base_chunks (pgvector)
       5. completed   — final status update
 
@@ -287,7 +321,6 @@ async def run_ingestion(
         file_content: Raw file bytes.
         filename: Original filename.
         content_type: MIME type.
-        openai_key: User's decrypted OpenAI API key (required for embedding).
         anthropic_key: User's decrypted Anthropic API key (optional, for enrichment).
     """
     retry_count = 0
@@ -368,8 +401,11 @@ async def run_ingestion(
             text = await _loop.run_in_executor(
                 None, lambda: extract_text(file_content, content_type, filename)
             )
-            enc = tiktoken.get_encoding("cl100k_base")
-            total_tokens = len(enc.encode(text))
+            # Token count via Gemini API (low-frequency: once per document)
+            embedder = EmbeddingService()
+            total_tokens = await _loop.run_in_executor(
+                None, lambda: embedder.count_tokens(text)
+            )
             if total_tokens > settings.INGESTION_TOKEN_LIMIT:
                 raise TokenLimitExceeded(
                     f"Document exceeds token limit: {total_tokens:,} > "
@@ -386,11 +422,14 @@ async def run_ingestion(
         # Enrichment: summary + tags (non-fatal, outside retry loop)
         await _run_enrichment(supabase, document_id, text, anthropic_key=anthropic_key)
 
+        # Fetch document title for contextual chunk headers (KIN-468)
+        document_title = await _fetch_document_title(supabase, document_id, fallback=filename)
+
         # Run remaining stages (chunking → embedding → indexing → completed)
         await _run_pipeline_stages(
             supabase, document_id, knowledge_base_id,
             project_id, agent_definition_id, text, total_tokens,
-            openai_key=openai_key,
+            document_title=document_title,
         )
 
     except TokenLimitExceeded as exc:
@@ -439,7 +478,6 @@ async def run_ingestion_from_stage(
     extracted_text: Optional[str] = None,
     filename: str = "",
     content_type: str = "application/octet-stream",
-    openai_key: str = "",
     anthropic_key: Optional[str] = None,
 ) -> None:
     """
@@ -451,7 +489,6 @@ async def run_ingestion_from_stage(
         start_stage: 'extracting' to re-run full pipeline, 'chunking' to skip extraction.
         file_content: Required if start_stage == 'extracting'.
         extracted_text: Required if start_stage == 'chunking'.
-        openai_key: User's decrypted OpenAI API key (required for embedding).
         anthropic_key: User's decrypted Anthropic API key (optional, for enrichment).
     """
     try:
@@ -462,23 +499,30 @@ async def run_ingestion_from_stage(
                 supabase, document_id, knowledge_base_id,
                 project_id, agent_definition_id,
                 file_content, filename, content_type,
-                openai_key=openai_key, anthropic_key=anthropic_key,
+                anthropic_key=anthropic_key,
             )
         elif start_stage == "chunking":
             if extracted_text is None:
                 raise ValueError("extracted_text required for retry from chunking stage")
-            # Re-count tokens from extracted text
-            enc = tiktoken.get_encoding("cl100k_base")
-            total_tokens = len(enc.encode(extracted_text))
+            # Re-count tokens via Gemini API (low-frequency: once per retry)
+            loop = asyncio.get_running_loop()
+            embedder = EmbeddingService()
+            total_tokens = await loop.run_in_executor(
+                None, lambda: embedder.count_tokens(extracted_text)
+            )
             # Re-run enrichment (tags/summary may have failed on first run too)
             await _run_enrichment(
                 supabase, document_id, extracted_text, anthropic_key=anthropic_key,
+            )
+            # Fetch document title for contextual chunk headers (KIN-468)
+            document_title = await _fetch_document_title(
+                supabase, document_id, fallback=filename,
             )
             # Run chunking → embedding → indexing → completed
             await _run_pipeline_stages(
                 supabase, document_id, knowledge_base_id,
                 project_id, agent_definition_id, extracted_text, total_tokens,
-                openai_key=openai_key,
+                document_title=document_title,
             )
         else:
             raise ValueError(f"Invalid start_stage: {start_stage}")
