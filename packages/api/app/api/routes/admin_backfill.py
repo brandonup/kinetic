@@ -20,7 +20,6 @@ from app.auth.deps import CurrentUser, require_admin
 from app.core.config import settings
 from app.db.supabase_client import get_supabase
 from app.services.ingestion.embedder import EmbeddingService
-from app.services.user_keys import fetch_user_key
 
 logger = logging.getLogger(__name__)
 
@@ -44,15 +43,12 @@ async def backfill_trigger_embeddings(
     Retroactively populate trigger embeddings for existing frameworks (admin only).
 
     - Iterates all agent definitions (or just one if agent_definition_id is provided).
-    - For each agent: fetches owner's BYOK OpenAI key, embeds when_to_apply triggers,
-      and inserts into framework_trigger_embeddings.
-    - Skips agents whose owner has no OpenAI key (logged and counted).
+    - Embeds when_to_apply triggers using platform Gemini key (KIN-467).
     - Idempotent: deletes existing trigger embeddings per framework before inserting.
 
     Returns:
         {
-            "processed": int,        # agents examined
-            "skipped_no_key": int,   # agents skipped due to missing OpenAI key
+            "processed": int,
             "frameworks_embedded": int,
             "triggers_embedded": int,
         }
@@ -84,29 +80,17 @@ async def backfill_trigger_embeddings(
     agents = agents_result.data or []
 
     processed = 0
-    skipped_no_key = 0
     frameworks_embedded = 0
     triggers_embedded = 0
 
+    # Platform Gemini key — single embedder for all agents (KIN-467)
+    embedder = EmbeddingService()
+
     for agent in agents:
         aid = agent["id"]
-        owner_id = agent["owner_id"]
         processed += 1
 
-        # Step 2: Fetch owner's BYOK OpenAI key
-        openai_key = await loop.run_in_executor(
-            None, lambda uid=owner_id: fetch_user_key(client, uid, "openai")
-        )
-        if not openai_key:
-            logger.warning(
-                "backfill_trigger_embeddings: no OpenAI key for owner %s (agent %s) — skipping",
-                owner_id,
-                aid,
-            )
-            skipped_no_key += 1
-            continue
-
-        # Step 3: Fetch frameworks for this agent
+        # Fetch frameworks for this agent
         fw_result = await loop.run_in_executor(
             None,
             lambda a=aid: client
@@ -116,8 +100,6 @@ async def backfill_trigger_embeddings(
                 .execute(),
         )
         frameworks = fw_result.data or []
-
-        embedder = EmbeddingService(api_key=openai_key)
 
         for fw in frameworks:
             triggers: list[str] = fw.get("when_to_apply") or []
@@ -175,7 +157,6 @@ async def backfill_trigger_embeddings(
 
     return {
         "processed": processed,
-        "skipped_no_key": skipped_no_key,
         "frameworks_embedded": frameworks_embedded,
         "triggers_embedded": triggers_embedded,
     }
