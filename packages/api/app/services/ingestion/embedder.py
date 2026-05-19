@@ -1,10 +1,9 @@
 """
-Embedding service with batching, retries, and rate limit handling.
+Embedding service using Gemini Embedding 001 with batching, retries, and rate limit handling.
 
-Ported from FounderPanel services/ingestion/embedding_service.py with Kinetic changes:
-- Uses user BYOK OpenAI key passed via api_key param (no platform key)
-- Model sourced from settings.EMBEDDING_MODEL (default: text-embedding-3-large, 3072 dims)
-- Batch size, retry params pulled from settings
+Platform-owned key (GEMINI_API_KEY) — no user BYOK required for embedding.
+Model: gemini-embedding-001 (3072 dims native; SDK normalizes at native dim).
+Tickets: KIN-467, KIN-476.
 """
 
 from __future__ import annotations
@@ -21,24 +20,19 @@ logger = logging.getLogger(__name__)
 
 
 class EmbeddingService:
-    """Create embeddings with batching and per-batch retries."""
+    """Create embeddings via Gemini with batching and per-batch retries."""
 
-    # Per-request timeout in seconds. Generous to allow large batches,
-    # but prevents indefinite hangs that block the entire pipeline.
     DEFAULT_REQUEST_TIMEOUT: int = 120
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
         model: Optional[str] = None,
         batch_size: Optional[int] = None,
         max_retries: Optional[int] = None,
         min_wait: Optional[int] = None,
         max_wait: Optional[int] = None,
         sleep_between_batches: Optional[float] = None,
-        request_timeout: Optional[int] = None,
     ) -> None:
-        self._api_key = api_key
         self.model = model or settings.EMBEDDING_MODEL
         self.batch_size = batch_size or settings.EMBEDDING_BATCH_SIZE
         self.max_retries = max_retries or settings.EMBEDDING_MAX_RETRIES
@@ -49,10 +43,8 @@ class EmbeddingService:
             if sleep_between_batches is not None
             else settings.EMBEDDING_SLEEP_BETWEEN_BATCHES
         )
-        self.request_timeout = request_timeout or self.DEFAULT_REQUEST_TIMEOUT
-        # Lazy-init: created on first embed call so __init__ never makes network calls
+        # Lazy-init: created on first call so __init__ never makes network calls
         self._client = None
-        self._openai_module = None
 
     def embed_batch(
         self,
@@ -62,17 +54,12 @@ class EmbeddingService:
         """
         Embed texts in batches with retries and optional progress callback.
 
-        Args:
-            texts: List of text strings to embed.
-            on_batch_complete: Optional callback(batch_idx, batch_embeddings) called
-                after each batch succeeds.
-
         Returns:
-            List of embedding vectors matching len(texts).
+            List of embedding vectors (settings.EMBEDDING_DIMS each — 3072 by default) matching len(texts).
 
         Raises:
-            RuntimeError: If no OpenAI API key was provided.
-            openai.RateLimitError et al.: Re-raised after max_retries exhausted.
+            RuntimeError: If GEMINI_API_KEY is not configured.
+            google.genai errors: Re-raised after max_retries exhausted.
         """
         if not texts:
             return []
@@ -95,46 +82,55 @@ class EmbeddingService:
 
         return cast(List[List[float]], embeddings)
 
-    def _get_client(self):
-        """Return (client, openai_module), creating the client once and reusing it."""
-        if self._client is None:
-            import openai  # type: ignore[import]
+    def count_tokens(self, text: str) -> int:
+        """Count tokens via Gemini API. Use for low-frequency paths only (pipeline/retrieval)."""
+        client = self._get_client()
+        result = client.models.count_tokens(model=self.model, contents=text)
+        return result.total_tokens
 
-            if not self._api_key:
+    def _get_client(self):
+        """Return genai.Client, creating once and reusing."""
+        if self._client is None:
+            from google import genai  # type: ignore[import]
+
+            if not settings.GEMINI_API_KEY:
                 raise RuntimeError(
-                    "No OpenAI API key provided for embedding. "
-                    "Add your OpenAI key in Settings."
+                    "GEMINI_API_KEY not configured. "
+                    "Set the environment variable to enable embeddings."
                 )
-            self._client = openai.OpenAI(
-                api_key=self._api_key,
-                timeout=self.request_timeout,
-            )
-            self._openai_module = openai
-        return self._client, self._openai_module
+            self._client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        return self._client
 
     def _embed_single_batch(self, texts: List[str]) -> List[List[float]]:
         """Embed a single batch with exponential backoff retry."""
-        client, openai_module = self._get_client()
+        from google.genai import types  # local import keeps __init__ side-effect-free
 
-        retryable = (
-            openai_module.RateLimitError,
-            openai_module.APIConnectionError,
-            openai_module.APITimeoutError,
-            openai_module.InternalServerError,
-        )
+        client = self._get_client()
+
+        # gemini-embedding-001 native dim is 3072 with automatic L2 normalization.
+        # When `output_dimensionality` is set to a non-native value, the SDK returns
+        # a truncated, unnormalized vector — the caller must normalize itself.
+        # We only request a non-native dim explicitly to keep the normalized path.
+        embed_config = None
+        if settings.EMBEDDING_DIMS != 3072:
+            embed_config = types.EmbedContentConfig(
+                output_dimensionality=settings.EMBEDDING_DIMS
+            )
 
         # Build the decorated invoker once per EmbeddingService instance.
-        # Keyed on retryable tuple identity — safe since openai_module is fixed after first call.
         if not hasattr(self, "_invoke"):
             @retry(
                 reraise=True,
                 stop=stop_after_attempt(self.max_retries + 1),
                 wait=wait_exponential(min=self.min_wait, max=self.max_wait),
-                retry=retry_if_exception_type(retryable),
+                retry=retry_if_exception_type((ConnectionError, TimeoutError, Exception)),
             )
             def _invoke(batch: List[str]) -> List[List[float]]:
-                response = client.embeddings.create(input=batch, model=self.model)
-                return [cast(List[float], item.embedding) for item in response.data]
+                kwargs = {"model": self.model, "contents": batch}
+                if embed_config is not None:
+                    kwargs["config"] = embed_config
+                result = client.models.embed_content(**kwargs)
+                return [list(e.values) for e in result.embeddings]
 
             self._invoke = _invoke
 

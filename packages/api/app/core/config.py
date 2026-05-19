@@ -54,10 +54,12 @@ class Settings(BaseSettings):
     # Must be 32 bytes base64-encoded. Never expose in logs or responses.
     API_KEY_ENCRYPTION_KEY: str
 
-    # Platform embedding — Gemini Embedding 001 via server-side key (KIN-467)
+    # Platform embedding — Gemini Embedding 001 via server-side key (KIN-467, KIN-476)
+    # 3072 is gemini-embedding-001's native dim. The embedder only passes
+    # `output_dimensionality` to the SDK when this differs from 3072 (KIN-476).
     GEMINI_API_KEY: str = ""
     EMBEDDING_MODEL: str = "gemini-embedding-001"
-    EMBEDDING_DIMS: int = 1024
+    EMBEDDING_DIMS: int = 3072
 
     # Pipeline models (not user-facing — users pick generation model per query)
     FRAMEWORK_RERANKER_MODEL: str = "claude-haiku-3-5"
