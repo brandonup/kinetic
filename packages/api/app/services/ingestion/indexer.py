@@ -77,7 +77,7 @@ async def index_chunks(
             "section_path": chunk.section_path,
             "page_range": chunk.page_range,
             "chunk_index": chunk.chunk_index,
-            "embedding_model": settings.EMBEDDING_MODEL,
+            "embedding_model": "gemini-embedding-001",  # hardcoded — backstop for stale env var (KIN-476 bugfix)
         }
         for chunk, embedding in zip(chunks, embeddings)
     ]

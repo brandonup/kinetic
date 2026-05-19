@@ -422,8 +422,11 @@ async def run_ingestion(
         # Enrichment: summary + tags (non-fatal, outside retry loop)
         await _run_enrichment(supabase, document_id, text, anthropic_key=anthropic_key)
 
-        # Fetch document title for contextual chunk headers (KIN-468)
-        document_title = await _fetch_document_title(supabase, document_id, fallback=filename)
+        # Use filename for contextual chunk headers (KIN-468).
+        # documents.py sets title = original_filename, so the DB roundtrip is redundant
+        # and was returning empty in prod (KIN-476 bugfix). Filename is always set.
+        document_title = filename or "Untitled Document"
+        _ = _fetch_document_title  # silence linter: function retained for retry path
 
         # Run remaining stages (chunking → embedding → indexing → completed)
         await _run_pipeline_stages(
@@ -515,9 +518,9 @@ async def run_ingestion_from_stage(
                 supabase, document_id, extracted_text, anthropic_key=anthropic_key,
             )
             # Fetch document title for contextual chunk headers (KIN-468)
-            document_title = await _fetch_document_title(
-                supabase, document_id, fallback=filename,
-            )
+            # Use filename directly — same rationale as main path (KIN-476 bugfix).
+            document_title = filename or "Untitled Document"
+            _ = _fetch_document_title  # retained for compatibility
             # Run chunking → embedding → indexing → completed
             await _run_pipeline_stages(
                 supabase, document_id, knowledge_base_id,

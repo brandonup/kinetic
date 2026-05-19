@@ -10,7 +10,6 @@ import logging
 from app.core.config import settings
 from app.db.supabase_client import create_supabase
 from app.services.ingestion.embedder import EmbeddingService
-from app.services.user_keys import fetch_user_key
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +23,7 @@ async def embed_framework_triggers(
     """
     Background job: embed trigger phrases and insert into framework_trigger_embeddings.
 
-    Fail-open: if no OpenAI key, logs warning and returns (framework is "dormant").
+    Uses platform Gemini key — no user BYOK required (KIN-467).
     Idempotent: deletes existing trigger embeddings for this framework before inserting.
     All Supabase calls via run_in_executor (sync client, async context).
 
@@ -36,21 +35,8 @@ async def embed_framework_triggers(
     loop = asyncio.get_running_loop()
     client = create_supabase()  # Fresh client — avoids HTTP/2 contention with the singleton
 
-    # Fetch owner's BYOK OpenAI key
-    openai_key = await loop.run_in_executor(
-        None, lambda: fetch_user_key(client, user_id, "openai")
-    )
-    if not openai_key:
-        logger.warning(
-            "embed_framework_triggers: no OpenAI key for user %s — "
-            "skipping trigger embedding for framework %s (dormant)",
-            user_id,
-            framework_db_id,
-        )
-        return
-
-    # Embed all triggers (sync EmbeddingService, run in executor)
-    embedder = EmbeddingService(api_key=openai_key)
+    # Embed all triggers using platform Gemini key (sync EmbeddingService, run in executor)
+    embedder = EmbeddingService()
     try:
         embeddings = await loop.run_in_executor(
             None, lambda: embedder.embed_batch(triggers)
@@ -79,7 +65,7 @@ async def embed_framework_triggers(
             "agent_definition_id": agent_definition_id,
             "trigger_text": trigger,
             "embedding": emb,
-            "embedding_model": settings.EMBEDDING_MODEL,
+            "embedding_model": "gemini-embedding-001",  # hardcoded — backstop for stale env var (KIN-476 bugfix)
         }
         for trigger, emb in zip(triggers, embeddings)
     ]
