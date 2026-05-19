@@ -363,20 +363,19 @@ Per `docs/rag-architecture.md` § Storage. Primary vector search target.
 | `project_id` | `uuid` | | Denormalized scope — set if KB belongs to a Project |
 | `agent_definition_id` | `uuid` | | Denormalized scope — set if KB belongs to an AgentDefinition |
 | `text` | `text` | `NOT NULL` | Chunk content |
-| `embedding` | `vector(3072)` | | pgvector embedding |
+| `embedding` | `extensions.halfvec(3072)` | | pgvector halfvec — 3072 native gemini-embedding-001 dim, half-precision storage (KIN-476) |
 | `chunk_summary` | `text` | | V1 — chunk-level enrichment |
 | `keywords` | `text[]` | | V1 — chunk-level enrichment |
 | `section_path` | `text` | | Heading hierarchy location |
 | `page_range` | `text` | | For PDFs |
 | `chunk_index` | `int` | `NOT NULL` | Position within document (0-indexed) |
 | `tsv` | `tsvector` | | V1 — FTS index column |
-| `embedding_model` | `text` | `NOT NULL DEFAULT 'text-embedding-3-large'` | Supports future model migrations |
+| `embedding_model` | `text` | `NOT NULL DEFAULT 'gemini-embedding-001'` | Supports future model migrations (KIN-467, KIN-476) |
 | `created_at` | `timestamptz` | `NOT NULL DEFAULT now()` | |
 
 **Indexes:**
-- HNSW index on `embedding` filtered by scope:
-  - `idx_chunks_embedding_project` on `(embedding vector_cosine_ops)` WHERE `project_id IS NOT NULL` — use `ivfflat` or `hnsw` with `lists` tuned to scale
-  - `idx_chunks_embedding_agent` on `(embedding vector_cosine_ops)` WHERE `agent_definition_id IS NOT NULL`
+- HNSW index on `embedding`:
+  - `idx_kb_chunks_embedding_hnsw` on `(embedding extensions.halfvec_cosine_ops)` — single unfiltered index. RPC `match_chunks` filters by scope inside the function body (KIN-476).
 - `idx_chunks_document` on `(document_id)`
 - `idx_chunks_project` on `(project_id)` WHERE `project_id IS NOT NULL`
 - `idx_chunks_agent_def` on `(agent_definition_id)` WHERE `agent_definition_id IS NOT NULL`
@@ -434,13 +433,13 @@ One row per trigger phrase per framework. Search target for framework selection 
 | `framework_db_id` | `uuid` | `NOT NULL REFERENCES frameworks(id) ON DELETE CASCADE` | DB FK to frameworks table |
 | `agent_definition_id` | `uuid` | `NOT NULL REFERENCES agent_definitions(id) ON DELETE CASCADE` | Denormalized for scoped queries |
 | `trigger_text` | `text` | `NOT NULL` | The trigger phrase being embedded |
-| `embedding` | `vector(3072)` | `NOT NULL` | |
-| `embedding_model` | `text` | `NOT NULL DEFAULT 'text-embedding-3-large'` | |
+| `embedding` | `extensions.halfvec(3072)` | `NOT NULL` | pgvector halfvec — 3072 native gemini-embedding-001 dim (KIN-476) |
+| `embedding_model` | `text` | `NOT NULL DEFAULT 'gemini-embedding-001'` | (KIN-467, KIN-476) |
 | `created_at` | `timestamptz` | `NOT NULL DEFAULT now()` | |
 
 **Indexes:**
-- HNSW index on `embedding` filtered by `agent_definition_id`:
-  - `idx_trigger_embeddings_agent` on `(embedding vector_cosine_ops)` — query always filters by agent
+- HNSW index on `embedding`:
+  - `idx_fw_trigger_embeddings_hnsw` on `(embedding extensions.halfvec_cosine_ops)` — single unfiltered index. RPC `match_framework_triggers` filters by `agent_definition_id` inside the function body (KIN-476).
 - `idx_trigger_embeddings_framework` on `(framework_db_id)`
 
 **RLS:**
@@ -771,7 +770,7 @@ Vector similarity search on framework trigger phrases, scoped to an agent.
 
 ```sql
 CREATE OR REPLACE FUNCTION public.match_framework_triggers(
-  query_embedding extensions.vector(3072),
+  query_embedding text,                        -- JSON-array text, cast to halfvec inside
   p_agent_id uuid,
   match_count integer DEFAULT 20
 )
@@ -782,8 +781,8 @@ RETURNS TABLE (
 )
 ```
 
-**Migration:** `20260328000006_add_match_framework_triggers_rpc.sql`
-**Note:** Must use `extensions.vector(3072)` (not `vector(3072)`) because pgvector is installed in the `extensions` schema. Function includes `SET search_path = public, extensions`.
+**Latest migration:** `20260518000001_kin476_embeddings_3072_halfvec.sql` (KIN-476). Originally added in `20260328000006_add_match_framework_triggers_rpc.sql`; dim and param type changed across `20260407000002_gemini_embeddings_1024.sql` (KIN-467) and KIN-476.
+**Param type note (KIN-476):** the parameter is `text`, not `extensions.halfvec(3072)`. PostgREST has no implicit cast from JSON-array to halfvec, so Python callers passing `list[float]` would fail on a halfvec-typed param. The function body declares `q extensions.halfvec(3072) := query_embedding::extensions.halfvec(3072)` and uses `q` in the cosine distance operator. `SET search_path = public, extensions` makes the schema-qualified `extensions.halfvec` resolvable.
 
 ### `match_chunks`
 
@@ -791,22 +790,26 @@ Vector similarity search on knowledge base chunks with dynamic scope filtering.
 
 ```sql
 CREATE OR REPLACE FUNCTION public.match_chunks(
-  query_embedding extensions.vector(3072),
+  query_embedding text,                        -- JSON-array text, cast to halfvec inside
   scope_column text,
   scope_value text,
   match_count integer DEFAULT 20
 )
 RETURNS TABLE (
   id uuid,
+  document_id uuid,
   document_title text,
-  section_path text,
+  document_type text,
   text text,
+  chunk_index integer,
+  section_path text,
+  page_range text,
   similarity double precision
 )
 ```
 
-**Usage:** Called by the RAG retrieval pipeline and the local MCP server (`packages/mcp/`). `scope_column` is typically `agent_definition_id`; `scope_value` is the agent UUID.
-**Note:** Uses `EXECUTE format(...)` for dynamic column filtering. Same `extensions.vector` requirement as `match_framework_triggers`.
+**Usage:** Called by the RAG retrieval pipeline and the local MCP server (`packages/mcp/`). `scope_column` must be one of `agent_definition_id`, `knowledge_base_id`, or `project_id` (validated inside the function); `scope_value` is the corresponding UUID.
+**Param type note (KIN-476):** same as `match_framework_triggers` — parameter is `text`, cast to `extensions.halfvec(3072)` inside the function body. Joins `knowledge_base_documents` for `document_title` and `document_type`. Uses `EXECUTE format(...)` for dynamic column filtering.
 
 ---
 
@@ -835,9 +838,11 @@ RETURNS TABLE (
 
 ### Extension Requirements
 ```sql
-CREATE EXTENSION IF NOT EXISTS vector;       -- pgvector
+CREATE EXTENSION IF NOT EXISTS vector;       -- pgvector (>= 0.7.0 required — KIN-476 uses halfvec HNSW)
 CREATE EXTENSION IF NOT EXISTS pgcrypto;     -- gen_random_uuid()
 ```
+
+**pgvector version note (KIN-476):** `halfvec` HNSW (up to 4000 dims) was added in pgvector 0.7.0. The KIN-476 migration assumes ≥ 0.7.0. Verify with `SELECT extversion FROM pg_extension WHERE extname='vector'` before applying related migrations. Production Supabase was on 0.8 at the time of KIN-476.
 
 ### Migration Order
 Tables must be created in dependency order:
