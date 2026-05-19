@@ -161,16 +161,10 @@ async def upload_document(
         except Exception as exc:
             logger.warning("Failed to set storage_uri (non-fatal): %s", exc)
 
-    # Fetch user BYOK keys and dispatch pipeline.
+    # Dispatch pipeline. Embedding uses platform Gemini key — no user BYOK needed (KIN-467).
     # Guard: if an unexpected (non-HTTP) exception occurs after the document row was inserted,
     # clean up the orphaned pending row so it doesn't linger in the UI.
     try:
-        openai_key = await fetch_user_key_async(supabase, current_user.user_id, "openai")
-        if not openai_key:
-            raise HTTPException(
-                status_code=400,
-                detail="OpenAI API key required for document upload. Add your key in Settings.",
-            )
         anthropic_key = await fetch_user_key_async(supabase, current_user.user_id, "anthropic")
 
         # Create a dedicated Supabase client for the background pipeline.
@@ -188,7 +182,6 @@ async def upload_document(
             content,
             original_filename,
             content_type,
-            openai_key,
             anthropic_key,
         )
     except HTTPException:
@@ -426,13 +419,7 @@ async def retry_document(
     except Exception as exc:
         logger.warning("Chunk cleanup failed (non-fatal): %s", exc)
 
-    # Fetch user BYOK keys for pipeline
-    openai_key = await fetch_user_key_async(supabase, current_user.user_id, "openai")
-    if not openai_key:
-        raise HTTPException(
-            status_code=400,
-            detail="OpenAI API key required for document retry. Add your key in Settings.",
-        )
+    # Fetch BYOK Anthropic key for enrichment (embedding uses platform Gemini key)
     anthropic_key = await fetch_user_key_async(supabase, current_user.user_id, "anthropic")
 
     # Dispatch retry pipeline — fresh client to avoid HTTP/2 contention
@@ -450,7 +437,6 @@ async def retry_document(
         extracted_text,
         doc.get("title", ""),
         doc.get("file_type", "application/octet-stream"),
-        openai_key,
         anthropic_key,
     )
 

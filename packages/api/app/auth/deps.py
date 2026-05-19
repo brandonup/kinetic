@@ -95,6 +95,24 @@ async def get_current_user(
         raise AuthenticationError("Invalid authorization header format")
 
     token = parts[1]
+
+    # Long-lived admin CLI token (KIN-476 follow-up).
+    # Allows terminal ops to bypass the 1hr Supabase JWT TTL.
+    # Activated only when both ADMIN_CLI_TOKEN and ADMIN_CLI_USER_ID are set
+    # in env. The bearer token must match ADMIN_CLI_TOKEN exactly.
+    if (
+        settings.ADMIN_CLI_TOKEN
+        and settings.ADMIN_CLI_USER_ID
+        and token == settings.ADMIN_CLI_TOKEN
+    ):
+        try:
+            UUID(settings.ADMIN_CLI_USER_ID)
+        except Exception as err:
+            logger.error("ADMIN_CLI_USER_ID is not a valid UUID")
+            raise AuthenticationError("Invalid admin CLI configuration") from err
+        logger.info("Authenticated via ADMIN_CLI_TOKEN as %s", settings.ADMIN_CLI_USER_ID)
+        return CurrentUser(user_id=settings.ADMIN_CLI_USER_ID)
+
     try:
         user_id = get_jwt_verifier().get_user_id(token)
         logger.debug(f"Authenticated user: {user_id}")

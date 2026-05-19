@@ -104,6 +104,13 @@ class Settings(BaseSettings):
     # Local dev auth bypass (never True in production)
     LOCAL_DEV_AUTH_BYPASS: bool = False
 
+    # Long-lived admin CLI token — bypasses 1hr Supabase JWT TTL for terminal ops.
+    # When ADMIN_CLI_TOKEN is set AND a request bears this exact token in
+    # Authorization, get_current_user authenticates the request as ADMIN_CLI_USER_ID.
+    # Both must be set for the path to activate. Empty = feature off (production-safe default).
+    ADMIN_CLI_TOKEN: str = ""
+    ADMIN_CLI_USER_ID: str = ""
+
     model_config = {
         "env_file": str(ENV_FILE_PATH),
         "case_sensitive": True,
