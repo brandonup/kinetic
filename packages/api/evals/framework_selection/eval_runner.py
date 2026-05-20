@@ -31,6 +31,50 @@ from app.services.rag.framework_selection import select_framework  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
+# Agent slug → UUID resolution
+# ---------------------------------------------------------------------------
+
+def resolve_agent_id(supabase, slug: str) -> str:
+    """Look up agent_definition UUID from slug."""
+    result = (
+        supabase.table("agent_definitions")
+        .select("id, name, slug")
+        .eq("slug", slug)
+        .execute()
+    )
+    agents = result.data or []
+    if not agents:
+        all_agents = (
+            supabase.table("agent_definitions")
+            .select("id, name, slug")
+            .execute()
+        )
+        available = all_agents.data or []
+        print(f"Error: No agent found with slug '{slug}'", file=sys.stderr)
+        if available:
+            print("Available agents in this database:", file=sys.stderr)
+            for a in available:
+                print(
+                    f"  - {a.get('name', '?')} (slug: '{a.get('slug', '')}', "
+                    f"id: {a['id']})",
+                    file=sys.stderr,
+                )
+        else:
+            print(
+                "No agents exist in this database. Are you pointing at the "
+                "right Supabase instance?",
+                file=sys.stderr,
+            )
+        sys.exit(1)
+    agent = agents[0]
+    print(
+        f"Resolved agent '{slug}' → {agent['name']} ({agent['id']})",
+        file=sys.stderr,
+    )
+    return agent["id"]
+
+
+# ---------------------------------------------------------------------------
 # Eval execution
 # ---------------------------------------------------------------------------
 
@@ -38,7 +82,6 @@ async def run_eval(
     cases: list[dict],
     agent_id: str,
     supabase,
-    openai_key: str,
 ) -> list[dict]:
     """Run select_framework() for each eval case and collect results."""
     results: list[dict] = []
@@ -53,7 +96,6 @@ async def run_eval(
                 query_text=case["query"],
                 agent_id=agent_id,
                 supabase=supabase,
-                openai_key=openai_key,
             )
 
             actual_id = match.matched_framework_id
@@ -465,7 +507,12 @@ async def async_main():
     parser.add_argument(
         "--dataset", required=True, help="Path to JSONL eval dataset"
     )
-    parser.add_argument("--agent-id", required=True, help="Agent definition UUID")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--agent-id", help="Agent definition UUID")
+    group.add_argument(
+        "--agent-slug",
+        help="Agent slug (e.g., 'nate') — resolves UUID from DB",
+    )
     parser.add_argument(
         "--output-dir",
         default=None,
@@ -473,14 +520,10 @@ async def async_main():
     )
     parser.add_argument("--supabase-url", default=os.environ.get("SUPABASE_URL"))
     parser.add_argument("--supabase-key", default=os.environ.get("SUPABASE_KEY"))
-    parser.add_argument("--openai-key", default=os.environ.get("OPENAI_API_KEY"))
     args = parser.parse_args()
 
     if not args.supabase_url or not args.supabase_key:
         print("Error: SUPABASE_URL and SUPABASE_KEY required", file=sys.stderr)
-        sys.exit(1)
-    if not args.openai_key:
-        print("Error: OPENAI_API_KEY required", file=sys.stderr)
         sys.exit(1)
 
     # Load dataset
@@ -493,9 +536,12 @@ async def async_main():
 
     supabase = create_client(args.supabase_url, args.supabase_key)
 
+    # Resolve agent slug → UUID if needed
+    agent_id = args.agent_id or resolve_agent_id(supabase, args.agent_slug)
+
     # Run eval
     print("\nRunning eval...", file=sys.stderr)
-    results = await run_eval(cases, args.agent_id, supabase, args.openai_key)
+    results = await run_eval(cases, agent_id, supabase)
 
     # Compute
     metrics = compute_metrics(results)
@@ -516,7 +562,7 @@ async def async_main():
         json.dump(
             {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
-                "agent_id": args.agent_id,
+                "agent_id": agent_id,
                 "dataset": args.dataset,
                 "metrics": metrics,
                 "failure_analysis": failures,
@@ -536,7 +582,7 @@ async def async_main():
     save_chart(dist, chart_path)
 
     # Markdown report for docs/evals/
-    md = save_markdown_report(metrics, failures, dist, args.agent_id, args.dataset)
+    md = save_markdown_report(metrics, failures, dist, agent_id, args.dataset)
     md_path = os.path.join(output_dir, "baseline_report.md")
     with open(md_path, "w") as f:
         f.write(md)

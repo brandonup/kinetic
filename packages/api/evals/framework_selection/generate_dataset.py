@@ -25,6 +25,50 @@ import os
 import random
 import sys
 
+
+# ---------------------------------------------------------------------------
+# Agent slug → UUID resolution
+# ---------------------------------------------------------------------------
+
+def resolve_agent_id(supabase, slug: str) -> str:
+    """Look up agent_definition UUID from slug."""
+    result = (
+        supabase.table("agent_definitions")
+        .select("id, name, slug")
+        .eq("slug", slug)
+        .execute()
+    )
+    agents = result.data or []
+    if not agents:
+        all_agents = (
+            supabase.table("agent_definitions")
+            .select("id, name, slug")
+            .execute()
+        )
+        available = all_agents.data or []
+        print(f"Error: No agent found with slug '{slug}'", file=sys.stderr)
+        if available:
+            print("Available agents in this database:", file=sys.stderr)
+            for a in available:
+                print(
+                    f"  - {a.get('name', '?')} (slug: '{a.get('slug', '')}', "
+                    f"id: {a['id']})",
+                    file=sys.stderr,
+                )
+        else:
+            print(
+                "No agents exist in this database. Are you pointing at the "
+                "right Supabase instance?",
+                file=sys.stderr,
+            )
+        sys.exit(1)
+    agent = agents[0]
+    print(
+        f"Resolved agent '{slug}' → {agent['name']} ({agent['id']})",
+        file=sys.stderr,
+    )
+    return agent["id"]
+
 # ---------------------------------------------------------------------------
 # Off-topic cases (Method 3 — hand-written, no DB needed)
 # ---------------------------------------------------------------------------
@@ -223,7 +267,12 @@ def main():
     parser = argparse.ArgumentParser(
         description="Generate framework selection eval dataset (KIN-448)"
     )
-    parser.add_argument("--agent-id", required=True, help="Agent definition UUID")
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument("--agent-id", help="Agent definition UUID")
+    group.add_argument(
+        "--agent-slug",
+        help="Agent slug (e.g., 'nate') — resolves UUID from DB",
+    )
     parser.add_argument(
         "--output",
         default="evals/framework_selection/dataset.jsonl",
@@ -259,9 +308,12 @@ def main():
 
     supabase = create_client(args.supabase_url, args.supabase_key)
 
+    # Resolve agent slug → UUID if needed
+    agent_id = args.agent_id or resolve_agent_id(supabase, args.agent_slug)
+
     # Fetch frameworks
-    print(f"Fetching frameworks for agent {args.agent_id}...", file=sys.stderr)
-    frameworks = fetch_frameworks_for_agent(supabase, args.agent_id)
+    print(f"Fetching frameworks for agent {agent_id}...", file=sys.stderr)
+    frameworks = fetch_frameworks_for_agent(supabase, agent_id)
     print(f"Found {len(frameworks)} frameworks with trigger embeddings", file=sys.stderr)
 
     if not frameworks:
