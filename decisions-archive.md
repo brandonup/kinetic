@@ -31,7 +31,7 @@ _Archived from MEMORY.md on 2026-03-28. These are locked decisions that rarely n
 | 2026-03-21 | Company profile simplified for MVP: Name + short description (optional). Full structured fields deferred. |
 | 2026-03-21 | Conversation entity added: belongs to Project, has messages, timestamped. Displayed in left column (Claude-style chat history). |
 | 2026-03-21 | Admin section in MVP: user registration and user management. Registration is email-only, auto-created. Login via Google OAuth only. No magic link (unreliable on free Supabase tier), no passwords in MVP. |
-| 2026-03-21 | Admin LLM Models tab: manages model library across three categories (generation, embedding, reranking). Only `generation` models are user-facing in MVP. In-memory cache + DB persistence; client-side pub/sub for instant UI updates; per-entity override pattern; admin-only API with audit logging. See `docs/prd.md §1`. |
+| 2026-03-21 | Admin LLM Models tab: manages model library across three categories (generation, embedding, reranking). Only `generation` models are user-facing in MVP. In-memory cache + DB persistence; client-side pub/sub for instant UI updates; per-entity override pattern; admin-only API with audit logging. See `docs/product/prd.md §1`. |
 | 2026-03-21 | AgentInstance data is private to the invoking user. Definition owner cannot see aggregate instance data. |
 | 2026-03-21 | Active Memory write UX: dual-trigger — user-initiated ("save to memory") + AI-proposed batch at conversation end with user approval. No automatic writes. Deferred proposals queued for next visit. |
 | 2026-03-21 | Conversation scope: two levels — project conversations (full 9-layer stack) and company conversations (Layers 1–2 + agent layers if invoked, no project context). |
@@ -42,7 +42,7 @@ _Archived from MEMORY.md on 2026-03-28. These are locked decisions that rarely n
 | 2026-03-21 | MVP context stack is 9 layers (no Thought Stream). User bio 500–1000 chars. |
 | 2026-03-21 | LLM client abstraction (e.g., LiteLLM) required to normalize Anthropic/OpenAI/Google/Groq APIs into a single interface. Enables BYOK + per-query model switching without per-provider integration paths. |
 | 2026-03-21 | Background processing: in-process (FastAPI BackgroundTasks) for MVP. Gilfoyle to add thin abstraction layer so migration to Celery/RQ later is a one-file change. |
-| 2026-03-21 | PRD written. See `docs/prd.md`. |
+| 2026-03-21 | PRD written. See `docs/product/prd.md`. |
 | 2026-03-21 | Frontend stack locked: Next.js 14 (App Router) + TypeScript + Radix UI + shadcn/ui + Tailwind CSS. Same stack as FounderPanel for code reuse. |
 | 2026-03-21 | Vector DB: pgvector (Supabase extension) for MVP. Qdrant is a migration option later if scale demands. Current scale (~5 users, ~2M words) is well within pgvector limits. |
 | 2026-03-21 | Codebase lineage: Kinetic implementation ports components from FounderPanel (`/Users/brandonupchuch/Projects/founder_panel`). Backend: LLM client, auth, model settings, RAG pipeline (Qdrant→pgvector), ingestion, chat service. Frontend: shadcn components, API client, SSE proxy, admin panel structure. |
@@ -51,23 +51,23 @@ _Archived from MEMORY.md on 2026-03-28. These are locked decisions that rarely n
 | 2026-03-21 | Document ingestion retry: auto-retry up to 3x with exponential backoff per stage. After 3 failures, user sees retry button. Admin can view failed docs across all users. |
 | 2026-03-21 | Admin RAG Debug tab: retrieval traces for recent queries (chunks retrieved, scores, gating decisions). Admin-only diagnostic tool. |
 | 2026-03-21 | Embedding key: platform-owned OpenAI key for `text-embedding-3-large`. Users not charged for embedding or pipeline LLM calls. BYOK is generation-only. |
-| 2026-03-21 | MVP RAG retrieval: zero LLM calls. Embed query → vector search → MMR → similarity threshold → cite → inject. Full V1 enhancements (query rewriting, FTS, LLM reranking, recency scoring) addable via config flags. See `docs/rag-architecture.md`. |
+| 2026-03-21 | MVP RAG retrieval: zero LLM calls. Embed query → vector search → MMR → similarity threshold → cite → inject. Full V1 enhancements (query rewriting, FTS, LLM reranking, recency scoring) addable via config flags. See `docs/features/rag-architecture.md`. |
 | 2026-03-21 | MVP ingestion: extract → fixed-size chunking (~500 tokens, ~50 overlap) → embed → index. No chunk enrichment, no semantic chunking in MVP. V1 enhancements via config flags. |
 | 2026-03-21 | Active Memory overflow: hard cap, write rejected with error, user must prune. Token count shown in editor. |
 | 2026-03-21 | Model selector UX: shows all admin-enabled models; models without matching user key are visible but disabled (greyed out). |
 | 2026-03-21 | Framework reranker + RAG query embedding use platform-owned key. Only per-query LLM call in MVP pipeline is Haiku reranker for framework selection (~50 tokens). |
-| 2026-03-21 | Linked upload extended to Agent Profile page: upload corpus → AI generates agent name + system prompt → user reviews/edits → saves. See `docs/feature-linked-upload.md`. |
+| 2026-03-21 | Linked upload extended to Agent Profile page: upload corpus → AI generates agent name + system prompt → user reviews/edits → saves. See `docs/features/feature-linked-upload.md`. |
 | 2026-03-21 | Linked upload + conversation compression use BYOK key (user's default model or first available). Linked upload gated on having at least one API key configured. |
 | 2026-03-21 | RAG_MAX_TOKENS: dynamic percentage of selected model's context window. Gilfoyle to determine percentage + minimum floor. |
 | 2026-03-21 | Active Memory write UX: triple-trigger — user-initiated, AI-proposed at explicit conversation end, periodic background generation every N messages. No browser unload dependency. |
 | 2026-03-21 | Framework upload: merge behavior (matching `id` = update, new = add, missing = retain). Per-framework validation with partial import. Format matches extraction script output. |
 | 2026-03-21 | MCP rate limiting: per-user daily cap (default 1,000 req/day), liberal, admin-configurable. HTTP 429 on exceed. |
 | 2026-03-21 | Agent switch preserves full conversation history. Messages tagged with `agent_id` for UI markers. |
-| 2026-03-21 | PRD pre-execution review complete. All 12 issues resolved. See `docs/prd.md` Decisions Locked table. |
+| 2026-03-21 | PRD pre-execution review complete. All 12 issues resolved. See `docs/product/prd.md` Decisions Locked table. |
 | 2026-03-21 | AgentDefinition update propagation: immediate — all invokers get updated system prompt + frameworks on next query. No versioning in MVP. Revisit when `shared` visibility ships. |
 | 2026-03-21 | Project company reassignment: everything moves — conversations, Active Memory, and KB all transfer to the new company. |
 | 2026-03-21 | API keys per provider: one per provider (Anthropic, OpenAI, Google, Groq). Multiple keys per provider deferred. |
-| 2026-03-21 | PRD approved. See `docs/prd.md`. |
+| 2026-03-21 | PRD approved. See `docs/product/prd.md`. |
 | 2026-03-21 | KB upload size limits: 25 MB per document, 1M token ingestion limit per document (mirrors FounderPanel). No per-KB/per-user storage quota in MVP. |
 | 2026-03-21 | User disable: admin must transfer ownership of public agents before disabling a user. Disable blocked until agents transferred or set to private. |
 | 2026-03-21 | Conversation soft-delete in MVP. Hidden from sidebar, retained in DB. No hard-delete. |
@@ -81,9 +81,9 @@ _Archived from MEMORY.md on 2026-03-28. These are locked decisions that rarely n
 | 2026-03-22 | Background tasks: TaskDispatcher protocol + FastAPITaskDispatcher. Migration to Celery/RQ = one-file swap. |
 | 2026-03-22 | Text extraction: `unstructured` library (covers all 12 PRD formats). See ADR-001. |
 | 2026-03-22 | DB schema spec written. 21 tables. See `docs/db-schema-spec.md`. |
-| 2026-03-22 | ADR-001 written. Stack locked. See `docs/adr-001-infrastructure-choices.md`. |
-| 2026-03-22 | ADR-002 written. RAG retrieval pipeline architecture documented. Zero-LLM MVP path, MMR config rationale, RAG_MAX_TOKENS formula, V1 enhancement enablement order. See `docs/adr-002-rag-retrieval-pipeline.md`. |
-| 2026-03-22 | ADR-003 written. AgentDefinition/AgentInstance architecture: two-table split, auto-creation, immediate propagation, JSONB overrides, framework trigger embeddings, bcrypt MCP tokens, generate-instructions flow, bulk upload merge. See `docs/adr-003-agents-architecture.md`. |
+| 2026-03-22 | ADR-001 written. Stack locked. See `docs/adrs/adr-001-infrastructure-choices.md`. |
+| 2026-03-22 | ADR-002 written. RAG retrieval pipeline architecture documented. Zero-LLM MVP path, MMR config rationale, RAG_MAX_TOKENS formula, V1 enhancement enablement order. See `docs/adrs/adr-002-rag-retrieval-pipeline.md`. |
+| 2026-03-22 | ADR-003 written. AgentDefinition/AgentInstance architecture: two-table split, auto-creation, immediate propagation, JSONB overrides, framework trigger embeddings, bcrypt MCP tokens, generate-instructions flow, bulk upload merge. See `docs/adrs/adr-003-agents-architecture.md`. |
 | 2026-03-22 | Conversation title generation uses BYOK key (user's default model). If no key configured, title stays null — renders as "New conversation". No platform key used. |
 | 2026-03-23 | Linked upload extraction endpoints (`/api/{company,agent}/{id}/upload-document`) do NOT validate ownership of the path param. Intentional: endpoint is compute-only (no DB write, no read of protected data). Ownership is validated by the save PATCH endpoint. Sprint 4 agent save endpoint must enforce ownership check. |
 | 2026-03-23 | Development workflow changed from parallel-autonomous to sequential-supervised. One implementation agent at a time, Brandon coordinates, agents check in after each ticket. Gilfoyle review is a hard gate. Pre-implementation spec check mandatory. See `conventions.md § Development Workflow Model` and `linear-workflow.md § Session Start`. |
@@ -109,24 +109,24 @@ _Archived from MEMORY.md on 2026-03-28. These are locked decisions that rarely n
 
 | Doc | Location | Status |
 |---|---|---|
-| Product Brief | `docs/product-brief.md` | Draft (updated 2026-03-21) |
-| Jobs to Be Done | `docs/jobs-to-be-done.md` | Draft (updated 2026-03-21) |
-| Domain Model | `docs/domain-model.md` | Draft (updated 2026-03-21) |
-| MVP Scope | `docs/mvp-scope.md` | Draft (new 2026-03-21) |
-| RAG Architecture | `docs/rag-architecture.md` | Draft (new 2026-03-21) |
-| Feature: Linked Upload | `docs/feature-linked-upload.md` | Draft (new 2026-03-21) |
+| Product Brief | `docs/product/product-brief.md` | Draft (updated 2026-03-21) |
+| Jobs to Be Done | `docs/product/jobs-to-be-done.md` | Draft (updated 2026-03-21) |
+| Domain Model | `docs/product/domain-model.md` | Draft (updated 2026-03-21) |
+| MVP Scope | `docs/product/mvp-scope.md` | Draft (new 2026-03-21) |
+| RAG Architecture | `docs/features/rag-architecture.md` | Draft (new 2026-03-21) |
+| Feature: Linked Upload | `docs/features/feature-linked-upload.md` | Draft (new 2026-03-21) |
 | Memory System Spec | `docs/memory-system-spec.md` | Not started |
-| PRD | `docs/prd.md` | Approved (2026-03-21) |
+| PRD | `docs/product/prd.md` | Approved (2026-03-21) |
 | Active Memory Spec | `docs/specs/active-memory-spec.md` | Draft (new 2026-03-22) |
 | DB Schema Spec | `docs/db-schema-spec.md` | Draft (new 2026-03-22) |
-| ADR-001: Infrastructure | `docs/adr-001-infrastructure-choices.md` | Proposed (new 2026-03-22) |
-| ADR-002: RAG Retrieval Pipeline | `docs/adr-002-rag-retrieval-pipeline.md` | Proposed (new 2026-03-22) |
-| ADR-003: Agents Architecture | `docs/adr-003-agents-architecture.md` | Proposed (new 2026-03-22) |
-| ADR-006: MCP Server | `docs/adr-006-mcp-server.md` | Accepted (2026-03-23) |
+| ADR-001: Infrastructure | `docs/adrs/adr-001-infrastructure-choices.md` | Proposed (new 2026-03-22) |
+| ADR-002: RAG Retrieval Pipeline | `docs/adrs/adr-002-rag-retrieval-pipeline.md` | Proposed (new 2026-03-22) |
+| ADR-003: Agents Architecture | `docs/adrs/adr-003-agents-architecture.md` | Proposed (new 2026-03-22) |
+| ADR-006: MCP Server | `docs/adrs/adr-006-mcp-server.md` | Accepted (2026-03-23) |
 | MCP Spec | `docs/specs/mcp-spec.md` | Approved (updated 2026-03-24) |
 | Admin RAG Debug Tab Spec | `docs/specs/rag-debug-tab-spec.md` | Approved (2026-03-24) |
 | Generation Engine Spec | `docs/specs/generation-engine-spec.md` | Draft (new 2026-03-26) |
-| Build Order | `docs/build-order.md` | Draft (2026-03-21) |
+| Build Order | `docs/product/build-order.md` | Draft (2026-03-21) |
 | Sprint 1 Plan | `docs/plans/2026-03-21-sprint1-foundation.md` | Active (new 2026-03-22) |
 | Framework MVP Strategy | `nbj_extractor/framework-mvp-strategy.md` | Draft — not executed (2026-03-23) |
 | Framework Extraction Learnings | `nbj_extractor/LEARNINGS.md` | Active (updated 2026-03-23) |

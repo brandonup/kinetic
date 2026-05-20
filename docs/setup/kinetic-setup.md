@@ -18,7 +18,7 @@ You'll need:
 ---
 
 ## Step 1: Sign up for Kinetic
-1. Open your browser and go to: **https://kinetic-production-b568.up.railway.app**
+1. Open your browser and go to: **https://kinetic-ashy-beta.vercel.app/**
 2. Log in with your Gmail credentials
 3. You should see the Kinetic dashboard
 
@@ -55,7 +55,19 @@ This token lets Cowork connect to your Kinetic account.
 
 ---
 
-## Step 5: Test It
+## Step 5: Install the /nate Skill
+
+The `/nate` command is a Cowork skill that tells Claude how to use the Kinetic tools. Brandon will provide the skill file.
+
+1. In Cowork, open the **Skills** panel (click the `/` button in the composer, then **Manage skills**)
+2. Click **Create skill** (or **Upload**, depending on your version)
+3. Paste the skill content Brandon provides
+4. Save the skill
+5. **Quit Cowork completely** (Cmd+Q) and reopen it — skills are not available until after a restart
+
+---
+
+## Step 6: Test It
 
 1. Start a **new conversation** in Cowork
 2. Type: `/nate How should I think about pricing for an AI-powered SaaS?`
@@ -74,7 +86,11 @@ This token lets Cowork connect to your Kinetic account.
 
 ## Troubleshooting
 
-**Connector doesn't show tools or /nate doesn't appear:**
+**`/nate` doesn't appear in the skill dropdown:**
+- Make sure you quit Cowork completely (Cmd+Q) and reopened after adding the skill
+- Check that the skill was saved successfully in Manage skills
+
+**Connector doesn't show tools:**
 - Remove the connector and re-add it
 - Make sure the URL includes `?key=mcp_...` at the end (no extra spaces or line breaks)
 - Quit Cowork completely (Cmd+Q) and reopen
