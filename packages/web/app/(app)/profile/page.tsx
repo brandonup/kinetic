@@ -425,8 +425,6 @@ export default function ProfilePage() {
           </div>
         </section>
 
-        <Separator />
-
         {/* ── Linked Upload (Auto-fill) ── */}
         <section className="space-y-3">
           <div>
