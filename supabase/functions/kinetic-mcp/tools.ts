@@ -355,11 +355,11 @@ export async function selectFramework(
   const queryCtx = await fetchQueryContext(supabase, userId);
   queryCtx.agentName = agent.name;  // L5: agent scope signal
 
-  // Embed the enriched query (uses user's BYOK OpenAI key)
+  // Embed the enriched query (uses platform Gemini key)
   const enrichedQuery = buildEnrichedQuery(query, queryCtx);
   let queryEmbedding: number[];
   try {
-    queryEmbedding = await embedQuery(supabase, userId, enrichedQuery);
+    queryEmbedding = await embedQuery(enrichedQuery);
   } catch (err) {
     if (err instanceof Error) return err.message;
     return "Error: Embedding failed";
@@ -493,7 +493,7 @@ export async function searchKnowledgeBase(
   const enrichedQuery = buildEnrichedQuery(query, queryCtx);
   let queryEmbedding: number[];
   try {
-    queryEmbedding = await embedQuery(supabase, userId, enrichedQuery);
+    queryEmbedding = await embedQuery(enrichedQuery);
   } catch (err) {
     if (err instanceof Error) return err.message;
     return "Error: Embedding failed";
@@ -607,13 +607,13 @@ export async function assembleContext(
   const queryCtx = await fetchQueryContext(supabase, userId);
   queryCtx.agentName = agent.name;  // L5: strongest scope signal for KB
 
-  // --- Single embedding call with enriched query (eliminates redundant OpenAI request) ---
+  // --- Single embedding call with enriched query (platform Gemini key) ---
   const enrichedCtxQuery = buildEnrichedQuery(query, queryCtx);
   let queryEmbedding: number[] | null = null;
   let embeddingError: string | null = null;
   const embeddingStart = Date.now();
   try {
-    queryEmbedding = await embedQuery(supabase, userId, enrichedCtxQuery);
+    queryEmbedding = await embedQuery(enrichedCtxQuery);
   } catch (err) {
     embeddingError = err instanceof Error ? err.message : "Error: Embedding failed";
   }

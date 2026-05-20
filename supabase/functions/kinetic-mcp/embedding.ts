@@ -1,91 +1,50 @@
 /**
- * Embedding Helper — KIN-428.
+ * Embedding Helper — KIN-467.
  *
- * Decrypts user's OpenAI key from user_api_keys, calls OpenAI embeddings API.
+ * Uses platform Gemini API key to generate embeddings (1024 dims).
+ * No BYOK decryption needed — simplifies the embedding path.
+ *
  * Returns embedding as number[] for use with match_chunks / match_framework_triggers RPCs.
- *
- * Schema ref: db-schema-spec.md §2 (user_api_keys)
  */
 
-import { SupabaseClient } from "@supabase/supabase-js";
-import { byteaToUint8Array, decryptApiKey, loadMasterKey } from "./crypto.ts";
-
-const EMBEDDING_MODEL = "text-embedding-3-large";
-const EMBEDDING_DIMS = 3072;
+const EMBEDDING_MODEL = "gemini-embedding-001";
+const EMBEDDING_DIMS = 1024;
 
 /**
- * Fetch and decrypt a user's OpenAI API key.
+ * Generate an embedding for a query string using the platform Gemini key.
  *
- * Matches Python: fetch_user_key(supabase, user_id, "openai") in user_keys.py
- *
- * Returns null if no key is configured (not an error — caller handles messaging).
- */
-export async function fetchUserOpenAiKey(
-  supabase: SupabaseClient,
-  userId: string
-): Promise<string | null> {
-  const { data, error } = await supabase
-    .from("user_api_keys")
-    .select("key_ciphertext, key_nonce")
-    .eq("user_id", userId)
-    .eq("provider", "openai")
-    .maybeSingle();
-
-  if (error || !data) {
-    return null;
-  }
-
-  try {
-    const masterKey = loadMasterKey();
-    const ciphertext = byteaToUint8Array(data.key_ciphertext);
-    const nonce = byteaToUint8Array(data.key_nonce);
-    return await decryptApiKey(ciphertext, nonce, masterKey, userId);
-  } catch (err) {
-    console.error(
-      `Failed to decrypt OpenAI key for user ${userId} ` +
-      "(likely API_KEY_ENCRYPTION_KEY changed since key was stored — " +
-      "user must re-save their key in Settings):",
-      err
-    );
-    return null;
-  }
-}
-
-/**
- * Generate an embedding for a query string using the user's OpenAI key.
- *
- * Returns number[] (3072 dimensions) compatible with extensions.vector(3072)
+ * Returns number[] (1024 dimensions) compatible with extensions.vector(1024)
  * for use in match_chunks and match_framework_triggers RPCs.
  *
  * Throws descriptive error strings matching the MCP error convention:
- *   - "Error: No OpenAI API key configured — add one in Kinetic settings to use this tool"
- *   - "Error: OpenAI API error — <message>"
+ *   - "Error: GEMINI_API_KEY not configured — contact the platform admin"
+ *   - "Error: Gemini API error — <message>"
  */
 export async function embedQuery(
-  supabase: SupabaseClient,
-  userId: string,
   query: string
 ): Promise<number[]> {
-  const apiKey = await fetchUserOpenAiKey(supabase, userId);
+  const apiKey = Deno.env.get("GEMINI_API_KEY");
   if (!apiKey) {
     throw new Error(
-      "Error: No OpenAI API key configured — add one in Kinetic settings to use this tool"
+      "Error: GEMINI_API_KEY not configured — contact the platform admin"
     );
   }
 
   try {
-    const response = await fetch("https://api.openai.com/v1/embeddings", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: EMBEDDING_MODEL,
-        input: query,
-        dimensions: EMBEDDING_DIMS,
-      }),
-    });
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${EMBEDDING_MODEL}:embedContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          content: {
+            parts: [{ text: query }],
+          },
+        }),
+      }
+    );
 
     if (!response.ok) {
       const body = await response.text();
@@ -96,14 +55,14 @@ export async function embedQuery(
       } catch {
         // Use HTTP status as message
       }
-      throw new Error(`Error: OpenAI API error — ${message}`);
+      throw new Error(`Error: Gemini API error — ${message}`);
     }
 
     const data = await response.json();
-    const embedding: number[] = data?.data?.[0]?.embedding;
+    const embedding: number[] = data?.embedding?.values;
 
     if (!embedding || !Array.isArray(embedding)) {
-      throw new Error("Error: OpenAI API error — unexpected response format");
+      throw new Error("Error: Gemini API error — unexpected response format");
     }
 
     return embedding;
@@ -114,7 +73,7 @@ export async function embedQuery(
     }
     // Wrap unexpected errors
     throw new Error(
-      `Error: OpenAI API error — ${err instanceof Error ? err.message : "unknown error"}`
+      `Error: Gemini API error — ${err instanceof Error ? err.message : "unknown error"}`
     );
   }
 }
