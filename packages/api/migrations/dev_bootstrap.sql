@@ -289,11 +289,12 @@ CREATE TABLE IF NOT EXISTS public.framework_trigger_embeddings (
   framework_db_id      uuid        NOT NULL REFERENCES public.frameworks(id) ON DELETE CASCADE,
   agent_definition_id  uuid        NOT NULL REFERENCES public.agent_definitions(id) ON DELETE CASCADE,
   trigger_text         text        NOT NULL,
-  embedding            vector(3072) NOT NULL,
-  embedding_model      text        NOT NULL DEFAULT 'text-embedding-3-large',
+  embedding            extensions.halfvec(3072) NOT NULL,
+  embedding_model      text        NOT NULL DEFAULT 'gemini-embedding-001',
   created_at           timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_trigger_embeddings_framework ON public.framework_trigger_embeddings (framework_db_id);
+CREATE INDEX IF NOT EXISTS idx_fw_trigger_embeddings_hnsw ON public.framework_trigger_embeddings USING hnsw (embedding extensions.halfvec_cosine_ops);
 ALTER TABLE public.framework_trigger_embeddings ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN CREATE POLICY "trigger_embeddings_select" ON public.framework_trigger_embeddings FOR SELECT USING (agent_definition_id IN (SELECT id FROM public.agent_definitions WHERE owner_id = auth.uid() OR visibility = 'public')); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "trigger_embeddings_insert_own" ON public.framework_trigger_embeddings FOR INSERT WITH CHECK (auth.uid() = (SELECT owner_id FROM public.agent_definitions WHERE id = agent_definition_id)); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
@@ -472,19 +473,20 @@ CREATE TABLE IF NOT EXISTS public.knowledge_base_chunks (
   project_id            uuid,
   agent_definition_id   uuid,
   text                  text        NOT NULL,
-  embedding             vector(3072),
+  embedding             extensions.halfvec(3072),
   chunk_summary         text,
   keywords              text[],
   section_path          text,
   page_range            text,
   chunk_index           int         NOT NULL,
   tsv                   tsvector,
-  embedding_model       text        NOT NULL DEFAULT 'text-embedding-3-large',
+  embedding_model       text        NOT NULL DEFAULT 'gemini-embedding-001',
   created_at            timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_chunks_document ON public.knowledge_base_chunks (document_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_project ON public.knowledge_base_chunks (project_id) WHERE project_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_chunks_agent_def ON public.knowledge_base_chunks (agent_definition_id) WHERE agent_definition_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_kb_chunks_embedding_hnsw ON public.knowledge_base_chunks USING hnsw (embedding extensions.halfvec_cosine_ops);
 ALTER TABLE public.knowledge_base_chunks ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN CREATE POLICY "kb_chunks_select" ON public.knowledge_base_chunks FOR SELECT USING (knowledge_base_id IN (SELECT id FROM public.knowledge_bases WHERE auth.uid() = user_id OR agent_definition_id IN (SELECT id FROM public.agent_definitions WHERE visibility = 'public'))); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "kb_chunks_insert" ON public.knowledge_base_chunks FOR INSERT WITH CHECK (knowledge_base_id IN (SELECT id FROM public.knowledge_bases WHERE auth.uid() = user_id)); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
@@ -525,9 +527,10 @@ END $$;
 -- 6. RPC functions
 -- =========================================================================
 
--- match_framework_triggers (KIN-411)
+-- match_framework_triggers (KIN-411, KIN-476)
+-- KIN-476: query_embedding is `text` (JSON-array), cast to halfvec(3072) inside.
 CREATE OR REPLACE FUNCTION public.match_framework_triggers(
-  query_embedding extensions.vector(3072),
+  query_embedding text,
   p_agent_id uuid,
   match_count integer DEFAULT 20
 )
@@ -540,37 +543,47 @@ LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, extensions
 AS $$
+DECLARE
+  q extensions.halfvec(3072) := query_embedding::extensions.halfvec(3072);
 BEGIN
   RETURN QUERY
   SELECT
     fte.framework_db_id,
     fte.trigger_text,
-    1 - (fte.embedding <=> query_embedding) AS similarity
+    1 - (fte.embedding <=> q) AS similarity
   FROM public.framework_trigger_embeddings fte
   WHERE fte.agent_definition_id = p_agent_id
-  ORDER BY fte.embedding <=> query_embedding
+  ORDER BY fte.embedding <=> q
   LIMIT match_count;
 END;
 $$;
 
--- match_chunks (KIN-429)
+-- match_chunks (KIN-429, KIN-449, KIN-476)
+-- KIN-449: returns full citation columns (document_id, chunk_index, page_range, document_type).
+-- KIN-476: query_embedding is `text` (JSON-array), cast to halfvec(3072) inside.
 CREATE OR REPLACE FUNCTION public.match_chunks(
-  query_embedding extensions.vector(3072),
+  query_embedding text,
   scope_column text,
   scope_value text,
   match_count integer DEFAULT 20
 )
 RETURNS TABLE (
   id uuid,
+  document_id uuid,
   document_title text,
-  section_path text,
+  document_type text,
   text text,
+  chunk_index integer,
+  section_path text,
+  page_range text,
   similarity double precision
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, extensions
 AS $$
+DECLARE
+  q extensions.halfvec(3072) := query_embedding::extensions.halfvec(3072);
 BEGIN
   IF scope_column NOT IN ('agent_definition_id', 'knowledge_base_id', 'project_id') THEN
     RAISE EXCEPTION 'Invalid scope_column: %', scope_column;
@@ -580,9 +593,13 @@ BEGIN
     $q$
     SELECT
       c.id,
+      c.document_id,
       d.title AS document_title,
-      c.section_path,
+      d.file_type AS document_type,
       c.text,
+      c.chunk_index,
+      c.section_path,
+      c.page_range,
       1 - (c.embedding <=> $1) AS similarity
     FROM public.knowledge_base_chunks c
     JOIN public.knowledge_base_documents d ON d.id = c.document_id
@@ -593,7 +610,7 @@ BEGIN
     $q$,
     scope_column
   )
-  USING query_embedding, scope_value, match_count;
+  USING q, scope_value, match_count;
 END;
 $$;
 
@@ -683,7 +700,9 @@ VALUES
   ('groq', 'openai/gpt-oss-120b',                           'GPT OSS 120B',           'generation', true),
   ('groq', 'openai/gpt-oss-20b',                            'GPT OSS 20B',            'generation', true),
   ('groq', 'qwen/qwen3-32b',                                'Qwen3 32B',              'generation', true),
-  -- OpenAI — embedding
+  -- Google — embedding (KIN-467: platform-owned Gemini key)
+  ('google', 'gemini-embedding-001', 'Gemini Embedding 001', 'embedding', true),
+  -- OpenAI — embedding (legacy, retained for reference)
   ('openai', 'text-embedding-3-large', 'Text Embedding 3 Large', 'embedding', true),
   ('openai', 'text-embedding-3-small', 'Text Embedding 3 Small', 'embedding', true),
   ('openai', 'text-embedding-ada-002', 'Text Embedding Ada 002', 'embedding', true),

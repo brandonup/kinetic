@@ -320,19 +320,19 @@ DO $$ BEGIN CREATE POLICY "frameworks_update_own" ON public.frameworks FOR UPDAT
 DO $$ BEGIN CREATE POLICY "frameworks_delete_own" ON public.frameworks FOR DELETE USING (auth.uid() = (SELECT owner_id FROM public.agent_definitions WHERE id = agent_definition_id)); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- 4.12 framework_trigger_embeddings
--- NOTE: vector(3072) exceeds pgvector IVFFlat/HNSW 2000-dim limit — no vector index at MVP scale.
--- Sequential scan via <=> operator is acceptable at MVP volume. Re-evaluate when chunks > 50K.
+-- KIN-476: embedding is extensions.halfvec(3072) — Gemini-001 native dim.
+-- pgvector 0.8 supports HNSW on halfvec up to 4000 dims (halfvec_cosine_ops).
 CREATE TABLE IF NOT EXISTS public.framework_trigger_embeddings (
   id                   uuid        NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   framework_db_id      uuid        NOT NULL REFERENCES public.frameworks(id) ON DELETE CASCADE,
   agent_definition_id  uuid        NOT NULL REFERENCES public.agent_definitions(id) ON DELETE CASCADE,
   trigger_text         text        NOT NULL,
-  embedding            vector(3072) NOT NULL,
-  embedding_model      text        NOT NULL DEFAULT 'text-embedding-3-large',
+  embedding            extensions.halfvec(3072) NOT NULL,
+  embedding_model      text        NOT NULL DEFAULT 'gemini-embedding-001',
   created_at           timestamptz NOT NULL DEFAULT now()
 );
--- No vector index: 3072 dims exceeds IVFFlat/HNSW limit. Sequential scan used instead.
 CREATE INDEX IF NOT EXISTS idx_trigger_embeddings_framework ON public.framework_trigger_embeddings (framework_db_id);
+CREATE INDEX IF NOT EXISTS idx_fw_trigger_embeddings_hnsw ON public.framework_trigger_embeddings USING hnsw (embedding extensions.halfvec_cosine_ops);
 ALTER TABLE public.framework_trigger_embeddings ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN CREATE POLICY "trigger_embeddings_select" ON public.framework_trigger_embeddings FOR SELECT USING (agent_definition_id IN (SELECT id FROM public.agent_definitions WHERE owner_id = auth.uid() OR visibility = 'public')); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "trigger_embeddings_insert_own" ON public.framework_trigger_embeddings FOR INSERT WITH CHECK (auth.uid() = (SELECT owner_id FROM public.agent_definitions WHERE id = agent_definition_id)); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
@@ -543,20 +543,21 @@ CREATE TABLE IF NOT EXISTS public.knowledge_base_chunks (
   project_id            uuid,
   agent_definition_id   uuid,
   text                  text        NOT NULL,
-  embedding             vector(3072),
+  embedding             extensions.halfvec(3072),
   chunk_summary         text,
   keywords              text[],
   section_path          text,
   page_range            text,
   chunk_index           int         NOT NULL,
   tsv                   tsvector,
-  embedding_model       text        NOT NULL DEFAULT 'text-embedding-3-large',
+  embedding_model       text        NOT NULL DEFAULT 'gemini-embedding-001',
   created_at            timestamptz NOT NULL DEFAULT now()
 );
--- No vector indexes: 3072 dims exceeds IVFFlat/HNSW limit. Sequential scan used instead.
 CREATE INDEX IF NOT EXISTS idx_chunks_document ON public.knowledge_base_chunks (document_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_project ON public.knowledge_base_chunks (project_id) WHERE project_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_chunks_agent_def ON public.knowledge_base_chunks (agent_definition_id) WHERE agent_definition_id IS NOT NULL;
+-- KIN-476: HNSW index on extensions.halfvec(3072) embedding for cosine similarity search.
+CREATE INDEX IF NOT EXISTS idx_kb_chunks_embedding_hnsw ON public.knowledge_base_chunks USING hnsw (embedding extensions.halfvec_cosine_ops);
 ALTER TABLE public.knowledge_base_chunks ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN CREATE POLICY "kb_chunks_select" ON public.knowledge_base_chunks FOR SELECT USING (knowledge_base_id IN (SELECT id FROM public.knowledge_bases WHERE auth.uid() = user_id OR agent_definition_id IN (SELECT id FROM public.agent_definitions WHERE visibility = 'public'))); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN CREATE POLICY "kb_chunks_insert" ON public.knowledge_base_chunks FOR INSERT WITH CHECK (knowledge_base_id IN (SELECT id FROM public.knowledge_bases WHERE auth.uid() = user_id)); EXCEPTION WHEN duplicate_object THEN NULL; END $$;
@@ -665,8 +666,10 @@ END $$;
 -- match_framework_triggers — cosine similarity search over trigger embeddings (ADR-007 §5, KIN-411)
 -- SECURITY DEFINER: bypasses RLS — called from service-role backend only.
 -- Scoped by p_agent_id for tenant isolation.
+-- KIN-476: query_embedding is `text` (JSON-array), cast to halfvec(3072) inside the
+-- function — PostgREST has no implicit JSON-array → halfvec cast for list[float] callers.
 CREATE OR REPLACE FUNCTION public.match_framework_triggers(
-  query_embedding vector(3072),
+  query_embedding text,
   p_agent_id uuid,
   match_count integer DEFAULT 20
 )
@@ -677,18 +680,75 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public
+SET search_path = public, extensions
 AS $$
+DECLARE
+  q extensions.halfvec(3072) := query_embedding::extensions.halfvec(3072);
 BEGIN
   RETURN QUERY
   SELECT
     fte.framework_db_id,
     fte.trigger_text,
-    1 - (fte.embedding <=> query_embedding) AS similarity
+    1 - (fte.embedding <=> q) AS similarity
   FROM public.framework_trigger_embeddings fte
   WHERE fte.agent_definition_id = p_agent_id
-  ORDER BY fte.embedding <=> query_embedding
+  ORDER BY fte.embedding <=> q
   LIMIT match_count;
+END;
+$$;
+
+-- 5.4 match_chunks — scope-filtered vector search on knowledge_base_chunks (KIN-429, KIN-476)
+-- KIN-476: query_embedding is `text` (JSON-array), cast to halfvec(3072) inside the function.
+CREATE OR REPLACE FUNCTION public.match_chunks(
+  query_embedding text,
+  scope_column text,
+  scope_value text,
+  match_count integer DEFAULT 20
+)
+RETURNS TABLE (
+  id uuid,
+  document_id uuid,
+  document_title text,
+  document_type text,
+  text text,
+  chunk_index integer,
+  section_path text,
+  page_range text,
+  similarity double precision
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+DECLARE
+  q extensions.halfvec(3072) := query_embedding::extensions.halfvec(3072);
+BEGIN
+  IF scope_column NOT IN ('agent_definition_id', 'knowledge_base_id', 'project_id') THEN
+    RAISE EXCEPTION 'Invalid scope_column: %', scope_column;
+  END IF;
+
+  RETURN QUERY EXECUTE format(
+    $q$
+    SELECT
+      c.id,
+      c.document_id,
+      d.title AS document_title,
+      d.file_type AS document_type,
+      c.text,
+      c.chunk_index,
+      c.section_path,
+      c.page_range,
+      1 - (c.embedding <=> $1) AS similarity
+    FROM public.knowledge_base_chunks c
+    JOIN public.knowledge_base_documents d ON d.id = c.document_id
+    WHERE c.%I = $2
+      AND d.deleted_at IS NULL
+    ORDER BY c.embedding <=> $1
+    LIMIT $3
+    $q$,
+    scope_column
+  )
+  USING q, scope_value, match_count;
 END;
 $$;
 
