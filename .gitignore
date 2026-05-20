@@ -38,3 +38,16 @@ dist/
 # Eval outputs (generated per-run)
 packages/api/evals/**/dataset.jsonl
 packages/api/evals/**/results_*/
+
+# Local IDE / tooling config
+.claude/settings.local.json
+
+# Supabase CLI scratch
+supabase/.temp/
+
+# Derived data (nbj_extractor — generated from JSONL)
+nbj_extractor/articles/
+nbj_extractor/bulk_upload_progress.jsonl
+
+# Trigger-rewrite script outputs (generated per-run)
+packages/api/scripts/trigger_rewrite_*.json
