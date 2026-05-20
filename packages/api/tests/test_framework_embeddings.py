@@ -3,7 +3,6 @@ Tests for KIN-412: embed_framework_triggers background job.
 
 Covers:
   - Happy path: embeds triggers, deletes old rows, inserts new rows
-  - No-op when owner has no OpenAI key
   - No-op when triggers list is empty
   - Graceful skip when embedding fails
   - Route dispatch: create_framework dispatches embedding job
@@ -30,7 +29,6 @@ TEST_EMBED = [0.1, 0.2, 0.3]
 PATCH_SUPABASE = "app.api.routes.agents.get_supabase_client"
 PATCH_DISPATCHER = "app.api.routes.agents.get_task_dispatcher"
 PATCH_CREATE_SUPABASE = "app.services.framework_embeddings.create_supabase"
-PATCH_FETCH_KEY = "app.services.framework_embeddings.fetch_user_key"
 PATCH_EMBEDDER = "app.services.framework_embeddings.EmbeddingService"
 
 
@@ -70,7 +68,7 @@ def _fw_row(fw_id: str = TEST_FW_ID, agent_id: str = TEST_AGENT_ID) -> dict:
 
 class TestEmbedFrameworkTriggers:
     def test_embeds_and_inserts(self):
-        """Happy path: fetches key, embeds triggers, deletes old rows, inserts new ones."""
+        """Happy path: embeds triggers using platform Gemini key, deletes old rows, inserts new ones."""
         from app.services.framework_embeddings import embed_framework_triggers
 
         mock_client = MagicMock()
@@ -79,7 +77,6 @@ class TestEmbedFrameworkTriggers:
 
         with (
             patch(PATCH_CREATE_SUPABASE, return_value=mock_client),
-            patch(PATCH_FETCH_KEY, return_value="sk-test-key"),
             patch(PATCH_EMBEDDER, return_value=mock_embedder),
         ):
             asyncio.get_event_loop().run_until_complete(
@@ -94,30 +91,6 @@ class TestEmbedFrameworkTriggers:
         # Verify delete was called for idempotency
         mock_client.table.assert_any_call("framework_trigger_embeddings")
         mock_embedder.embed_batch.assert_called_once_with(["when unsure"])
-
-    def test_no_op_when_no_openai_key(self):
-        """When owner has no OpenAI key, function returns without embedding."""
-        from app.services.framework_embeddings import embed_framework_triggers
-
-        mock_client = MagicMock()
-        mock_embedder = MagicMock()
-
-        with (
-            patch(PATCH_CREATE_SUPABASE, return_value=mock_client),
-            patch(PATCH_FETCH_KEY, return_value=None),
-            patch(PATCH_EMBEDDER, return_value=mock_embedder),
-        ):
-            asyncio.get_event_loop().run_until_complete(
-                embed_framework_triggers(
-                    framework_db_id=TEST_FW_ID,
-                    agent_definition_id=TEST_AGENT_ID,
-                    triggers=["when unsure"],
-                    user_id=TEST_USER_ID,
-                )
-            )
-
-        mock_embedder.embed_batch.assert_not_called()
-        mock_client.table.assert_not_called()
 
     def test_no_op_when_triggers_empty(self):
         """When triggers list is empty, function returns immediately."""
@@ -143,11 +116,10 @@ class TestEmbedFrameworkTriggers:
 
         mock_client = MagicMock()
         mock_embedder = MagicMock()
-        mock_embedder.embed_batch.side_effect = RuntimeError("OpenAI unreachable")
+        mock_embedder.embed_batch.side_effect = RuntimeError("Gemini unreachable")
 
         with (
             patch(PATCH_CREATE_SUPABASE, return_value=mock_client),
-            patch(PATCH_FETCH_KEY, return_value="sk-test-key"),
             patch(PATCH_EMBEDDER, return_value=mock_embedder),
         ):
             # Should not raise

@@ -176,14 +176,13 @@ async def select_framework(
     query_text: str,
     agent_id: str,
     supabase,
-    openai_key: str = "",
     excluded_ids: set[str] | None = None,
     context: QueryContext | None = None,
 ) -> FrameworkMatch:
     """
     Run the 4-step framework selection pipeline for MCP context assembly (L7).
 
-    Uses user's BYOK OpenAI key for embedding.
+    Embedding uses platform Gemini key — no user BYOK required (KIN-467).
 
     Args:
         excluded_ids: Framework IDs to exclude from the candidate pool
@@ -206,7 +205,7 @@ async def select_framework(
         enriched_query = build_enriched_query(query_text, context)
 
         from app.services.ingestion.embedder import EmbeddingService
-        embedder = EmbeddingService(api_key=openai_key)
+        embedder = EmbeddingService()
         query_embedding = await loop.run_in_executor(
             None, lambda: embedder.embed_batch([enriched_query])[0]
         )

@@ -139,7 +139,6 @@ def _build_mock_supabase(
     due_sources: list | None = None,
     existing_external_ids: list | None = None,
     kb_data: dict | None = None,
-    openai_key: str = "sk-test-key",
 ):
     """Build a mock Supabase client with configurable table responses."""
     mock = MagicMock()
@@ -184,7 +183,6 @@ def _build_mock_supabase(
 
 SB_PATCH = "app.services.scraping.poller._get_client"
 SCRAPER_PATCH = "app.services.scraping.poller._resolve_scraper"
-USER_KEY_PATCH = "app.services.scraping.poller._fetch_openai_key"
 INGEST_POST_PATCH = "app.services.scraping.poller._ingest_post"
 
 
@@ -234,7 +232,6 @@ class TestPollScrapeSources:
         with (
             patch(SB_PATCH, return_value=mock_sb),
             patch(SCRAPER_PATCH, return_value=mock_scraper),
-            patch(USER_KEY_PATCH, return_value="sk-test"),
             patch(INGEST_POST_PATCH, new_callable=AsyncMock) as mock_ingest,
         ):
             _run(poll_scrape_sources())
@@ -260,7 +257,6 @@ class TestPollScrapeSources:
         with (
             patch(SB_PATCH, return_value=mock_sb),
             patch(SCRAPER_PATCH, return_value=mock_scraper),
-            patch(USER_KEY_PATCH, return_value="sk-test"),
             patch(INGEST_POST_PATCH, new_callable=AsyncMock) as mock_ingest,
         ):
             _run(poll_scrape_sources())
@@ -281,7 +277,6 @@ class TestPollScrapeSources:
         with (
             patch(SB_PATCH, return_value=mock_sb),
             patch(SCRAPER_PATCH, return_value=mock_scraper),
-            patch(USER_KEY_PATCH, return_value="sk-test"),
         ):
             _run(poll_scrape_sources())
 
@@ -304,7 +299,6 @@ class TestPollScrapeSources:
         with (
             patch(SB_PATCH, return_value=mock_sb),
             patch(SCRAPER_PATCH, return_value=mock_scraper),
-            patch(USER_KEY_PATCH, return_value="sk-test"),
         ):
             _run(poll_scrape_sources())
 
@@ -313,18 +307,6 @@ class TestPollScrapeSources:
             c for c in mock_sb.table.call_args_list if c.args[0] == "scrape_sources"
         ]
         assert len(update_calls) >= 1
-
-    def test_no_openai_key_triggers_failure(self):
-        """If user has no BYOK OpenAI key, source fails gracefully."""
-        source = _source_row()
-        mock_sb = _build_mock_supabase(due_sources=[source])
-
-        with (
-            patch(SB_PATCH, return_value=mock_sb),
-            patch(USER_KEY_PATCH, return_value=None),
-        ):
-            # Should not crash — error is caught per-source
-            _run(poll_scrape_sources())
 
     def test_multiple_sources_processed_independently(self):
         """Multiple due sources: one failure doesn't prevent processing the next."""
@@ -348,7 +330,6 @@ class TestPollScrapeSources:
         with (
             patch(SB_PATCH, return_value=mock_sb),
             patch(SCRAPER_PATCH, return_value=mock_scraper),
-            patch(USER_KEY_PATCH, return_value="sk-test"),
         ):
             _run(poll_scrape_sources())
 

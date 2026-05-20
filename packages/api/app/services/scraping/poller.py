@@ -47,13 +47,6 @@ def _get_client():
     return get_supabase()
 
 
-def _fetch_openai_key(supabase, user_id: str) -> str | None:
-    """Resolve BYOK OpenAI key. Thin wrapper for test patching."""
-    from app.services.user_keys import fetch_user_key
-
-    return fetch_user_key(supabase, user_id, "openai")
-
-
 def _resolve_scraper(source_type: str):
     """Get scraper instance. Thin wrapper for test patching."""
     from app.services.scraping.registry import get_scraper
@@ -100,14 +93,7 @@ async def _process_source(supabase, source_row: dict) -> None:
     loop = asyncio.get_running_loop()
 
     try:
-        # Resolve BYOK OpenAI key for this user (needed for embedding after ingestion)
-        openai_key = await loop.run_in_executor(
-            None, lambda: _fetch_openai_key(supabase, user_id)
-        )
-        if not openai_key:
-            raise RuntimeError(
-                "No OpenAI BYOK key found — required for embedding after ingestion"
-            )
+        # Embedding uses platform Gemini key — no user BYOK required (KIN-467)
 
         # Decrypt credential if present
         credential: str | None = None
@@ -175,7 +161,6 @@ async def _process_source(supabase, source_row: dict) -> None:
                 project_id=project_id,
                 agent_definition_id=agent_definition_id,
                 post=post,
-                openai_key=openai_key,
             )
 
         # Success: update source state
@@ -212,7 +197,6 @@ async def _ingest_post(
     project_id: str | None,
     agent_definition_id: str | None,
     post,
-    openai_key: str,
 ) -> None:
     """Create KB document, upload text, insert dedup row, dispatch chunking."""
     from app.core.config import settings
@@ -272,7 +256,6 @@ async def _ingest_post(
             extracted_text=post.content,
             filename=f"{post.title or post.external_id}.txt",
             content_type="text/plain",
-            openai_key=openai_key,
         )
     except Exception as exc:
         logger.error("Ingestion failed for doc %s (source %s): %s", document_id, source_id, exc)

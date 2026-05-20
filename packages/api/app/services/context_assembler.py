@@ -152,29 +152,18 @@ class ContextAssembler:
                 loop, supabase, active_agent_id, user_id, ctx
             )
 
-        # Fetch OpenAI key once for L7 + L8/L9 (fail-open if missing)
-        from app.services.user_keys import fetch_user_key_async
-
-        openai_key: str | None = None
-        if active_agent_id or project_id:
-            openai_key = await fetch_user_key_async(supabase, user_id, "openai")
-            if not openai_key:
-                logger.info(
-                    "No OpenAI BYOK key for user %s — skipping L7/L8/L9", user_id
-                )
-
-        # L7 + L8/L9: Run in parallel (both need OpenAI key, both fail-open)
-        if active_agent_id and openai_key:
+        # L7 + L8/L9: Run in parallel (both use platform Gemini key, KIN-467)
+        if active_agent_id:
             framework_task = self._assemble_framework(
-                supabase, active_agent_id, user_id, query_text, openai_key, ctx
+                supabase, active_agent_id, user_id, query_text, ctx
             )
         else:
             framework_task = asyncio.sleep(0)  # no-op
 
-        if openai_key:
+        if project_id or active_agent_id:
             rag_task = self._assemble_rag(
                 supabase, query_text, project_id, active_agent_id,
-                openai_key, model_context_window, ctx,
+                model_context_window, ctx,
             )
         else:
             rag_task = asyncio.sleep(0)  # no-op
@@ -382,7 +371,6 @@ class ContextAssembler:
         active_agent_id: str,
         user_id: str,
         query_text: str,
-        openai_key: str,
         ctx: AssembledContext,
     ) -> None:
         """L7: Select a framework for the active agent and append to system_parts.
@@ -447,7 +435,6 @@ class ContextAssembler:
             excluded = set(overrides.get("excluded", []))
             match = await select_framework(
                 query_text, active_agent_id, supabase,
-                openai_key=openai_key,
                 excluded_ids=excluded if excluded else None,
                 context=query_context,
             )
@@ -472,7 +459,6 @@ class ContextAssembler:
         query_text: str,
         project_id: str | None,
         active_agent_id: str | None,
-        openai_key: str,
         model_context_window: int,
         ctx: AssembledContext,
     ) -> None:
@@ -501,7 +487,6 @@ class ContextAssembler:
                     scope=RetrievalScope.PROJECT_KB,
                     scope_id=UUID(project_id),
                     supabase=supabase,
-                    openai_key=openai_key,
                     model_context_window=model_context_window,
                     debug_ctx=debug_ctx,
                     context=query_context,
@@ -522,7 +507,6 @@ class ContextAssembler:
                     scope=RetrievalScope.AGENT_KB,
                     scope_id=UUID(active_agent_id),
                     supabase=supabase,
-                    openai_key=openai_key,
                     model_context_window=model_context_window,
                     debug_ctx=debug_ctx,
                     context=query_context,

@@ -398,12 +398,10 @@ class TestL7FrameworkMatched:
     """L7: Framework match found — framework_text appears in system_parts."""
 
     @pytest.mark.asyncio
-    @patch("app.services.user_keys.fetch_user_key_async", new_callable=AsyncMock)
     @patch("app.services.rag.framework_selection.select_framework", new_callable=AsyncMock)
-    async def test_l7_framework_matched(self, mock_select, mock_key):
+    async def test_l7_framework_matched(self, mock_select):
         from app.services.rag.framework_selection import FrameworkMatch
 
-        mock_key.return_value = "sk-test-openai-key"
         mock_select.return_value = FrameworkMatch(
             matched_framework_id="fw-1",
             matched_framework_name="SWOT Analysis",
@@ -427,13 +425,11 @@ class TestL7NoMatch:
     """L7: No framework match — system_parts unchanged by L7."""
 
     @pytest.mark.asyncio
-    @patch("app.services.user_keys.fetch_user_key_async", new_callable=AsyncMock)
     @patch("app.services.rag.framework_selection.select_framework", new_callable=AsyncMock)
     @patch("app.services.rag.retrieval.retrieve", new_callable=AsyncMock)
-    async def test_l7_no_match(self, mock_retrieve, mock_select, mock_key):
+    async def test_l7_no_match(self, mock_retrieve, mock_select):
         from app.services.rag.framework_selection import FrameworkMatch
 
-        mock_key.return_value = "sk-test-openai-key"
         mock_select.return_value = FrameworkMatch(
             matched_framework_id=None,
             matched_framework_name=None,
@@ -450,30 +446,6 @@ class TestL7NoMatch:
             query_text="Just a question",
         )
 
-        combined = "\n".join(result.system_parts)
-        assert "[Framework:" not in combined
-
-
-class TestL7NoOpenAIKey:
-    """L7: No OpenAI key — L7 skipped silently, no error."""
-
-    @pytest.mark.asyncio
-    @patch("app.services.user_keys.fetch_user_key_async", new_callable=AsyncMock)
-    @patch("app.services.rag.framework_selection.select_framework", new_callable=AsyncMock)
-    async def test_l7_no_openai_key(self, mock_select, mock_key):
-        mock_key.return_value = None  # No key
-
-        mock_sb = _base_mock_sb_with_agent()
-        assembler = ContextAssembler()
-        result = await assembler.assemble(
-            supabase=mock_sb,
-            user_id=USER_ID,
-            conversation_id=CONVERSATION_ID,
-            query_text="Test",
-        )
-
-        # select_framework should never be called when no key
-        mock_select.assert_not_called()
         combined = "\n".join(result.system_parts)
         assert "[Framework:" not in combined
 
@@ -504,13 +476,11 @@ class TestL8ProjectKBChunks:
     """L8: Project KB retrieval returns chunks — rag_context_text and rag_chunks populated."""
 
     @pytest.mark.asyncio
-    @patch("app.services.user_keys.fetch_user_key_async", new_callable=AsyncMock)
     @patch("app.services.rag.framework_selection.select_framework", new_callable=AsyncMock)
     @patch("app.services.rag.retrieval.retrieve", new_callable=AsyncMock)
-    async def test_l8_project_kb_chunks_returned(self, mock_retrieve, mock_select, mock_key):
+    async def test_l8_project_kb_chunks_returned(self, mock_retrieve, mock_select):
         from app.services.rag.framework_selection import FrameworkMatch
 
-        mock_key.return_value = "sk-test-key"
         mock_select.return_value = FrameworkMatch(None, None, None)
 
         project_chunk = _make_mock_chunk("Design Doc", "Use microservices", "project_kb")
@@ -535,13 +505,11 @@ class TestL9AgentKBChunks:
     """L9: Agent KB retrieval returns chunks."""
 
     @pytest.mark.asyncio
-    @patch("app.services.user_keys.fetch_user_key_async", new_callable=AsyncMock)
     @patch("app.services.rag.framework_selection.select_framework", new_callable=AsyncMock)
     @patch("app.services.rag.retrieval.retrieve", new_callable=AsyncMock)
-    async def test_l9_agent_kb_chunks_returned(self, mock_retrieve, mock_select, mock_key):
+    async def test_l9_agent_kb_chunks_returned(self, mock_retrieve, mock_select):
         from app.services.rag.framework_selection import FrameworkMatch
 
-        mock_key.return_value = "sk-test-key"
         mock_select.return_value = FrameworkMatch(None, None, None)
 
         agent_chunk = _make_mock_chunk("Agent Playbook", "Always empathize first", "agent_kb")
@@ -566,13 +534,11 @@ class TestL8L9BothScopes:
     """L8+L9: Both project and agent chunks combined in rag_chunks."""
 
     @pytest.mark.asyncio
-    @patch("app.services.user_keys.fetch_user_key_async", new_callable=AsyncMock)
     @patch("app.services.rag.framework_selection.select_framework", new_callable=AsyncMock)
     @patch("app.services.rag.retrieval.retrieve", new_callable=AsyncMock)
-    async def test_l8_l9_both_scopes(self, mock_retrieve, mock_select, mock_key):
+    async def test_l8_l9_both_scopes(self, mock_retrieve, mock_select):
         from app.services.rag.framework_selection import FrameworkMatch
 
-        mock_key.return_value = "sk-test-key"
         mock_select.return_value = FrameworkMatch(None, None, None)
 
         proj_chunk = _make_mock_chunk("Proj Doc", "Project info", "project_kb")
@@ -593,40 +559,15 @@ class TestL8L9BothScopes:
         assert "[Source: Agent Doc]" in result.rag_context_text
 
 
-class TestRAGNoOpenAIKey:
-    """RAG: No OpenAI key — RAG skipped, empty chunks."""
-
-    @pytest.mark.asyncio
-    @patch("app.services.user_keys.fetch_user_key_async", new_callable=AsyncMock)
-    @patch("app.services.rag.retrieval.retrieve", new_callable=AsyncMock)
-    async def test_rag_no_openai_key(self, mock_retrieve, mock_key):
-        mock_key.return_value = None
-
-        mock_sb = _base_mock_sb_with_agent()
-        assembler = ContextAssembler()
-        result = await assembler.assemble(
-            supabase=mock_sb,
-            user_id=USER_ID,
-            conversation_id=CONVERSATION_ID,
-            query_text="test",
-        )
-
-        mock_retrieve.assert_not_called()
-        assert result.rag_chunks == []
-        assert result.rag_context_text == ""
-
-
 class TestRAGNoChunks:
     """RAG: retrieve() returns [] — graceful empty."""
 
     @pytest.mark.asyncio
-    @patch("app.services.user_keys.fetch_user_key_async", new_callable=AsyncMock)
     @patch("app.services.rag.framework_selection.select_framework", new_callable=AsyncMock)
     @patch("app.services.rag.retrieval.retrieve", new_callable=AsyncMock)
-    async def test_rag_no_chunks_above_threshold(self, mock_retrieve, mock_select, mock_key):
+    async def test_rag_no_chunks_above_threshold(self, mock_retrieve, mock_select):
         from app.services.rag.framework_selection import FrameworkMatch
 
-        mock_key.return_value = "sk-test-key"
         mock_select.return_value = FrameworkMatch(None, None, None)
         mock_retrieve.return_value = []  # No chunks from either scope
 
@@ -651,7 +592,7 @@ class TestRAGNoChunks:
 def _base_mock_sb_company_only(messages_data=None, summary_data=None):
     """Return a mock supabase for a company-only conversation (no agent, no project).
 
-    This avoids triggering L7/L8/L9 (which need agent/project + openai key).
+    This avoids triggering L7/L8/L9 (which need an active agent/project).
     """
     return _build_mock_supabase({
         "conversations": [
@@ -751,11 +692,9 @@ class TestL7OverrideDisabled:
     """KIN-391: disabled=True skips L7 entirely — no pipeline call."""
 
     @pytest.mark.asyncio
-    @patch("app.services.user_keys.fetch_user_key_async", new_callable=AsyncMock)
     @patch("app.services.rag.framework_selection.select_framework", new_callable=AsyncMock)
     @patch("app.services.rag.retrieval.retrieve", new_callable=AsyncMock)
-    async def test_disabled_skips_l7(self, mock_retrieve, mock_select, mock_key):
-        mock_key.return_value = "sk-test-key"
+    async def test_disabled_skips_l7(self, mock_retrieve, mock_select):
         mock_retrieve.return_value = []
 
         mock_sb = _base_mock_sb_with_agent(
@@ -779,14 +718,12 @@ class TestL7OverridePinned:
     """KIN-391: pinned list bypasses pipeline, injects pinned frameworks."""
 
     @pytest.mark.asyncio
-    @patch("app.services.user_keys.fetch_user_key_async", new_callable=AsyncMock)
     @patch("app.services.rag.framework_selection.select_framework", new_callable=AsyncMock)
     @patch("app.services.rag.framework_selection.fetch_pinned_frameworks", new_callable=AsyncMock)
     @patch("app.services.rag.retrieval.retrieve", new_callable=AsyncMock)
-    async def test_pinned_bypasses_pipeline(self, mock_retrieve, mock_fetch_pinned, mock_select, mock_key):
+    async def test_pinned_bypasses_pipeline(self, mock_retrieve, mock_fetch_pinned, mock_select):
         from app.services.rag.framework_selection import FrameworkMatch
 
-        mock_key.return_value = "sk-test-key"
         mock_retrieve.return_value = []
         mock_fetch_pinned.return_value = [
             FrameworkMatch(
@@ -817,13 +754,11 @@ class TestL7OverrideExcluded:
     """KIN-391: excluded list passed to pipeline as excluded_ids."""
 
     @pytest.mark.asyncio
-    @patch("app.services.user_keys.fetch_user_key_async", new_callable=AsyncMock)
     @patch("app.services.rag.framework_selection.select_framework", new_callable=AsyncMock)
     @patch("app.services.rag.retrieval.retrieve", new_callable=AsyncMock)
-    async def test_excluded_passed_to_pipeline(self, mock_retrieve, mock_select, mock_key):
+    async def test_excluded_passed_to_pipeline(self, mock_retrieve, mock_select):
         from app.services.rag.framework_selection import FrameworkMatch
 
-        mock_key.return_value = "sk-test-key"
         mock_retrieve.return_value = []
         mock_select.return_value = FrameworkMatch(None, None, None)
 
@@ -849,13 +784,11 @@ class TestL7OverrideNoInstance:
     """KIN-391: No agent_instance row → pipeline runs normally (empty overrides)."""
 
     @pytest.mark.asyncio
-    @patch("app.services.user_keys.fetch_user_key_async", new_callable=AsyncMock)
     @patch("app.services.rag.framework_selection.select_framework", new_callable=AsyncMock)
     @patch("app.services.rag.retrieval.retrieve", new_callable=AsyncMock)
-    async def test_no_instance_runs_pipeline_normally(self, mock_retrieve, mock_select, mock_key):
+    async def test_no_instance_runs_pipeline_normally(self, mock_retrieve, mock_select):
         from app.services.rag.framework_selection import FrameworkMatch
 
-        mock_key.return_value = "sk-test-key"
         mock_retrieve.return_value = []
         mock_select.return_value = FrameworkMatch(
             matched_framework_id="fw-normal",

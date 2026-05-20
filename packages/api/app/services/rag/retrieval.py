@@ -2,7 +2,7 @@
 RAG retrieval pipeline — MVP implementation.
 
 Pipeline:
-  1. Embed query         — text-embedding-3-large via user's BYOK OpenAI key
+  1. Embed query         — Gemini Embedding 001 via platform key (KIN-467)
   2. Vector search       — cosine similarity against knowledge_base_chunks (scoped)
   3. MMR selection       — Maximal Marginal Relevance to reduce near-duplicates
   4. Similarity threshold — exclude chunks below SIMILARITY_THRESHOLD; return [] if none qualify
@@ -26,8 +26,6 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import List, Optional
 from uuid import UUID
-
-import tiktoken
 
 from app.core.config import settings
 from app.services.ingestion.embedder import EmbeddingService
@@ -79,29 +77,24 @@ class RetrievedChunk:
 
 
 # ---------------------------------------------------------------------------
-# Token counting
+# Token counting (Gemini API — low-frequency path, KIN-467)
 # ---------------------------------------------------------------------------
 
-_ENCODING_NAME = "cl100k_base"
-_encoding = None
+# Module-level embedder for token counting — reused across calls in one request
+_embedder: EmbeddingService | None = None
 
 
-def _get_encoding():
-    """Return tiktoken encoding, initialised once per process."""
-    global _encoding
-    if _encoding is None:
-        _encoding = tiktoken.get_encoding(_ENCODING_NAME)
-    return _encoding
-
-
-def _get_embedder(api_key: str) -> EmbeddingService:
-    """Return an EmbeddingService instance with the user's BYOK key."""
-    return EmbeddingService(api_key=api_key)
+def _get_embedder() -> EmbeddingService:
+    """Return a shared EmbeddingService instance (platform Gemini key)."""
+    global _embedder
+    if _embedder is None:
+        _embedder = EmbeddingService()
+    return _embedder
 
 
 def _count_tokens(text: str) -> int:
-    """Count tokens in text using cl100k_base encoding."""
-    return len(_get_encoding().encode(text))
+    """Count tokens via Gemini API. Used for token budget enforcement (1-8 calls per retrieval)."""
+    return _get_embedder().count_tokens(text)
 
 
 # ---------------------------------------------------------------------------
@@ -255,11 +248,9 @@ def _vector_search_sync(
     # Fallback: select scope-filtered chunks (used in unit tests with mock Supabase)
     # Read-path fail-open: return [] on retrieval failure (not a write operation).
     #
-    # Two deleted_at filters are required:
-    #   1. knowledge_base_chunks.deleted_at IS NULL  — excludes hard-cleaned chunks
-    #   2. knowledge_base_documents.deleted_at IS NULL — excludes chunks whose parent
-    #      document was soft-deleted but whose chunks have not yet been cleaned up
-    #      (chunks are purged after a 7-day window per MEMORY.md 2026-03-22 decision).
+    # knowledge_base_chunks does NOT have deleted_at — only knowledge_base_documents does.
+    # The !inner join + filter on knowledge_base_documents.deleted_at excludes chunks
+    # whose parent document was soft-deleted.
     try:
         result = (
             supabase.table("knowledge_base_chunks")
@@ -268,7 +259,6 @@ def _vector_search_sync(
                 "knowledge_base_documents!inner(title, file_type, deleted_at)"
             )
             .eq(scope_filter["column"], scope_filter["value"])
-            .is_("deleted_at", "null")
             .is_("knowledge_base_documents.deleted_at", "null")
             .limit(top_k)
             .execute()
@@ -278,9 +268,17 @@ def _vector_search_sync(
         logger.warning("Vector search fallback select failed: %s", exc)
         return []
 
-    # Compute cosine similarity client-side for fallback path
+    # Compute cosine similarity client-side for fallback path.
+    # PostgREST may return vector columns as strings — parse if needed.
     for row in rows:
         emb = row.get("embedding") or []
+        if isinstance(emb, str):
+            try:
+                import json as _json
+                emb = _json.loads(emb)
+            except (ValueError, TypeError):
+                emb = []
+            row["embedding"] = emb
         row["similarity"] = _cosine_similarity(query_embedding, emb) if emb else 0.0
 
     # Sort by similarity descending
@@ -382,7 +380,6 @@ async def retrieve(
     scope: RetrievalScope,
     scope_id: UUID,
     supabase,
-    openai_key: str = "",
     model_context_window: int = 100_000,
     vector_top_k: int = VECTOR_TOP_K,
     mmr_top_k: int = MMR_TOP_K,
@@ -398,12 +395,13 @@ async def retrieve(
       embed query → vector search → MMR selection → threshold gate
       → token budget → citation assembly
 
+    Embedding uses platform Gemini key — no user BYOK required (KIN-467).
+
     Args:
         query_text: The user's raw query string.
         scope: RetrievalScope.PROJECT_KB or RetrievalScope.AGENT_KB.
         scope_id: UUID of the project or agent_definition, depending on scope.
         supabase: Supabase service-role client (sync — wrapped in run_in_executor).
-        openai_key: User's decrypted OpenAI BYOK key (required for embedding).
         model_context_window: Context window of the generation model (tokens).
             Used to compute RAG_MAX_TOKENS = max(2048, context_window * 15%).
         vector_top_k: Candidates to fetch from vector search (default 20).
@@ -436,7 +434,7 @@ async def retrieve(
 
     enriched_query = build_enriched_query(query_text, context)
 
-    embedder = _get_embedder(api_key=openai_key)
+    embedder = _get_embedder()
     loop = asyncio.get_running_loop()
     try:
         _t = debug_ctx.start_step("embed") if debug_ctx else None

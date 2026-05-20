@@ -38,7 +38,6 @@ from app.core.errors import AuthenticationError, NotFoundError, RateLimitError, 
 from app.db.supabase_client import get_supabase
 from app.services.rag.framework_selection import select_framework, FrameworkMatch
 from app.services.rag.retrieval import retrieve, RetrievalScope, RetrievedChunk
-from app.services.user_keys import fetch_user_key_async
 
 logger = logging.getLogger(__name__)
 
@@ -349,34 +348,31 @@ async def mcp_context(
             raise NotFoundError("Agent not found")
 
     # Step 5: Pipeline ops — L7 (framework selection), L8/L9 (RAG retrieval)
-    # Uses user's BYOK OpenAI key for embedding. Fail-open on error.
-    openai_key = await fetch_user_key_async(client, user_id, "openai")
+    # Embedding uses platform Gemini key — no user BYOK required (KIN-467).
 
     # L7 — Framework selection (when agent_id present)
     framework_match = FrameworkMatch(matched_framework_id=None, matched_framework_name=None, framework_text=None)
-    if body.agent_id and agent_row and openai_key:
+    if body.agent_id and agent_row:
         framework_match = await select_framework(
-            body.query, body.agent_id, client, openai_key=openai_key,
+            body.query, body.agent_id, client,
         )
 
     # L8 — Project KB RAG (when project_id present)
     project_rag_chunks: list[RetrievedChunk] = []
-    if body.project_id and project_row and openai_key:
+    if body.project_id and project_row:
         try:
             project_rag_chunks = await retrieve(
                 body.query, RetrievalScope.PROJECT_KB, UUID(body.project_id), client,
-                openai_key=openai_key,
             )
         except Exception:
             logger.warning("L8 RAG retrieval failed — omitting project KB context", exc_info=True)
 
     # L9 — Agent KB RAG (when agent_id present)
     agent_rag_chunks: list[RetrievedChunk] = []
-    if body.agent_id and agent_row and openai_key:
+    if body.agent_id and agent_row:
         try:
             agent_rag_chunks = await retrieve(
                 body.query, RetrievalScope.AGENT_KB, UUID(body.agent_id), client,
-                openai_key=openai_key,
             )
         except Exception:
             logger.warning("L9 RAG retrieval failed — omitting agent KB context", exc_info=True)

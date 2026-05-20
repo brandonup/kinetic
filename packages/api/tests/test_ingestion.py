@@ -74,7 +74,7 @@ class TestIngestionHappyPath:
                 run_ingestion(
                     db_session, document_id, kb_id, project_id, None,
                     b"fake-content", "test.txt", "text/plain",
-                    openai_key="sk-test", anthropic_key="test-anthropic-key",
+                    anthropic_key="test-anthropic-key",
                 )
             )
 
@@ -110,7 +110,7 @@ class TestIngestionHappyPath:
         assert all(r["embedding"] is not None for r in rows)
         assert rows[0]["chunk_index"] == 0
         assert rows[1]["chunk_index"] == 1
-        assert all(r["embedding_model"] == "text-embedding-3-large" for r in rows)
+        assert all(r["embedding_model"] == "gemini-embedding-001" for r in rows)
 
 
 # ---------------------------------------------------------------------------
@@ -536,7 +536,7 @@ class TestPipelineTagIntegration:
                 run_ingestion(
                     db_session, document_id, kb_id, project_id, None,
                     b"fake-content", "test.txt", "text/plain",
-                    openai_key="sk-test", anthropic_key="test-anthropic-key",
+                    anthropic_key="test-anthropic-key",
                 )
             )
 
@@ -564,7 +564,7 @@ class TestPipelineTagIntegration:
                 run_ingestion(
                     db_session, document_id, kb_id, project_id, None,
                     b"fake-content", "test.txt", "text/plain",
-                    openai_key="sk-test", anthropic_key="test-anthropic-key",
+                    anthropic_key="test-anthropic-key",
                 )
             )
 

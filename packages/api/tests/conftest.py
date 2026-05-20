@@ -22,6 +22,7 @@ os.environ.setdefault("SUPABASE_SERVICE_ROLE_KEY", "test-service-role-key")
 os.environ.setdefault("SUPABASE_ANON_KEY", "test-anon-key")
 os.environ.setdefault("SUPABASE_JWT_SECRET", "test-jwt-secret")
 os.environ.setdefault("API_KEY_ENCRYPTION_KEY", "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")  # 32 zero-bytes, base64 (43 A's + =)
+os.environ.setdefault("GEMINI_API_KEY", "test-gemini-key")
 
 # ---------------------------------------------------------------------------
 # Sandbox workaround: prevent pydantic-settings from stat-ing .env files.
@@ -200,17 +201,18 @@ def sample_pdf() -> bytes:
 
 
 @pytest.fixture(autouse=True)
-def mock_tiktoken():
+def mock_gemini_token_counter():
     """
-    Mock tiktoken encoding to avoid network download in tests.
-    cl100k_base encoding must be downloaded from openaipublic.blob.core.windows.net
-    which is unavailable in the test sandbox. Mock uses len(text) // 4 as token count.
+    Mock EmbeddingService.count_tokens to avoid Gemini API calls in tests.
+    Uses len(text) // 4 as token count approximation (same as old tiktoken mock).
+    KIN-467: replaced tiktoken mock with Gemini count_tokens mock.
     """
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import patch
 
-    mock_encoding = MagicMock()
-    mock_encoding.encode.side_effect = lambda text: list(range(max(1, len(text) // 4)))
-    with patch("tiktoken.get_encoding", return_value=mock_encoding):
+    with patch(
+        "app.services.ingestion.embedder.EmbeddingService.count_tokens",
+        lambda self, text: max(1, len(text) // 4),
+    ):
         yield
 
 
@@ -218,7 +220,7 @@ def mock_tiktoken():
 def large_document() -> bytes:
     """
     Text document that exceeds the 1M token ingestion limit.
-    With mock_tiktoken (len // 4 tokens), needs >4M chars.
+    With mock count_tokens (len // 4 tokens), needs >4M chars.
     4,500,000 chars → ~1,125,000 mock tokens.
     """
     word = "The quick brown fox jumps over the lazy dog. " * 500
@@ -233,7 +235,7 @@ def oversized_file() -> bytes:
 
 @pytest.fixture
 def mock_embedding_service():
-    """Patches EmbeddingService.embed_batch to return fake 3072-dim vectors."""
+    """Patches EmbeddingService.embed_batch to return fake 3072-dim vectors (KIN-476)."""
     from unittest.mock import patch
 
     def _make_embeddings(texts):

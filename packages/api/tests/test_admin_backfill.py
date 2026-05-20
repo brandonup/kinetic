@@ -3,13 +3,13 @@ Tests for KIN-413: Admin backfill endpoint for trigger embeddings.
 
 Covers:
   - Admin auth guard (403 for non-admin)
-  - Happy path: 2 agents, one with key (embeddings created), one without (skipped)
+  - Happy path: 2 agents with frameworks, all processed (platform key)
   - Idempotent on re-run (delete-then-insert for each framework)
   - Scoped to single agent_definition_id
   - Empty frameworks list for an agent (no embeddings, not counted)
 
 All Supabase calls are mocked. Uses admin_client fixture from conftest.py.
-ADR-007 §1.
+ADR-007 §1. KIN-467: platform Gemini key, no per-agent BYOK.
 """
 
 from unittest.mock import MagicMock, patch
@@ -20,7 +20,6 @@ import pytest
 from tests.conftest import TEST_ADMIN_ID, TEST_USER_ID
 
 PATCH_SUPABASE = "app.api.routes.admin_backfill.get_supabase_client"
-PATCH_FETCH_KEY = "app.api.routes.admin_backfill.fetch_user_key"
 PATCH_EMBEDDER = "app.api.routes.admin_backfill.EmbeddingService"
 
 AGENT_1_ID = str(uuid4())
@@ -69,62 +68,20 @@ class TestBackfillAuthGuard:
 
 
 class TestBackfillTriggerEmbeddings:
-    def _setup_mock_db(self, mock_db, agents: list[dict], frameworks_by_agent: dict):
+    def test_two_agents_both_processed(self, admin_client):
         """
-        Wire mock_db for:
-          - agent_definitions fetch (all agents)
-          - per-agent frameworks fetch
-        """
-        # Agent list fetch
-        mock_db.table.return_value.select.return_value.execute.return_value = MagicMock(
-            data=agents
-        )
-        # Per-agent framework fetch — use side_effect on .eq().execute() to return
-        # different results per agent. We rely on lambda capture in the route, so
-        # the mock chain for frameworks uses .eq().execute() (no .single()).
-        # We route by tracking call order.
-        fw_call_count = {"n": 0}
-        agent_ids = [a["id"] for a in agents]
-
-        def _fw_execute():
-            # Returns frameworks for agents in order
-            idx = fw_call_count["n"]
-            fw_call_count["n"] += 1
-            if idx < len(agent_ids):
-                agent_id = agent_ids[idx]
-                return MagicMock(data=frameworks_by_agent.get(agent_id, []))
-            return MagicMock(data=[])
-
-        mock_db.table.return_value.select.return_value.eq.return_value.execute.side_effect = (
-            _fw_execute
-        )
-
-        # Delete + insert for trigger embeddings
-        mock_db.table.return_value.delete.return_value.eq.return_value.execute.return_value = (
-            MagicMock(data=[])
-        )
-        mock_db.table.return_value.insert.return_value.execute.return_value = MagicMock(
-            data=[{"id": str(uuid4())}]
-        )
-
-    def test_two_agents_one_with_key_one_without(self, admin_client):
-        """
-        2 agents: agent 1 has an OpenAI key (1 framework, 2 triggers),
-        agent 2 has no key → skipped.
-        Returns correct processed/skipped/frameworks_embedded/triggers_embedded counts.
+        2 agents: agent 1 has 1 framework (2 triggers), agent 2 has no frameworks.
+        Both processed with platform Gemini key (no BYOK gating).
         """
         agents = [_agent(AGENT_1_ID, AGENT_1_OWNER), _agent(AGENT_2_ID, AGENT_2_OWNER)]
         frameworks_by_agent = {
             AGENT_1_ID: [_fw(FW_1_ID, AGENT_1_ID, ["when planning", "when unsure"])],
-            AGENT_2_ID: [],  # frameworks fetch never reached (no key)
+            AGENT_2_ID: [],
         }
 
         mock_db = MagicMock()
         mock_embedder = MagicMock()
         mock_embedder.embed_batch.return_value = [TEST_EMBED, TEST_EMBED]
-
-        def _key_side_effect(client_arg, uid, provider):
-            return "sk-test" if uid == AGENT_1_OWNER else None
 
         mock_db.table.return_value.select.return_value.execute.return_value = MagicMock(
             data=agents
@@ -152,7 +109,6 @@ class TestBackfillTriggerEmbeddings:
 
         with (
             patch(PATCH_SUPABASE, return_value=mock_db),
-            patch(PATCH_FETCH_KEY, side_effect=_key_side_effect),
             patch(PATCH_EMBEDDER, return_value=mock_embedder),
         ):
             response = admin_client.post("/api/v1/admin/backfill-trigger-embeddings")
@@ -160,7 +116,6 @@ class TestBackfillTriggerEmbeddings:
         assert response.status_code == 200
         data = response.json()
         assert data["processed"] == 2
-        assert data["skipped_no_key"] == 1
         assert data["frameworks_embedded"] == 1
         assert data["triggers_embedded"] == 2
 
@@ -189,7 +144,6 @@ class TestBackfillTriggerEmbeddings:
 
         with (
             patch(PATCH_SUPABASE, return_value=mock_db),
-            patch(PATCH_FETCH_KEY, return_value="sk-test"),
             patch(PATCH_EMBEDDER, return_value=mock_embedder),
         ):
             r1 = admin_client.post("/api/v1/admin/backfill-trigger-embeddings")
@@ -226,7 +180,6 @@ class TestBackfillTriggerEmbeddings:
             MagicMock(data=agents)
         )
         # Frameworks for the scoped agent
-        # The route does a second .eq() for the frameworks query — need to chain
         mock_db.table.return_value.select.return_value.eq.return_value.eq.return_value.execute.return_value = (
             MagicMock(data=[_fw(FW_1_ID, AGENT_1_ID, ["when planning"])])
         )
@@ -239,7 +192,6 @@ class TestBackfillTriggerEmbeddings:
 
         with (
             patch(PATCH_SUPABASE, return_value=mock_db),
-            patch(PATCH_FETCH_KEY, return_value="sk-test"),
             patch(PATCH_EMBEDDER, return_value=mock_embedder),
         ):
             response = admin_client.post(
