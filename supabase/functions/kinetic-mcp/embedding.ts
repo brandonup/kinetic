@@ -1,19 +1,18 @@
 /**
- * Embedding Helper — KIN-467.
+ * Embedding Helper — KIN-467 / KIN-476.
  *
- * Uses platform Gemini API key to generate embeddings (1024 dims).
- * No BYOK decryption needed — simplifies the embedding path.
+ * Uses platform Gemini API key to generate embeddings at gemini-embedding-001's
+ * native 3072 dims. No BYOK decryption needed — simplifies the embedding path.
  *
  * Returns embedding as number[] for use with match_chunks / match_framework_triggers RPCs.
  */
 
 const EMBEDDING_MODEL = "gemini-embedding-001";
-const EMBEDDING_DIMS = 1024;
 
 /**
  * Generate an embedding for a query string using the platform Gemini key.
  *
- * Returns number[] (1024 dimensions) compatible with extensions.vector(1024)
+ * Returns number[] (native 3072 dimensions) compatible with extensions.halfvec(3072)
  * for use in match_chunks and match_framework_triggers RPCs.
  *
  * Throws descriptive error strings matching the MCP error convention:
