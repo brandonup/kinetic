@@ -810,6 +810,7 @@ RETURNS TABLE (
 
 **Usage:** Called by the RAG retrieval pipeline and the local MCP server (`packages/mcp/`). `scope_column` must be one of `agent_definition_id`, `knowledge_base_id`, or `project_id` (validated inside the function); `scope_value` is the corresponding UUID.
 **Param type note (KIN-476):** same as `match_framework_triggers` — parameter is `text`, cast to `extensions.halfvec(3072)` inside the function body. Joins `knowledge_base_documents` for `document_title` and `document_type`. Uses `EXECUTE format(...)` for dynamic column filtering.
+**Scope cast (migration `20260521000001`):** `scope_value` is bound as `text` but the scope columns are `uuid`-typed, so the dynamic query filters `WHERE c.%I = $2::uuid`. Without the cast Postgres raises `operator does not exist: uuid = text` on every call — the bug fixed by `20260521000001_fix_match_chunks_uuid_cast.sql`.
 
 ---
 

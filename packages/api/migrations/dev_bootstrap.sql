@@ -603,7 +603,7 @@ BEGIN
       1 - (c.embedding <=> $1) AS similarity
     FROM public.knowledge_base_chunks c
     JOIN public.knowledge_base_documents d ON d.id = c.document_id
-    WHERE c.%I = $2
+    WHERE c.%I = $2::uuid
       AND d.deleted_at IS NULL
     ORDER BY c.embedding <=> $1
     LIMIT $3
