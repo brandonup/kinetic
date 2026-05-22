@@ -3,6 +3,7 @@
 _Append-only. One row per Critical or Important finding from code review._
 
 | Date | Ticket | Reviewer | Category | Severity | Description |
+| 2026-05-21 | KIN-478 | Dinesh | untested-infra | Critical | `match_chunks` RPC bound `scope_value` as `text` but scope columns are `uuid` — `operator does not exist: uuid = text` on every call; MCP/API KB search returned zero results since KIN-476. Shipped because the RPC was created but never invoked. Fixed in `20260521000001` (`$2::uuid`); `database-migrations.md` rule 2a added. |
 | 2026-04-03 | KIN-454 | Gilfoyle | other | Important | Debug console.log in `index.ts:183-184` logs userId and prompt list to Edge Function logs on every `prompts/list` call — minor info leak, remove before deploy |
 | 2026-03-28 | KIN-407 | Bachman | untested-infra | High | KB ingestion jobs stalling at pending/extracting/embedding stages; stale job timeout monitor catching silent failures. storage_uri NULL on all documents. Complex-tier — routed to Gilfoyle for diagnosis, Dinesh for fix (KIN-408). |
 | 2026-03-26 | KIN-388 | Gilfoyle | other | Critical | `run_in_executor` call for periodic proposal job not awaited or `ensure_future`'d — job silently never executes in production |
