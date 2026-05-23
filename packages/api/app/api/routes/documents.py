@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import date
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
@@ -31,6 +32,10 @@ from app.auth.deps import CurrentUser, get_current_user
 from app.core.config import settings
 from app.db.supabase_client import create_supabase, get_supabase
 from app.services.background import TaskDispatcher
+from app.services.ingestion.document_date import (
+    MIN_PLAUSIBLE_DATE,
+    is_plausible_document_date,
+)
 from app.services.ingestion.pipeline import run_ingestion, run_ingestion_from_stage
 from app.services.user_keys import fetch_user_key_async
 
@@ -72,6 +77,7 @@ async def upload_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     knowledge_base_id: UUID = Form(...),
+    document_date: date | None = Form(None),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> UploadResponse:
     """
@@ -80,12 +86,26 @@ async def upload_document(
     Validates file size at the boundary (413 if > 25 MB).
     Creates a knowledge_base_documents row immediately and returns.
     Ingestion runs in the background: pending → extracting → chunking → embedding → completed.
+
+    Optional ``document_date`` is the publication date used for recency-aware
+    retrieval (KIN-481). FastAPI rejects malformed ISO strings with 422; a
+    parseable but implausible value (pre-2015 or beyond today+1d) is also
+    rejected with 422 so the caller learns of the bad input.
     """
     content = await file.read()
     if len(content) > MAX_UPLOAD_BYTES:
         raise HTTPException(
             status_code=413,
             detail=f"File exceeds 25 MB upload limit ({len(content):,} bytes received).",
+        )
+
+    if document_date is not None and not is_plausible_document_date(document_date):
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"document_date {document_date.isoformat()} is outside the supported "
+                f"range [{MIN_PLAUSIBLE_DATE.isoformat()}, today+1d]."
+            ),
         )
 
     supabase = get_supabase()
@@ -116,21 +136,20 @@ async def upload_document(
     original_filename = file.filename or "Untitled"
 
     # Create document row with status=pending
+    insert_row: dict = {
+        "id": str(document_id),
+        "knowledge_base_id": str(knowledge_base_id),
+        "title": original_filename,
+        "file_type": content_type,
+        "file_size_bytes": len(content),
+        "status": "pending",
+        "retry_count": 0,
+    }
+    if document_date is not None:
+        insert_row["document_date"] = document_date.isoformat()
     insert_result = await loop.run_in_executor(
         None,
-        lambda: supabase.table("knowledge_base_documents")
-        .insert(
-            {
-                "id": str(document_id),
-                "knowledge_base_id": str(knowledge_base_id),
-                "title": original_filename,
-                "file_type": content_type,
-                "file_size_bytes": len(content),
-                "status": "pending",
-                "retry_count": 0,
-            }
-        )
-        .execute(),
+        lambda: supabase.table("knowledge_base_documents").insert(insert_row).execute(),
     )
     if not insert_result.data:
         raise RuntimeError(f"Failed to create document row for {document_id}")

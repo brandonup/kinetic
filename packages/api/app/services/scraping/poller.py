@@ -201,20 +201,29 @@ async def _ingest_post(
     """Create KB document, upload text, insert dedup row, dispatch chunking."""
     from app.core.config import settings
 
+    from app.services.ingestion.document_date import datetime_to_document_date
+
     document_id = uuid4()
+    # KIN-481 — populate document_date from the post's publish timestamp.
+    # Implausible/parse-failure dates (e.g. datetime.min) coerce to None.
+    document_date = datetime_to_document_date(post.published_at)
+
+    insert_row: dict = {
+        "id": str(document_id),
+        "knowledge_base_id": kb_id,
+        "title": post.title or post.external_id,
+        "file_type": "text/plain",
+        "status": "pending",
+        "retry_count": 0,
+    }
+    if document_date is not None:
+        insert_row["document_date"] = document_date.isoformat()
 
     # Create knowledge_base_documents row
     await loop.run_in_executor(
         None,
         lambda: supabase.table("knowledge_base_documents")
-        .insert({
-            "id": str(document_id),
-            "knowledge_base_id": kb_id,
-            "title": post.title or post.external_id,
-            "file_type": "text/plain",
-            "status": "pending",
-            "retry_count": 0,
-        })
+        .insert(insert_row)
         .execute(),
     )
 

@@ -129,6 +129,26 @@ def convert_article(article: dict) -> str:
     )
 
 
+def extract_document_date(article: dict) -> Optional[str]:
+    """Return the article's publish date as YYYY-MM-DD, or None on any failure.
+
+    Article JSON ``date`` is a full ISO-8601 timestamp
+    (e.g. ``"2026-01-31T03:58:51.677Z"``). The recency-aware retrieval column
+    (`knowledge_base_documents.document_date`) is a SQL `DATE`, so we truncate
+    to the date portion. Bad/missing input never aborts the upload — the
+    server simply stores `NULL`.
+    """
+    raw = article.get("date")
+    if not raw or not isinstance(raw, str):
+        return None
+    # Normalize trailing Z so fromisoformat (pre-3.11 stdlib) accepts it.
+    candidate = raw.replace("Z", "+00:00") if raw.endswith("Z") else raw
+    try:
+        return datetime.fromisoformat(candidate).date().isoformat()
+    except (ValueError, TypeError):
+        return None
+
+
 def iter_articles(articles_dir: Path):
     """Yield (slug, article_dict, source_path) sorted by filename for deterministic order."""
     for path in sorted(articles_dir.glob("*.json")):
@@ -154,11 +174,15 @@ def _post_upload_once(
     kb_id: str,
     filename: str,
     body: str,
+    document_date: Optional[str] = None,
 ) -> requests.Response:
+    data: dict[str, str] = {"knowledge_base_id": kb_id}
+    if document_date:
+        data["document_date"] = document_date
     return session.post(
         f"{base_url.rstrip('/')}/api/v1/documents/upload",
         files={"file": (filename, body.encode("utf-8"), "text/plain")},
-        data={"knowledge_base_id": kb_id},
+        data=data,
         timeout=UPLOAD_TIMEOUT_S,
     )
 
@@ -169,6 +193,7 @@ def upload_with_retry(
     kb_id: str,
     filename: str,
     body: str,
+    document_date: Optional[str] = None,
 ) -> str:
     """POST a single file with up to MAX_CONSECUTIVE_FAILURES_PER_FILE attempts.
 
@@ -183,7 +208,7 @@ def upload_with_retry(
 
     for attempt in range(1, MAX_CONSECUTIVE_FAILURES_PER_FILE + 1):
         try:
-            resp = _post_upload_once(session, base_url, kb_id, filename, body)
+            resp = _post_upload_once(session, base_url, kb_id, filename, body, document_date)
         except requests.RequestException as exc:
             last_error = f"network error: {exc}"
             logger.warning(
@@ -325,7 +350,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         return 2
 
     # JWT only required for real runs.
-    jwt = os.environ.get(ENV_JWT, "")
+    jwt = os.environ.get(ENV_JWT, "").strip()
+    # Tolerate a pasted "Bearer <token>" value — strip the prefix if present.
+    if jwt[:7].lower() == "bearer ":
+        jwt = jwt[7:].strip()
     if not args.dry_run and not jwt:
         logger.error(
             "Missing %s env var. Copy your JWT from the web app session and export it before running.",
@@ -359,22 +387,29 @@ def main(argv: Optional[list[str]] = None) -> int:
         attempts += 1
         filename = f"{slug}.txt"
         body = convert_article(article)
+        document_date = extract_document_date(article)
 
         if args.dry_run:
             preview = body[:200].replace("\n", " | ")
             logger.info(
-                "[dry-run] would upload %s (%d bytes) — preview: %s%s",
+                "[dry-run] would upload %s (%d bytes, document_date=%s) — preview: %s%s",
                 filename,
                 len(body.encode("utf-8")),
+                document_date or "<none>",
                 preview,
                 "..." if len(body) > 200 else "",
             )
             continue
 
-        logger.info("[%d] uploading %s (%d bytes)", attempts, filename, len(body.encode("utf-8")))
+        logger.info(
+            "[%d] uploading %s (%d bytes, document_date=%s)",
+            attempts, filename, len(body.encode("utf-8")), document_date or "<none>",
+        )
         try:
             assert session is not None
-            document_id = upload_with_retry(session, args.base_url, args.kb, filename, body)
+            document_id = upload_with_retry(
+                session, args.base_url, args.kb, filename, body, document_date,
+            )
         except UploadError as exc:
             err = str(exc)
             logger.error("[%s] FAILED: %s", slug, err)
