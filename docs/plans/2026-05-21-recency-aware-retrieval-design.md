@@ -75,6 +75,7 @@ The `match_chunks` RPC already JOINs `knowledge_base_chunks → knowledge_base_d
 - Add **two** columns to the RPC's `RETURNS TABLE` + SELECT: `document_date` (raw, nullable) and `created_at`. **Do not pre-`COALESCE`** — Python needs to know whether the date is a real publish date or an estimate (see Component D).
 - Signature change → `CREATE OR REPLACE` is insufficient. The migration must **`DROP FUNCTION`** all historical overloads (vector / halfvec / text param variants, as `20260518000001` did) then recreate.
 - Per `policies/database-migrations.md` §2a: the new RPC must be **invoked and verified** before shipping (KIN-478 shipped a `uuid=text` bug because the RPC was created but never called).
+- **The recreated function must preserve every prior fix.** Canonical current signature is the 9-column form in `db-schema-spec.md` lines 798-808 (`id, document_id, document_title, document_type, text, chunk_index, section_path, page_range, similarity`) → 11 columns after the two additions. Recreating the function must NOT regress: the KIN-476 `text` param + internal `halfvec` cast, the KIN-478 `$2::uuid` scope cast, or any existing `deleted_at IS NULL` soft-delete filter on the document JOIN.
 - Python plumbing:
   - New keys in `_normalise_search_row` output (`retrieval.py:289-321`).
   - New fields on the `RetrievedChunk` dataclass (`retrieval.py:58-76`): `effective_date: Optional[date]`, `date_is_estimated: bool`.
@@ -127,6 +128,11 @@ The contradiction-safety mechanism.
 | All retrieved candidates old | No hard filter — return best available; the agent flags potential staleness via the instruction. |
 | Future / implausibly-old dates | Both-tail clamp → null → `created_at` fallback. |
 | `effective_date` null on the fallback search path | Recency skipped for that chunk. |
+| 0 retrieved candidates | Recency scoring and MMR handle an empty candidate list without error. |
+| Malformed / missing date at ingestion | Best-effort — a bad date never fails the ingestion pipeline; stored as `NULL`. |
+| Invalid user-supplied `document_date` on upload | Rejected with a 4xx or coerced to `NULL` — never a 500. |
+| `match_chunks` recreated | Recreated function preserves existing `deleted_at IS NULL` soft-delete filtering — no stale-document regression. |
+| Date arithmetic timezone | `created_at::date` cast and age computation use a consistent timezone (UTC). |
 
 ## Sequencing
 
@@ -145,7 +151,9 @@ If the full corpus is **already** in prod (verify during implementation planning
 
 ## Doc Reconciliation
 
-This design **supersedes** `docs/features/rag-architecture.md` § Recency Scoring (~lines 190-203), including the additive modifier table (`+0.5 / +0.2 / 0 / −0.3`) and the `RECENCY_WEIGHT` default of `1.0`. Those raw additive modifiers are rejected: on a 0–1 cosine score a `+0.5` boost inverts relevance ranking. `rag-architecture.md` is updated when Gilfoyle's Phase 2 artifacts land.
+This design **supersedes** `docs/features/rag-architecture.md` § Recency Scoring (~lines 190-203), including the additive modifier table (`+0.5 / +0.2 / 0 / −0.3`) and the `RECENCY_WEIGHT` default of `1.0`. Those raw additive modifiers are rejected: on a 0–1 cosine score a `+0.5` boost inverts relevance ranking.
+
+**Owner of the `rag-architecture.md` update:** Gilfoyle Phase 2 tech prep, alongside the ADR and the `db-schema-spec.md` `match_chunks`-signature update. All three doc updates ship together so the repo never holds two conflicting recency specs.
 
 ## Out of Scope (MVP cuts)
 
@@ -177,3 +185,4 @@ Pending the pre-implementation gate + Gilfoyle Phase 2 tech prep:
 | 2026-05-21 | Approach 2 (recency scoring + date-aware generation) over Approaches 1 and 3 (Jared). |
 | 2026-05-21 | Gilfoyle design review → `NEEDS REWORK`; 13-item punch list applied (3-path ingestion, RPC drop/recreate, score-field discipline, `context_assembler` integration point, both-tail clamp, supersede `rag-architecture.md`, mandatory off-state regression). |
 | 2026-05-21 | MCP/Cowork scope — **Option B**: recency *ranking* API-only; date-aware generation (safety) on both surfaces. Jared + Gilfoyle converged; Brandon approved. |
+| 2026-05-21 | Pre-implementation gate run — 8 gates pass with findings folded into this doc (edge cases, migration-preservation, doc-update ownership). Ticket creation blocked on Gilfoyle Phase 2 (ADR + migration draft + `db-schema-spec.md` update); T2/T3 done-when cannot be completed until the ADR fixes the decay curve + `RECENCY_WEIGHT`. |

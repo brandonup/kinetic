@@ -789,7 +789,7 @@ RETURNS TABLE (
 Vector similarity search on knowledge base chunks with dynamic scope filtering.
 
 ```sql
-CREATE OR REPLACE FUNCTION public.match_chunks(
+CREATE FUNCTION public.match_chunks(
   query_embedding text,                        -- JSON-array text, cast to halfvec inside
   scope_column text,
   scope_value text,
@@ -804,13 +804,16 @@ RETURNS TABLE (
   chunk_index integer,
   section_path text,
   page_range text,
-  similarity double precision
+  similarity double precision,
+  document_date date,                          -- raw publication date; NULL when unset
+  document_created_at date                     -- knowledge_base_documents.created_at::date
 )
 ```
 
-**Usage:** Called by the RAG retrieval pipeline and the local MCP server (`packages/mcp/`). `scope_column` must be one of `agent_definition_id`, `knowledge_base_id`, or `project_id` (validated inside the function); `scope_value` is the corresponding UUID.
+**Usage:** Called by the RAG retrieval pipeline (`retrieval.py`), the local MCP server (`packages/mcp/`), and the remote MCP Edge Function (`supabase/functions/kinetic-mcp/tools.ts`). `scope_column` must be one of `agent_definition_id`, `knowledge_base_id`, or `project_id` (validated inside the function); `scope_value` is the corresponding UUID.
 **Param type note (KIN-476):** same as `match_framework_triggers` — parameter is `text`, cast to `extensions.halfvec(3072)` inside the function body. Joins `knowledge_base_documents` for `document_title` and `document_type`. Uses `EXECUTE format(...)` for dynamic column filtering.
 **Scope cast (migration `20260521000001`):** `scope_value` is bound as `text` but the scope columns are `uuid`-typed, so the dynamic query filters `WHERE c.%I = $2::uuid`. Without the cast Postgres raises `operator does not exist: uuid = text` on every call — the bug fixed by `20260521000001_fix_match_chunks_uuid_cast.sql`.
+**Recency columns (migration `20260521000002`, recency-aware retrieval):** `document_date` (raw `knowledge_base_documents.document_date`, nullable) and `document_created_at` (`created_at` cast to `date`) are returned **un-`COALESCE`d** — `retrieval.py` derives `effective_date = COALESCE(document_date, document_created_at)` and `date_is_estimated = (document_date IS NULL)` so the generation layer can distinguish a real publish date from an ingestion-date estimate (see ADR-009, `docs/plans/2026-05-21-recency-aware-retrieval-design.md` § Component B). This is a signature change — the migration `DROP`s all historical overloads and recreates with `CREATE` rather than `CREATE OR REPLACE`. All consumers read columns by name, so the two added columns do not break the MCP/Cowork callers.
 
 ---
 

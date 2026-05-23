@@ -189,18 +189,40 @@ When enabled, replaces the simple similarity threshold with full 3-tier confiden
 
 ### Recency Scoring (`RECENCY_ENABLED`)
 
-After the base relevance score is assigned (either similarity score or reranker score), a recency modifier is applied. The modifier uses the chunk's parent document date (`document_date` if set, otherwise `created_at` as fallback):
+> **Superseded by ADR-009 (`docs/adrs/adr-009-recency-scoring-model.md`) and the
+> recency-aware-retrieval design (`docs/plans/2026-05-21-recency-aware-retrieval-design.md`).**
+> The original additive step table below (`+0.5 / +0.2 / 0 / −0.3`) and the
+> `RECENCY_WEIGHT` default of `1.0` are **rejected** — on a 0–1 cosine score a `+0.5`
+> boost inverts relevance ranking. The implemented model is summarized here; ADR-009 is
+> the source of truth.
 
-| Document age | Modifier |
-|---|---|
-| < 30 days | +0.5 |
-| 30 days – 6 months | +0.2 |
-| 6 months – 2 years | 0 (neutral) |
-| > 2 years | -0.3 |
+Recency scoring is a **soft demote** applied in the Python API retrieval path
+(`retrieval.py`), not in the `match_chunks` RPC. After vector search returns
+candidates, a pure function `recency_term(effective_date, now) -> float` computes a
+recency signal in `[−1, +1]`, and:
 
-**When to enable:** When KBs contain documents spanning years and users need recent content to surface preferentially.
+```
+recency_adjusted_score = similarity_score + RECENCY_WEIGHT × recency_term
+```
 
-**Parameter:** `RECENCY_WEIGHT` (default 1.0) — scaling factor for the recency modifier. Set to 0 to disable.
+`similarity_score` (raw cosine) stays immutable. `recency_term` uses a piecewise-linear
+age decay: `+1` at age 0, linear to `0` at a 9-month zero-crossing, linear to `−1` at
+24 months, clamped at `−1` beyond. `effective_date` is `COALESCE(document_date,
+created_at)`; a `None` date yields `recency_term = 0` (no effect).
+
+**Score-field discipline:** the similarity threshold gate uses **raw** `similarity_score`
+(a quality floor recency must not breach); MMR selection and token-budget eviction use
+`recency_adjusted_score`. See the design doc § Component C score-usage table.
+
+**Scope:** recency *ranking* is API-only for MVP (MCP/Cowork serves raw cosine).
+Date-aware *generation* — source dates in context + a contradiction-preference
+instruction — ships on both surfaces (design § Option B).
+
+**When to enable:** Shipped in the MVP launch (gated `RECENCY_ENABLED`); when off,
+retrieval is byte-identical to pre-feature behavior.
+
+**Parameter:** `RECENCY_WEIGHT` (default **0.15**, tunable; expected band `0.10–0.25`) —
+scaling factor for `recency_term`. Set `RECENCY_ENABLED=false` to disable.
 
 ### Chunk-Level Enrichment (`CHUNK_ENRICHMENT_ENABLED`)
 
