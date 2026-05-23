@@ -23,11 +23,13 @@ import asyncio
 import logging
 import math
 from dataclasses import dataclass, field
+from datetime import date
 from enum import Enum
 from typing import List, Optional
 from uuid import UUID
 
 from app.core.config import settings
+from app.services.ingestion.document_date import is_plausible_document_date
 from app.services.ingestion.embedder import EmbeddingService
 
 logger = logging.getLogger(__name__)
@@ -74,6 +76,12 @@ class RetrievedChunk:
     similarity_score: float          # cosine similarity from vector search
     token_count: int = field(default=0)  # estimated tokens (set after retrieval)
     scope: Optional[str] = field(default=None)  # 'project_kb' or 'agent_kb'
+    # KIN-482 — recency-aware retrieval (Component B).
+    # effective_date = COALESCE(document_date, document_created_at) after both-tail clamp;
+    # date_is_estimated is True when document_date was NULL/implausible (fell back to created_at).
+    # None on the fallback search path — that path does not select dates.
+    effective_date: Optional[date] = field(default=None)
+    date_is_estimated: bool = field(default=False)
 
 
 # ---------------------------------------------------------------------------
@@ -286,13 +294,62 @@ def _vector_search_sync(
     return rows[:top_k]
 
 
+def _parse_iso_date(value) -> Optional[date]:
+    """Parse a PostgREST `date` value (string `YYYY-MM-DD` or None) → ``date | None``.
+
+    Already-`date` values pass through. Anything unparseable returns ``None``.
+    """
+    if value is None or value == "":
+        return None
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        try:
+            return date.fromisoformat(value[:10])  # tolerate timestamps too
+        except ValueError:
+            return None
+    return None
+
+
+def _derive_effective_date(row: dict) -> tuple[Optional[date], bool]:
+    """Return ``(effective_date, date_is_estimated)`` for a `match_chunks` RPC row.
+
+    Implements the design's both-tail clamp + Python-side COALESCE — the RPC does
+    NOT pre-COALESCE so the generation layer can distinguish a real publish date
+    from an ingestion-date estimate.
+
+    * `document_date` is the raw publication date (nullable).
+    * `document_created_at` is the ingestion timestamp cast to date (rarely null,
+      but kept defensive).
+    * Future-dated (> today+1d) or pre-2015 `document_date` values are discarded
+      and fall back to `document_created_at`, with ``date_is_estimated=True``.
+    * Rows with neither (fallback search path) yield ``(None, False)`` so recency
+      scoring treats this chunk as a no-op.
+    """
+    raw_document_date = _parse_iso_date(row.get("document_date"))
+    document_created_at = _parse_iso_date(row.get("document_created_at"))
+
+    # Clamp: implausible publish dates are *not* recency-trustworthy — fall back.
+    if raw_document_date is not None and not is_plausible_document_date(raw_document_date):
+        raw_document_date = None
+
+    if raw_document_date is not None:
+        return raw_document_date, False
+    if document_created_at is not None:
+        return document_created_at, True
+    return None, False
+
+
 def _normalise_search_row(row: dict) -> dict:
     """
     Normalise a raw row from either the RPC or fallback select into a uniform shape.
 
     RPC (match_chunks) returns: id, document_id, text, embedding, chunk_index,
-      section_path, page_range, similarity, document_title, document_type
-    Fallback select returns joined knowledge_base_documents nested under a key.
+      section_path, page_range, similarity, document_title, document_type,
+      document_date, document_created_at  (last two added in KIN-482).
+    Fallback select returns joined knowledge_base_documents nested under a key
+    and does NOT select date columns — `effective_date` resolves to ``None`` so
+    recency scoring is a no-op on that path.
     """
     # Extract document metadata — may be top-level (RPC) or nested (select join)
     doc_meta = row.get("knowledge_base_documents") or {}
@@ -307,6 +364,8 @@ def _normalise_search_row(row: dict) -> dict:
 
     embedding = row.get("embedding") or []
 
+    effective_date, date_is_estimated = _derive_effective_date(row)
+
     return {
         "chunk_id": str(row.get("id", "")),
         "document_id": str(row.get("document_id", "")),
@@ -318,6 +377,8 @@ def _normalise_search_row(row: dict) -> dict:
         "page_range": row.get("page_range"),
         "similarity_score": similarity,
         "embedding": embedding,
+        "effective_date": effective_date,
+        "date_is_estimated": date_is_estimated,
     }
 
 
@@ -536,6 +597,8 @@ async def retrieve(
                 similarity_score=chunk["similarity_score"],
                 token_count=chunk.get("token_count", 0),
                 scope=scope.value,
+                effective_date=chunk.get("effective_date"),
+                date_is_estimated=chunk.get("date_is_estimated", False),
             )
         )
     if _t:
