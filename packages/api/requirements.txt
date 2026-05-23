@@ -36,7 +36,9 @@ python-multipart>=0.0.9
 # Scheduled KB scraping (KIN-459)
 apscheduler>=3.10
 feedparser>=6.0
+html2text>=2024.2        # KIN-480: substack scraper HTML→text conversion
+beautifulsoup4>=4.12     # KIN-480: substack scraper body extraction (also transitive via unstructured, pinning explicitly)
 
 # FastAPI TestClient transport
 # httpx already listed above — starlette TestClient uses it automatically
-# cache-bust: 2026-05-19T05:08:15Z (KIN-476 fresh build)
+# cache-bust: 2026-05-23T17:30:00Z (KIN-480 fresh build with scraper deps)
