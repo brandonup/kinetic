@@ -86,6 +86,26 @@ PROMPTS: dict[str, dict[str, Any]] = {
         ),
     },
     # -----------------------------------------------------------------------
+    # Context Stack — Date-aware system prompt (KIN-485, Component D)
+    #
+    # Used by generation.py when `settings.RECENCY_ENABLED=True`. Identical to
+    # v1 plus the recency / contradiction-preference instruction below. The
+    # ``Sources are labeled with publication dates`` framing matches what
+    # context_assembler.py emits — ``[Source: TITLE, Published: YYYY-MM-DD]``
+    # for real dates, ``Added: YYYY-MM-DD`` for ingestion-date fallbacks.
+    # -----------------------------------------------------------------------
+    "context-stack-system-v2": {
+        "system": (
+            "You are a helpful AI assistant. Use the context provided below to inform your responses. "
+            "Always prioritize information from the context layers when relevant to the user's question.\n\n"
+            "Sources are labeled with publication dates. This domain evolves rapidly — when sources "
+            "conflict, prefer the more recent one. If you rely on information that may be outdated "
+            "given its date, briefly note that.\n\n"
+            "{context_layers}\n\n"
+            "{rag_context}"
+        ),
+    },
+    # -----------------------------------------------------------------------
     # Rolling Summary Compression — KIN-392
     # -----------------------------------------------------------------------
     "conversation-summary-v1": {

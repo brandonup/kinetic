@@ -32,6 +32,64 @@ const KB_TOP_K = 8;
 // Context enrichment (KIN-447) — prefix cap ~50 tokens
 const MAX_CONTEXT_PREFIX_CHARS = 200;
 
+// ---------------------------------------------------------------------------
+// KIN-485 (Component D, MCP/Cowork path): date-aware output, env-var gated.
+//
+// Deno Edge Functions can't read the Python `settings` object, so the MCP
+// surface is gated by its own Supabase Edge Function env var rather than the
+// Python `RECENCY_ENABLED`. Off-state must produce byte-identical output to
+// pre-feature `main` — both the per-chunk header line and the assembleContext
+// payload preamble are unchanged when this is "0" / unset.
+// ---------------------------------------------------------------------------
+
+function isRecencyDateAwareEnabled(): boolean {
+  const raw = Deno.env.get("RECENCY_DATE_AWARE_ENABLED");
+  // Accept "1" / "true" (case-insensitive). Anything else (including unset)
+  // is OFF. Mirrors the strict-true gate the Python settings field implements.
+  if (!raw) return false;
+  const v = raw.trim().toLowerCase();
+  return v === "1" || v === "true";
+}
+
+const RECENCY_KB_PREAMBLE =
+  "Sources are labeled with publication dates. This domain evolves rapidly — " +
+  "when sources conflict, prefer the more recent one. If you rely on information " +
+  "that may be outdated given its date, briefly note that.";
+
+/**
+ * Build the date suffix to append to a KB result header line.
+ *
+ * Mirrors the Python context_assembler._format_source_header logic — uses the
+ * raw `document_date` when present (PostgREST returns the `match_chunks` date
+ * columns as plain "YYYY-MM-DD" strings, see
+ * `migrations/20260523000001_match_chunks_add_effective_date.sql`), and falls
+ * back to `document_created_at` with the `Added` label when document_date is
+ * null/missing/implausible. Returns an empty string when both are null OR when
+ * the gating env var is off — keeping off-state output byte-identical.
+ *
+ * Supabase TS types lag the new RPC columns, so callers access these fields
+ * via the `Record<string, unknown>` shape and we read them through `unknown`
+ * here. No `as any` cast is needed.
+ */
+function formatChunkDateSuffix(chunk: Record<string, unknown>): string {
+  if (!isRecencyDateAwareEnabled()) return "";
+
+  const rawDate = chunk.document_date;
+  const createdAt = chunk.document_created_at;
+
+  // Python parity: pre-2015 / future-dated values are not validated here —
+  // the API path handles plausibility in `_derive_effective_date`. On the MCP
+  // surface we trust what the RPC returns; the eval suite will catch any
+  // observable drift via end-to-end cases.
+  if (typeof rawDate === "string" && rawDate.length > 0) {
+    return `, Published: ${rawDate}`;
+  }
+  if (typeof createdAt === "string" && createdAt.length > 0) {
+    return `, Added: ${createdAt}`;
+  }
+  return "";
+}
+
 interface QueryContextFields {
   agentName?: string | null;     // L5 — strongest scoping signal for KB
   companyName?: string | null;   // L2
@@ -523,8 +581,16 @@ export async function searchKnowledgeBase(
   // Take top K
   const topChunks = filtered.slice(0, KB_TOP_K);
 
-  // Format with metadata
+  // KIN-485 (Component D): when RECENCY_DATE_AWARE_ENABLED, prepend a recency /
+  // contradiction-preference preamble so the Cowork-side LLM applies the same
+  // tie-break rule the Kinetic-side generation prompt does. Off-state omits it
+  // so output is byte-identical to pre-feature.
+  const recencyOn = isRecencyDateAwareEnabled();
   const lines = ["# Knowledge Base Results\n"];
+  if (recencyOn) {
+    lines.push(RECENCY_KB_PREAMBLE);
+    lines.push("");
+  }
   for (let i = 0; i < topChunks.length; i++) {
     const chunk = topChunks[i];
     const title = (chunk.document_title as string) || "Unknown";
@@ -535,6 +601,7 @@ export async function searchKnowledgeBase(
     let header = `## [${i + 1}] ${title}`;
     if (section) header += ` > ${section}`;
     header += ` (relevance: ${similarity.toFixed(2)})`;
+    header += formatChunkDateSuffix(chunk);
 
     lines.push(header);
     lines.push(text);
@@ -884,8 +951,16 @@ async function fetchKnowledgeBase(
   // Take top K
   const topChunks = filtered.slice(0, KB_TOP_K);
 
-  // Format with metadata
+  // KIN-485 (Component D): preamble + per-chunk date suffix, env-var gated.
+  // `assembleContext` already wraps this in a `## Knowledge Base` section, so
+  // we prepend the preamble *inside* that section (right above the result
+  // headers) when recency is on. Off-state is byte-identical.
+  const recencyOn = isRecencyDateAwareEnabled();
   const lines: string[] = [];
+  if (recencyOn) {
+    lines.push(RECENCY_KB_PREAMBLE);
+    lines.push("");
+  }
   for (let i = 0; i < topChunks.length; i++) {
     const chunk = topChunks[i];
     const title = (chunk.document_title as string) || "Unknown";
@@ -896,6 +971,7 @@ async function fetchKnowledgeBase(
     let header = `### [${i + 1}] ${title}`;
     if (section) header += ` > ${section}`;
     header += ` (relevance: ${similarity.toFixed(2)})`;
+    header += formatChunkDateSuffix(chunk);
 
     lines.push(header);
     lines.push(text);

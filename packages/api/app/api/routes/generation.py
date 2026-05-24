@@ -236,9 +236,18 @@ async def generate(
     )
 
     # 7. Build messages array
+    # KIN-485 (Component D): pick the v2 (date-aware) system template only when
+    # settings.RECENCY_ENABLED. Off-state must select v1 so the prompt is
+    # byte-identical to pre-feature output.
     from app.services.prompts import get_prompt
+    from app.core.config import settings as _settings
 
-    system_template = get_prompt("context-stack-system-v1", "system")
+    _prompt_id = (
+        "context-stack-system-v2"
+        if _settings.RECENCY_ENABLED
+        else "context-stack-system-v1"
+    )
+    system_template = get_prompt(_prompt_id, "system")
     system_content = system_template.format(
         context_layers="\n\n".join(ctx.system_parts),
         rag_context=ctx.rag_context_text,

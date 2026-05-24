@@ -72,6 +72,40 @@ class AssembledContext:
 
 
 # ---------------------------------------------------------------------------
+# Source-line formatting (KIN-485 — Component D)
+# ---------------------------------------------------------------------------
+
+
+def _format_source_header(chunk, *, recency_enabled: bool) -> str:
+    """Build the per-chunk `[Source: ...]` header injected into the RAG context.
+
+    Off-state (``recency_enabled=False``) returns the pre-feature byte-identical
+    string ``[Source: {title}]`` regardless of any date metadata on the chunk —
+    this is what the launch byte-identical regression test pins.
+
+    On-state appends a date label when the chunk carries one:
+      * ``Published: YYYY-MM-DD`` when ``chunk.date_is_estimated`` is False
+        (real publication date pulled from ``knowledge_base_documents.document_date``).
+      * ``Added: YYYY-MM-DD`` when True (ingestion-date fallback per Component B).
+    If ``chunk.effective_date is None`` (fallback search path, dates not selected),
+    we omit the suffix entirely rather than print a placeholder.
+    """
+    title = chunk.document_title
+    if not recency_enabled:
+        return f"[Source: {title}]"
+
+    # ``effective_date`` and ``date_is_estimated`` are present on RetrievedChunk
+    # (KIN-482). Use getattr to stay defensive — older test fixtures may build
+    # chunks without these fields.
+    effective_date = getattr(chunk, "effective_date", None)
+    if effective_date is None:
+        return f"[Source: {title}]"
+
+    label = "Added" if getattr(chunk, "date_is_estimated", False) else "Published"
+    return f"[Source: {title}, {label}: {effective_date.isoformat()}]"
+
+
+# ---------------------------------------------------------------------------
 # Assembler
 # ---------------------------------------------------------------------------
 
@@ -521,9 +555,20 @@ class ContextAssembler:
         ctx.rag_chunks.extend(all_chunks)
 
         if all_chunks:
+            # KIN-485 (Component D): date-aware injection, gated on settings.RECENCY_ENABLED.
+            # OFF-state must be byte-identical to pre-feature output: `[Source: {title}]`.
+            # ON-state appends the chunk's effective_date with the appropriate label —
+            # `Published: YYYY-MM-DD` when date_is_estimated=False (real publication date)
+            # or `Added: YYYY-MM-DD` when True (ingestion-date fallback per Component B).
+            # If effective_date is None (fallback search path that doesn't carry dates),
+            # we silently omit the suffix rather than print a garbage value.
+            from app.core.config import settings as _settings  # local import: avoid import-time config load
+
+            recency_enabled = _settings.RECENCY_ENABLED
             parts = []
             for chunk in all_chunks:
-                parts.append(f"[Source: {chunk.document_title}]\n{chunk.text}")
+                source_line = _format_source_header(chunk, recency_enabled=recency_enabled)
+                parts.append(f"{source_line}\n{chunk.text}")
             ctx.rag_context_text = "\n\n".join(parts)
 
     async def _assemble_conversation_history(

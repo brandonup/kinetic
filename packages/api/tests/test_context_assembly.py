@@ -831,3 +831,152 @@ class TestL7OverrideNoInstance:
         call_kwargs = mock_select.call_args
         assert call_kwargs.kwargs.get("excluded_ids") is None
         assert any("[Framework: Normal Match]" in p for p in result.system_parts)
+
+
+# ---------------------------------------------------------------------------
+# KIN-485 — Component D: date-aware source-line formatting
+# ---------------------------------------------------------------------------
+
+from datetime import date  # noqa: E402
+
+from app.services.context_assembler import _format_source_header  # noqa: E402
+
+
+def _make_dated_chunk(title: str, effective_date, *, date_is_estimated: bool):
+    """Mock chunk carrying date metadata (mirrors RetrievedChunk shape)."""
+    chunk = MagicMock()
+    chunk.document_title = title
+    chunk.effective_date = effective_date
+    chunk.date_is_estimated = date_is_estimated
+    chunk.text = "body"
+    return chunk
+
+
+class TestRecencyOffStateByteIdentical:
+    """RECENCY_ENABLED=False must produce the pre-feature `[Source: TITLE]` exactly."""
+
+    def test_off_state_with_real_date_strips_date(self):
+        chunk = _make_dated_chunk("Design Doc", date(2026, 5, 1), date_is_estimated=False)
+        assert _format_source_header(chunk, recency_enabled=False) == "[Source: Design Doc]"
+
+    def test_off_state_with_estimated_date_strips_date(self):
+        chunk = _make_dated_chunk("Stale Doc", date(2024, 1, 1), date_is_estimated=True)
+        assert _format_source_header(chunk, recency_enabled=False) == "[Source: Stale Doc]"
+
+    def test_off_state_with_none_date(self):
+        chunk = _make_dated_chunk("No Date Doc", None, date_is_estimated=False)
+        assert _format_source_header(chunk, recency_enabled=False) == "[Source: No Date Doc]"
+
+
+class TestRecencyOnStateDateLabel:
+    """RECENCY_ENABLED=True appends `Published:`/`Added:` per estimated flag."""
+
+    def test_on_state_published_when_not_estimated(self):
+        chunk = _make_dated_chunk("Fresh Doc", date(2026, 5, 23), date_is_estimated=False)
+        result = _format_source_header(chunk, recency_enabled=True)
+        assert result == "[Source: Fresh Doc, Published: 2026-05-23]"
+
+    def test_on_state_added_when_estimated(self):
+        chunk = _make_dated_chunk("Ingest Doc", date(2024, 11, 4), date_is_estimated=True)
+        result = _format_source_header(chunk, recency_enabled=True)
+        assert result == "[Source: Ingest Doc, Added: 2024-11-04]"
+
+    def test_on_state_with_none_date_omits_suffix(self):
+        # Fallback search path: no dates selected → defensive omit, no garbage.
+        chunk = _make_dated_chunk("Fallback Doc", None, date_is_estimated=False)
+        assert _format_source_header(chunk, recency_enabled=True) == "[Source: Fallback Doc]"
+
+
+class TestRecencyAssembleEndToEnd:
+    """Full assemble() path: rag_context_text byte-identical off; date-tagged on."""
+
+    @pytest.mark.asyncio
+    @patch("app.services.rag.framework_selection.select_framework", new_callable=AsyncMock)
+    @patch("app.services.rag.retrieval.retrieve", new_callable=AsyncMock)
+    async def test_assemble_off_state_byte_identical(self, mock_retrieve, mock_select):
+        """RECENCY_ENABLED=False → rag_context_text drops date even when chunk carries it."""
+        from app.services.rag.framework_selection import FrameworkMatch
+
+        mock_select.return_value = FrameworkMatch(None, None, None)
+        chunk = _make_dated_chunk("Dated Doc", date(2026, 5, 1), date_is_estimated=False)
+        chunk.scope = "project_kb"
+        chunk.chunk_id = str(uuid4())
+        chunk.document_id = str(uuid4())
+        chunk.document_type = "text/plain"
+        chunk.chunk_index = 0
+        chunk.section_path = None
+        chunk.page_range = None
+        chunk.similarity_score = 0.85
+        chunk.token_count = 50
+        chunk.text = "Some content"
+        mock_retrieve.side_effect = [[chunk], []]
+
+        mock_sb = _base_mock_sb_with_agent()
+        with patch("app.core.config.settings.RECENCY_ENABLED", False):
+            result = await ContextAssembler().assemble(
+                supabase=mock_sb,
+                user_id=USER_ID,
+                conversation_id=CONVERSATION_ID,
+                query_text="date question",
+            )
+        assert "[Source: Dated Doc]\nSome content" in result.rag_context_text
+        assert "Published" not in result.rag_context_text
+        assert "Added" not in result.rag_context_text
+
+    @pytest.mark.asyncio
+    @patch("app.services.rag.framework_selection.select_framework", new_callable=AsyncMock)
+    @patch("app.services.rag.retrieval.retrieve", new_callable=AsyncMock)
+    async def test_assemble_on_state_appends_date(self, mock_retrieve, mock_select):
+        """RECENCY_ENABLED=True → header line carries `Published: YYYY-MM-DD`."""
+        from app.services.rag.framework_selection import FrameworkMatch
+
+        mock_select.return_value = FrameworkMatch(None, None, None)
+        chunk = _make_dated_chunk("Dated Doc", date(2026, 5, 1), date_is_estimated=False)
+        chunk.scope = "project_kb"
+        chunk.chunk_id = str(uuid4())
+        chunk.document_id = str(uuid4())
+        chunk.document_type = "text/plain"
+        chunk.chunk_index = 0
+        chunk.section_path = None
+        chunk.page_range = None
+        chunk.similarity_score = 0.85
+        chunk.token_count = 50
+        chunk.text = "Some content"
+        mock_retrieve.side_effect = [[chunk], []]
+
+        mock_sb = _base_mock_sb_with_agent()
+        with patch("app.core.config.settings.RECENCY_ENABLED", True):
+            result = await ContextAssembler().assemble(
+                supabase=mock_sb,
+                user_id=USER_ID,
+                conversation_id=CONVERSATION_ID,
+                query_text="date question",
+            )
+        assert "[Source: Dated Doc, Published: 2026-05-01]" in result.rag_context_text
+
+
+class TestRecencyPromptVariantSelection:
+    """generation.py picks v1 vs v2 system prompt based on RECENCY_ENABLED."""
+
+    def test_v1_prompt_is_byte_identical_to_pre_feature(self):
+        # If anyone edits v1 they break the byte-identical off-state guarantee.
+        from app.services.prompts import get_prompt
+
+        expected = (
+            "You are a helpful AI assistant. Use the context provided below to inform your responses. "
+            "Always prioritize information from the context layers when relevant to the user's question.\n\n"
+            "{context_layers}\n\n"
+            "{rag_context}"
+        )
+        assert get_prompt("context-stack-system-v1", "system") == expected
+
+    def test_v2_prompt_includes_contradiction_instruction(self):
+        from app.services.prompts import get_prompt
+
+        v2 = get_prompt("context-stack-system-v2", "system")
+        assert "Sources are labeled with publication dates" in v2
+        assert "prefer the more recent one" in v2
+        # v2 must still expose the same template variables v1 does so the
+        # generation.py format() call stays interchangeable.
+        assert "{context_layers}" in v2
+        assert "{rag_context}" in v2
