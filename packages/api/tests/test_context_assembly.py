@@ -954,6 +954,38 @@ class TestRecencyAssembleEndToEnd:
             )
         assert "[Source: Dated Doc, Published: 2026-05-01]" in result.rag_context_text
 
+    @pytest.mark.asyncio
+    @patch("app.services.rag.framework_selection.select_framework", new_callable=AsyncMock)
+    @patch("app.services.rag.retrieval.retrieve", new_callable=AsyncMock)
+    async def test_assemble_on_state_estimated_date_uses_added_label(self, mock_retrieve, mock_select):
+        """RECENCY_ENABLED=True + date_is_estimated=True → header carries `Added: YYYY-MM-DD`."""
+        from app.services.rag.framework_selection import FrameworkMatch
+
+        mock_select.return_value = FrameworkMatch(None, None, None)
+        chunk = _make_dated_chunk("Estimated Doc", date(2026, 5, 1), date_is_estimated=True)
+        chunk.scope = "project_kb"
+        chunk.chunk_id = str(uuid4())
+        chunk.document_id = str(uuid4())
+        chunk.document_type = "text/plain"
+        chunk.chunk_index = 0
+        chunk.section_path = None
+        chunk.page_range = None
+        chunk.similarity_score = 0.85
+        chunk.token_count = 50
+        chunk.text = "Some content"
+        mock_retrieve.side_effect = [[chunk], []]
+
+        mock_sb = _base_mock_sb_with_agent()
+        with patch("app.core.config.settings.RECENCY_ENABLED", True):
+            result = await ContextAssembler().assemble(
+                supabase=mock_sb,
+                user_id=USER_ID,
+                conversation_id=CONVERSATION_ID,
+                query_text="date question",
+            )
+        assert "[Source: Estimated Doc, Added: 2026-05-01]" in result.rag_context_text
+        assert "Published" not in result.rag_context_text
+
 
 class TestRecencyPromptVariantSelection:
     """generation.py picks v1 vs v2 system prompt based on RECENCY_ENABLED."""
