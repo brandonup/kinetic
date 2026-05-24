@@ -11,7 +11,10 @@ Usage:
         --scope agent_kb --scope-id <agent-uuid>
 
 Environment variables (or CLI overrides):
-    SUPABASE_URL, SUPABASE_KEY, OPENAI_API_KEY
+    SUPABASE_URL, SUPABASE_KEY, GEMINI_API_KEY
+
+Embedding uses the platform-owned Gemini key via `EmbeddingService()` (KIN-467).
+No OpenAI key is required.
 """
 
 import argparse
@@ -85,7 +88,6 @@ async def run_eval(
     scope: RetrievalScope,
     scope_id: UUID,
     supabase,
-    openai_key: str,
     similarity_threshold: float = 0.3,
 ) -> list[dict]:
     """Run retrieve() for each eval case and collect results."""
@@ -106,7 +108,6 @@ async def run_eval(
                 scope=scope,
                 scope_id=scope_id,
                 supabase=supabase,
-                openai_key=openai_key,
                 model_context_window=1_000_000,
                 vector_top_k=20,
                 mmr_top_k=20,
@@ -118,14 +119,34 @@ async def run_eval(
             should_retrieve = set(case.get("should_retrieve") or [])
             should_not_retrieve = set(case.get("should_not_retrieve") or [])
 
-            # Precision@8: fraction of top-8 chunks from relevant documents
+            # Precision@8 — KIN-497: redefined as DOCUMENT-LEVEL (was chunk-level).
+            # The chunk-level definition penalises retrieval for finding the right
+            # doc *and* other topically-relevant docs — which is exactly what we want
+            # on a dense corpus like Nate's (567 AI-commentary articles, many
+            # overlapping topics). Doc-level precision answers the question users
+            # actually care about: did the target doc appear in the top-8?
+            #
+            # `precision_at_8_chunks` keeps the legacy chunk-level computation
+            # for info-only diagnostics (high chunk-level FIR can still flag
+            # noisy injection even when the right doc is present).
+            top8_doc_set = set(retrieved_top8_doc_ids)
             if chunks[:8]:
-                relevant_in_top8 = sum(
+                # Doc-level: fraction of should_retrieve docs present in top-8 doc-set.
+                if should_retrieve:
+                    precision_at_8 = (
+                        len(should_retrieve & top8_doc_set) / len(should_retrieve)
+                    )
+                else:
+                    # No docs expected → precision is 1.0 if nothing came back, 0 otherwise.
+                    precision_at_8 = 0.0
+                # Legacy chunk-level for diagnostics.
+                relevant_chunks_in_top8 = sum(
                     1 for did in retrieved_top8_doc_ids if did in should_retrieve
                 )
-                precision_at_8 = relevant_in_top8 / len(chunks[:8])
+                precision_at_8_chunks = relevant_chunks_in_top8 / len(chunks[:8])
             else:
                 precision_at_8 = 1.0 if not should_retrieve else 0.0
+                precision_at_8_chunks = precision_at_8
 
             # Recall@20: fraction of relevant docs with >= 1 chunk in all results
             if should_retrieve:
@@ -173,6 +194,7 @@ async def run_eval(
                 "num_chunks_returned": len(chunks),
                 "top_scores": [round(c.similarity_score, 4) for c in chunks[:8]],
                 "precision_at_8": round(precision_at_8, 4),
+                "precision_at_8_chunks": round(precision_at_8_chunks, 4),
                 "recall_at_20": round(recall_at_20, 4),
                 "mrr": round(mrr, 4),
                 "false_injection_rate": round(false_injection_rate, 4),
@@ -194,6 +216,7 @@ async def run_eval(
                 "label": case["label"],
                 "error": str(e),
                 "precision_at_8": 0.0,
+                "precision_at_8_chunks": 0.0,
                 "recall_at_20": 0.0,
                 "mrr": 0.0,
                 "false_injection_rate": 0.0,
@@ -217,6 +240,9 @@ def compute_metrics(results: list[dict]) -> dict:
 
     # Aggregate metrics over on-topic cases (the primary eval set)
     precision_at_8 = safe_mean([r["precision_at_8"] for r in on_topic])
+    precision_at_8_chunks = safe_mean(
+        [r.get("precision_at_8_chunks", 0.0) for r in on_topic]
+    )
     recall_at_20 = safe_mean([r["recall_at_20"] for r in on_topic])
     mrr = safe_mean([r["mrr"] for r in on_topic])
 
@@ -236,6 +262,7 @@ def compute_metrics(results: list[dict]) -> dict:
 
     return {
         "precision_at_8": round(precision_at_8, 4),
+        "precision_at_8_chunks": round(precision_at_8_chunks, 4),
         "recall_at_20": round(recall_at_20, 4),
         "mrr": round(mrr, 4),
         "false_injection_rate": round(false_injection_rate, 4),
@@ -330,7 +357,11 @@ def print_report(metrics: dict, failures: dict):
             f"  [{symbol}] {name:25s} {value:6.1%}  (target {direction} {target:.0%})"
         )
 
-    print(f"\n  False fire rate (info):   {metrics['false_fire_rate']:.1%}")
+    print(f"\n  False fire rate (info):    {metrics['false_fire_rate']:.1%}")
+    print(
+        f"  Chunk-level p@8 (info):    {metrics.get('precision_at_8_chunks', 0):.1%}  "
+        f"(legacy chunk-level metric; primary p@8 is now doc-level — KIN-497)"
+    )
 
     print("\n--- Failure Analysis ---")
     print(f"  Low precision (<50%):  {failures['low_precision_count']}")
@@ -365,6 +396,7 @@ def save_markdown_report(
     dataset_path: str,
 ) -> str:
     """Generate markdown report for docs/evals/."""
+    from app.core.config import settings as _settings
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     c = metrics["counts"]
 
@@ -372,6 +404,7 @@ def save_markdown_report(
         "---",
         f"Date: {now}",
         "Ticket: KIN-449",
+        f"Embedding model: {_settings.EMBEDDING_MODEL}",
         f"Scope: {scope} ({scope_id})",
         f"Dataset: {dataset_path} ({c['total']} cases)",
         "---",
@@ -454,19 +487,22 @@ async def async_main():
     )
     parser.add_argument("--supabase-url", default=os.environ.get("SUPABASE_URL"))
     parser.add_argument("--supabase-key", default=os.environ.get("SUPABASE_KEY"))
-    parser.add_argument("--openai-key", default=os.environ.get("OPENAI_API_KEY"))
     parser.add_argument(
         "--no-threshold",
         action="store_true",
         help="Disable similarity threshold (raw pipeline output, inflates false injection rate)",
     )
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=None,
+        help="Override similarity threshold (e.g. 0.45). Defaults to the prod "
+             "settings.SIMILARITY_THRESHOLD. Use this for sweeping (KIN-497).",
+    )
     args = parser.parse_args()
 
     if not args.supabase_url or not args.supabase_key:
         print("Error: SUPABASE_URL and SUPABASE_KEY required", file=sys.stderr)
-        sys.exit(1)
-    if not args.openai_key:
-        print("Error: OPENAI_API_KEY required", file=sys.stderr)
         sys.exit(1)
 
     # Load dataset
@@ -494,11 +530,19 @@ async def async_main():
         sys.exit(1)
 
     # Run eval
-    threshold = 0.0 if args.no_threshold else 0.3
-    mode = "raw (no threshold)" if args.no_threshold else "production (threshold=0.3)"
+    if args.no_threshold:
+        threshold = 0.0
+        mode = "raw (no threshold)"
+    elif args.threshold is not None:
+        threshold = args.threshold
+        mode = f"sweep (threshold={threshold})"
+    else:
+        from app.core.config import settings as _settings
+        threshold = _settings.SIMILARITY_THRESHOLD
+        mode = f"production (threshold={threshold})"
     print(f"\nRunning eval in {mode} mode...", file=sys.stderr)
     results = await run_eval(
-        cases, scope, scope_id, supabase, args.openai_key,
+        cases, scope, scope_id, supabase,
         similarity_threshold=threshold,
     )
 
@@ -515,11 +559,15 @@ async def async_main():
     os.makedirs(output_dir, exist_ok=True)
 
     # JSON results
+    # `embedding_model` is recorded so cross-regime comparison is explicit
+    # (KIN-467 migrated from OpenAI → Gemini; see KIN-497).
+    from app.core.config import settings as _settings
     results_path = os.path.join(output_dir, "results.json")
     with open(results_path, "w") as f:
         json.dump(
             {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
+                "embedding_model": _settings.EMBEDDING_MODEL,
                 "scope": scope.value,
                 "scope_id": str(scope_id),
                 "dataset": args.dataset,
