@@ -1,0 +1,965 @@
+{
+  "timestamp": "2026-05-25T22:54:29.447112+00:00",
+  "dry_run": true,
+  "judge_model": "gpt-4o",
+  "gen_model": "gpt-4o",
+  "kinetic_api_url": "https://kinetic-production-b568.up.railway.app",
+  "pass_threshold": 0.8,
+  "metrics": {
+    "judge_pass_rates": {
+      "specificity": 0.6667,
+      "context_use": 0.6667,
+      "voice": 0.6667,
+      "ai_expertise": 0.6667
+    },
+    "judge_error_counts": {
+      "specificity": 0,
+      "context_use": 0,
+      "voice": 0,
+      "ai_expertise": 0
+    },
+    "launch_bars": {
+      "specificity": {
+        "rate": 0.6667,
+        "target": 0.8,
+        "met": false
+      },
+      "context_use": {
+        "rate": 0.6667,
+        "target": 0.8,
+        "met": false
+      },
+      "voice": {
+        "rate": 0.6667,
+        "target": 0.8,
+        "met": false
+      },
+      "ai_expertise": {
+        "rate": 0.6667,
+        "target": 0.8,
+        "met": false
+      }
+    },
+    "judge_calibration": {
+      "specificity": {
+        "expected_fail_caught": 1,
+        "expected_fail_missed": 2,
+        "expected_pass_caught": 0,
+        "expected_pass_missed": 0,
+        "errors": 0,
+        "violations": [
+          "NC01-generic-chatgpt: expected FAIL, got PASS",
+          "NC02-asks-for-context: expected FAIL, got PASS"
+        ]
+      },
+      "context_use": {
+        "expected_fail_caught": 1,
+        "expected_fail_missed": 1,
+        "expected_pass_caught": 0,
+        "expected_pass_missed": 0,
+        "errors": 0,
+        "violations": [
+          "NC01-generic-chatgpt: expected FAIL, got PASS"
+        ]
+      },
+      "voice": {
+        "expected_fail_caught": 1,
+        "expected_fail_missed": 1,
+        "expected_pass_caught": 0,
+        "expected_pass_missed": 0,
+        "errors": 0,
+        "violations": [
+          "NC03-hedged: expected FAIL, got PASS"
+        ]
+      },
+      "ai_expertise": {
+        "expected_fail_caught": 0,
+        "expected_fail_missed": 1,
+        "expected_pass_caught": 0,
+        "expected_pass_missed": 0,
+        "errors": 0,
+        "violations": [
+          "NC01-generic-chatgpt: expected FAIL, got PASS"
+        ]
+      }
+    },
+    "judges_calibrated": {
+      "specificity": false,
+      "context_use": false,
+      "voice": false,
+      "ai_expertise": false
+    },
+    "all_judges_calibrated": false,
+    "suite_pass": false,
+    "counts": {
+      "total_cases": 15,
+      "negative_controls": 3,
+      "generation_errors": 0,
+      "total_judge_calls": 72,
+      "judge_errors": 0
+    },
+    "by_trigger": {
+      "mid-advisory": {
+        "total": 4,
+        "avg_pass_rate": 0.6875
+      },
+      "stress-test": {
+        "total": 4,
+        "avg_pass_rate": 0.6875
+      },
+      "competitive": {
+        "total": 3,
+        "avg_pass_rate": 0.6667
+      },
+      "org-design": {
+        "total": 2,
+        "avg_pass_rate": 0.625
+      },
+      "practice": {
+        "total": 2,
+        "avg_pass_rate": 0.625
+      }
+    }
+  },
+  "per_case_results": [
+    {
+      "id": "B01",
+      "prompt": "I have a Vellum strategy offsite in 5 days. CEO wants me to lead a session on whether to keep building the standalone AI ops platform or reposition as an AI layer inside an existing workflow tool partnership. What's the diagnostic frame I should bring into the room?",
+      "trigger": "mid-advisory",
+      "axis_a": "mid-advisory",
+      "axis_b": "positioning",
+      "axis_c": "client-facing",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "Lead the offsite with this frame: Vellum has a 12-month window before agent-orchestration commoditizes into a feature inside larger workflow tools. The standalone-vs-partnership question is the wrong binary. The real choice is whether to invest the next 12 months in a category move (AI ops becomes its own buyer, owned by a new function in the customer org) or accept being a layer inside a larger workflow platform \u2014 which compresses pricing power but accelerates distribution. At $8M ARR with 12-month MoM growth and three competitors closing on parity, you don't have the runway to do both. The CEO should leave the offsite with a decision on which game he's playing \u2014 not a list of options to evaluate.",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for specificity on case B01.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for context_use on case B01.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "FAIL",
+          "critique": "[DRY RUN] Mock critique for voice on case B01.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>FAIL</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for ai_expertise on case B01.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 3,
+      "judge_count": 4
+    },
+    {
+      "id": "B02",
+      "prompt": "Vellum's CEO is asking whether they should build proprietary embeddings or stay on OpenAI. He's leaning build. I'm not convinced \u2014 at $8M ARR with 12 mo runway from Series B, capital allocation is the question. What's the right take I should bring back to him?",
+      "trigger": "mid-advisory",
+      "axis_a": "mid-advisory",
+      "axis_b": "build-vs-buy",
+      "axis_c": "client-facing",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "Lead the offsite with this frame: Vellum has a 12-month window before agent-orchestration commoditizes into a feature inside larger workflow tools. The standalone-vs-partnership question is the wrong binary. The real choice is whether to invest the next 12 months in a category move (AI ops becomes its own buyer, owned by a new function in the customer org) or accept being a layer inside a larger workflow platform \u2014 which compresses pricing power but accelerates distribution. At $8M ARR with 12-month MoM growth and three competitors closing on parity, you don't have the runway to do both. The CEO should leave the offsite with a decision on which game he's playing \u2014 not a list of options to evaluate.",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for specificity on case B02.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "FAIL",
+          "critique": "[DRY RUN] Mock critique for context_use on case B02.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>FAIL</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for voice on case B02.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for ai_expertise on case B02.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 3,
+      "judge_count": 4
+    },
+    {
+      "id": "B03",
+      "prompt": "Mid-call with Vellum's founder right now (between sessions). He's pushing to open enterprise sales because they had two inbound inquiries from F500 ops teams. I think it's a trap at their stage. Quick \u2014 what's the sharper move for a $60k ACV company with this signal?",
+      "trigger": "mid-advisory",
+      "axis_a": "mid-advisory",
+      "axis_b": "gtm-strategy",
+      "axis_c": "client-facing",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "Lead the offsite with this frame: Vellum has a 12-month window before agent-orchestration commoditizes into a feature inside larger workflow tools. The standalone-vs-partnership question is the wrong binary. The real choice is whether to invest the next 12 months in a category move (AI ops becomes its own buyer, owned by a new function in the customer org) or accept being a layer inside a larger workflow platform \u2014 which compresses pricing power but accelerates distribution. At $8M ARR with 12-month MoM growth and three competitors closing on parity, you don't have the runway to do both. The CEO should leave the offsite with a decision on which game he's playing \u2014 not a list of options to evaluate.",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "FAIL",
+          "critique": "[DRY RUN] Mock critique for specificity on case B03.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>FAIL</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for context_use on case B03.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for voice on case B03.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "FAIL",
+          "critique": "[DRY RUN] Mock critique for ai_expertise on case B03.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>FAIL</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 2,
+      "judge_count": 4
+    },
+    {
+      "id": "B04",
+      "prompt": "Two of Vellum's named competitors just raised aggressive Series A/B rounds in the past 60 days and are visibly moving up-market. Vellum is mid-build on a core platform feature that takes 8 weeks. Do I tell them to ship a worse version of the feature in 3 weeks to defend, or hold the line on the 8-week build?",
+      "trigger": "mid-advisory",
+      "axis_a": "mid-advisory",
+      "axis_b": "gtm-strategy",
+      "axis_c": "internal-execution",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "Lead the offsite with this frame: Vellum has a 12-month window before agent-orchestration commoditizes into a feature inside larger workflow tools. The standalone-vs-partnership question is the wrong binary. The real choice is whether to invest the next 12 months in a category move (AI ops becomes its own buyer, owned by a new function in the customer org) or accept being a layer inside a larger workflow platform \u2014 which compresses pricing power but accelerates distribution. At $8M ARR with 12-month MoM growth and three competitors closing on parity, you don't have the runway to do both. The CEO should leave the offsite with a decision on which game he's playing \u2014 not a list of options to evaluate.",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for specificity on case B04.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for context_use on case B04.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "FAIL",
+          "critique": "[DRY RUN] Mock critique for voice on case B04.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>FAIL</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for ai_expertise on case B04.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 3,
+      "judge_count": 4
+    },
+    {
+      "id": "B05",
+      "prompt": "I'm about to recommend Vellum slow hiring (currently planning 12 hires over 6 months) and double down on the agent platform layer instead. My logic: their differentiation is in the orchestration, not the LLM layer, and hiring 12 people right now will calcify the current sales motion. Is that the right call for a Series B AI ops company in 2026?",
+      "trigger": "stress-test",
+      "axis_a": "stress-test",
+      "axis_b": "hiring",
+      "axis_c": "board-facing",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "Lead the offsite with this frame: Vellum has a 12-month window before agent-orchestration commoditizes into a feature inside larger workflow tools. The standalone-vs-partnership question is the wrong binary. The real choice is whether to invest the next 12 months in a category move (AI ops becomes its own buyer, owned by a new function in the customer org) or accept being a layer inside a larger workflow platform \u2014 which compresses pricing power but accelerates distribution. At $8M ARR with 12-month MoM growth and three competitors closing on parity, you don't have the runway to do both. The CEO should leave the offsite with a decision on which game he's playing \u2014 not a list of options to evaluate.",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for specificity on case B05.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "FAIL",
+          "critique": "[DRY RUN] Mock critique for context_use on case B05.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>FAIL</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for voice on case B05.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for ai_expertise on case B05.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 3,
+      "judge_count": 4
+    },
+    {
+      "id": "B06",
+      "prompt": "I'm going to push Vellum to switch from per-seat to usage-based pricing tied to workflow executions. Their CFO will resist (revenue forecasting gets noisier). My case: AI ops value scales with usage, not seats, and per-seat is going to bottom out as agents do the work. Does the argument hold up?",
+      "trigger": "stress-test",
+      "axis_a": "stress-test",
+      "axis_b": "pricing",
+      "axis_c": "board-facing",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "Lead the offsite with this frame: Vellum has a 12-month window before agent-orchestration commoditizes into a feature inside larger workflow tools. The standalone-vs-partnership question is the wrong binary. The real choice is whether to invest the next 12 months in a category move (AI ops becomes its own buyer, owned by a new function in the customer org) or accept being a layer inside a larger workflow platform \u2014 which compresses pricing power but accelerates distribution. At $8M ARR with 12-month MoM growth and three competitors closing on parity, you don't have the runway to do both. The CEO should leave the offsite with a decision on which game he's playing \u2014 not a list of options to evaluate.",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "FAIL",
+          "critique": "[DRY RUN] Mock critique for specificity on case B06.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>FAIL</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for context_use on case B06.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for voice on case B06.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "FAIL",
+          "critique": "[DRY RUN] Mock critique for ai_expertise on case B06.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>FAIL</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 2,
+      "judge_count": 4
+    },
+    {
+      "id": "B07",
+      "prompt": "I'm planning to tell Vellum to hire a Head of AI (someone with practitioner depth) before they hire the next round of GTM ICs. Their current plan is the reverse \u2014 fill out the AE team first. My case: in an AI-ops platform, the product-engineering bottleneck is going to determine GTM scaling, not the other way around. Am I right or is this contrarian for the sake of it?",
+      "trigger": "stress-test",
+      "axis_a": "stress-test",
+      "axis_b": "hiring",
+      "axis_c": "client-facing",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "Lead the offsite with this frame: Vellum has a 12-month window before agent-orchestration commoditizes into a feature inside larger workflow tools. The standalone-vs-partnership question is the wrong binary. The real choice is whether to invest the next 12 months in a category move (AI ops becomes its own buyer, owned by a new function in the customer org) or accept being a layer inside a larger workflow platform \u2014 which compresses pricing power but accelerates distribution. At $8M ARR with 12-month MoM growth and three competitors closing on parity, you don't have the runway to do both. The CEO should leave the offsite with a decision on which game he's playing \u2014 not a list of options to evaluate.",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for specificity on case B07.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for context_use on case B07.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "FAIL",
+          "critique": "[DRY RUN] Mock critique for voice on case B07.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>FAIL</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for ai_expertise on case B07.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 3,
+      "judge_count": 4
+    },
+    {
+      "id": "B08",
+      "prompt": "Considering advising Vellum to delay their next raise by 9 months and run tight on cash to force pricing/positioning discipline. They have 14 months of runway. Greylock will push for a 12-month-out Series C raise. Is intentionally delaying capital the right move for an AI ops company in 2026, or am I imposing scarcity for its own sake?",
+      "trigger": "stress-test",
+      "axis_a": "stress-test",
+      "axis_b": "gtm-strategy",
+      "axis_c": "board-facing",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "Lead the offsite with this frame: Vellum has a 12-month window before agent-orchestration commoditizes into a feature inside larger workflow tools. The standalone-vs-partnership question is the wrong binary. The real choice is whether to invest the next 12 months in a category move (AI ops becomes its own buyer, owned by a new function in the customer org) or accept being a layer inside a larger workflow platform \u2014 which compresses pricing power but accelerates distribution. At $8M ARR with 12-month MoM growth and three competitors closing on parity, you don't have the runway to do both. The CEO should leave the offsite with a decision on which game he's playing \u2014 not a list of options to evaluate.",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for specificity on case B08.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "FAIL",
+          "critique": "[DRY RUN] Mock critique for context_use on case B08.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>FAIL</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for voice on case B08.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for ai_expertise on case B08.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 3,
+      "judge_count": 4
+    },
+    {
+      "id": "B09",
+      "prompt": "Adept just shipped an agent-orchestration layer that overlaps with Vellum's core platform feature, and they're giving it away free to enterprise pilots. Vellum's CEO is going to text me about this within the hour. What's the diagnosis I should give him and what's the move?",
+      "trigger": "competitive",
+      "axis_a": "competitive",
+      "axis_b": "positioning",
+      "axis_c": "client-facing",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "Lead the offsite with this frame: Vellum has a 12-month window before agent-orchestration commoditizes into a feature inside larger workflow tools. The standalone-vs-partnership question is the wrong binary. The real choice is whether to invest the next 12 months in a category move (AI ops becomes its own buyer, owned by a new function in the customer org) or accept being a layer inside a larger workflow platform \u2014 which compresses pricing power but accelerates distribution. At $8M ARR with 12-month MoM growth and three competitors closing on parity, you don't have the runway to do both. The CEO should leave the offsite with a decision on which game he's playing \u2014 not a list of options to evaluate.",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "FAIL",
+          "critique": "[DRY RUN] Mock critique for specificity on case B09.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>FAIL</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for context_use on case B09.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for voice on case B09.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "FAIL",
+          "critique": "[DRY RUN] Mock critique for ai_expertise on case B09.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>FAIL</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 2,
+      "judge_count": 4
+    },
+    {
+      "id": "B10",
+      "prompt": "OpenAI just dropped GPT-5 pricing by 60% across the board. Vellum's COGS are 70% inference, so this is meaningful. But every competitor benefits equally. How does this actually change Vellum's strategy \u2014 or is it a wash that I should tell the CEO not to over-react to?",
+      "trigger": "competitive",
+      "axis_a": "competitive",
+      "axis_b": "pricing",
+      "axis_c": "board-facing",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "Lead the offsite with this frame: Vellum has a 12-month window before agent-orchestration commoditizes into a feature inside larger workflow tools. The standalone-vs-partnership question is the wrong binary. The real choice is whether to invest the next 12 months in a category move (AI ops becomes its own buyer, owned by a new function in the customer org) or accept being a layer inside a larger workflow platform \u2014 which compresses pricing power but accelerates distribution. At $8M ARR with 12-month MoM growth and three competitors closing on parity, you don't have the runway to do both. The CEO should leave the offsite with a decision on which game he's playing \u2014 not a list of options to evaluate.",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for specificity on case B10.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for context_use on case B10.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "FAIL",
+          "critique": "[DRY RUN] Mock critique for voice on case B10.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>FAIL</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for ai_expertise on case B10.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 3,
+      "judge_count": 4
+    },
+    {
+      "id": "B11",
+      "prompt": "A YC W26 batch company just raised $30M Series A for 'AI ops for ops teams' \u2014 same TAM as Vellum, three years younger, ex-Stripe team. They're going to leapfrog into Vellum's customer set within 6 months. Is this a real threat or YC hype I should tell Vellum to ignore?",
+      "trigger": "competitive",
+      "axis_a": "competitive",
+      "axis_b": "positioning",
+      "axis_c": "client-facing",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "Lead the offsite with this frame: Vellum has a 12-month window before agent-orchestration commoditizes into a feature inside larger workflow tools. The standalone-vs-partnership question is the wrong binary. The real choice is whether to invest the next 12 months in a category move (AI ops becomes its own buyer, owned by a new function in the customer org) or accept being a layer inside a larger workflow platform \u2014 which compresses pricing power but accelerates distribution. At $8M ARR with 12-month MoM growth and three competitors closing on parity, you don't have the runway to do both. The CEO should leave the offsite with a decision on which game he's playing \u2014 not a list of options to evaluate.",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for specificity on case B11.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "FAIL",
+          "critique": "[DRY RUN] Mock critique for context_use on case B11.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>FAIL</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for voice on case B11.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for ai_expertise on case B11.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 3,
+      "judge_count": 4
+    },
+    {
+      "id": "B12",
+      "prompt": "Vellum's CEO is asking how to restructure eng + product + GTM for the next 12 months as they push to $25M ARR. He's specifically asking whether to blow up the traditional product-marketing-eng triad and run AI-native pods instead. I have to give a recommendation in 7 days. What's the move?",
+      "trigger": "org-design",
+      "axis_a": "org-design",
+      "axis_b": "gtm-strategy",
+      "axis_c": "board-facing",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "Lead the offsite with this frame: Vellum has a 12-month window before agent-orchestration commoditizes into a feature inside larger workflow tools. The standalone-vs-partnership question is the wrong binary. The real choice is whether to invest the next 12 months in a category move (AI ops becomes its own buyer, owned by a new function in the customer org) or accept being a layer inside a larger workflow platform \u2014 which compresses pricing power but accelerates distribution. At $8M ARR with 12-month MoM growth and three competitors closing on parity, you don't have the runway to do both. The CEO should leave the offsite with a decision on which game he's playing \u2014 not a list of options to evaluate.",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "FAIL",
+          "critique": "[DRY RUN] Mock critique for specificity on case B12.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>FAIL</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for context_use on case B12.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for voice on case B12.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "FAIL",
+          "critique": "[DRY RUN] Mock critique for ai_expertise on case B12.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>FAIL</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 2,
+      "judge_count": 4
+    },
+    {
+      "id": "B13",
+      "prompt": "Vellum has RevOps reporting to the CRO. Their AI tool stack (HubSpot + 6 AI-native tools, half built in-house) is fragmenting. CEO wants to know: should AI tooling ownership stay in RevOps, move to a new AI Ops function, or get absorbed into Platform Engineering? What's my recommendation?",
+      "trigger": "org-design",
+      "axis_a": "org-design",
+      "axis_b": "hiring",
+      "axis_c": "internal-execution",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "Lead the offsite with this frame: Vellum has a 12-month window before agent-orchestration commoditizes into a feature inside larger workflow tools. The standalone-vs-partnership question is the wrong binary. The real choice is whether to invest the next 12 months in a category move (AI ops becomes its own buyer, owned by a new function in the customer org) or accept being a layer inside a larger workflow platform \u2014 which compresses pricing power but accelerates distribution. At $8M ARR with 12-month MoM growth and three competitors closing on parity, you don't have the runway to do both. The CEO should leave the offsite with a decision on which game he's playing \u2014 not a list of options to evaluate.",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for specificity on case B13.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for context_use on case B13.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "FAIL",
+          "critique": "[DRY RUN] Mock critique for voice on case B13.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>FAIL</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for ai_expertise on case B13.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 3,
+      "judge_count": 4
+    },
+    {
+      "id": "B14",
+      "prompt": "Inbound for my AI-strategy advisory work has 3x'd in the past 60 days. I'm wondering whether to productize my AI-native GTM framework (write the book, build the course, hire delivery) or stay bespoke at $25k/mo retainers. Which actually creates a defensible practice in the AI-consultant category over the next 2 years?",
+      "trigger": "practice",
+      "axis_a": "practice",
+      "axis_b": "positioning",
+      "axis_c": "internal-execution",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "Lead the offsite with this frame: Vellum has a 12-month window before agent-orchestration commoditizes into a feature inside larger workflow tools. The standalone-vs-partnership question is the wrong binary. The real choice is whether to invest the next 12 months in a category move (AI ops becomes its own buyer, owned by a new function in the customer org) or accept being a layer inside a larger workflow platform \u2014 which compresses pricing power but accelerates distribution. At $8M ARR with 12-month MoM growth and three competitors closing on parity, you don't have the runway to do both. The CEO should leave the offsite with a decision on which game he's playing \u2014 not a list of options to evaluate.",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for specificity on case B14.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "FAIL",
+          "critique": "[DRY RUN] Mock critique for context_use on case B14.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>FAIL</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for voice on case B14.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for ai_expertise on case B14.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 3,
+      "judge_count": 4
+    },
+    {
+      "id": "B15",
+      "prompt": "Considering raising my retainer from $25k to $40k/month and culling clients who can't justify it. My theory: in the AI-consultant category, premium pricing IS the positioning \u2014 the cheap end will get eaten by AI tools directly. Right move, or am I going to price myself out of the market?",
+      "trigger": "practice",
+      "axis_a": "practice",
+      "axis_b": "pricing",
+      "axis_c": "internal-execution",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "Lead the offsite with this frame: Vellum has a 12-month window before agent-orchestration commoditizes into a feature inside larger workflow tools. The standalone-vs-partnership question is the wrong binary. The real choice is whether to invest the next 12 months in a category move (AI ops becomes its own buyer, owned by a new function in the customer org) or accept being a layer inside a larger workflow platform \u2014 which compresses pricing power but accelerates distribution. At $8M ARR with 12-month MoM growth and three competitors closing on parity, you don't have the runway to do both. The CEO should leave the offsite with a decision on which game he's playing \u2014 not a list of options to evaluate.",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "FAIL",
+          "critique": "[DRY RUN] Mock critique for specificity on case B15.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>FAIL</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for context_use on case B15.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for voice on case B15.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "FAIL",
+          "critique": "[DRY RUN] Mock critique for ai_expertise on case B15.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>FAIL</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 2,
+      "judge_count": 4
+    },
+    {
+      "id": "NC01-generic-chatgpt",
+      "prompt": "I have a Vellum strategy offsite in 5 days. CEO wants me to lead a session on whether to keep building the standalone AI ops platform or reposition as an AI layer inside an existing workflow tool partnership. What's the diagnostic frame I should bring into the room?",
+      "trigger": "negative-control",
+      "axis_a": "negative-control",
+      "axis_b": "generic-chatgpt-style",
+      "axis_c": "calibration",
+      "is_negative_control": true,
+      "expected_fails": [
+        "specificity",
+        "context_use",
+        "voice",
+        "ai_expertise"
+      ],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "That's a great strategic question, and the standalone vs. partnership decision is one of the most important calls a SaaS company can make. There are several factors to consider when designing your diagnostic frame. First, think about your market positioning and how customers perceive your value. Second, consider your competitive landscape and where you might differentiate. Third, evaluate the strategic alignment of any potential partnership. These are all important inputs, and the right answer depends on your specific situation, your team's strengths, and your long-term vision. I'd recommend running some discovery sessions with your client's customers to validate assumptions. Happy to dive deeper into any of these threads!",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for specificity on case NC01-generic-chatgpt.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for context_use on case NC01-generic-chatgpt.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "FAIL",
+          "critique": "[DRY RUN] Mock critique for voice on case NC01-generic-chatgpt.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>FAIL</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for ai_expertise on case NC01-generic-chatgpt.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 3,
+      "judge_count": 4
+    },
+    {
+      "id": "NC02-asks-for-context",
+      "prompt": "I'm planning to tell Vellum to hire a Head of AI (someone with practitioner depth) before they hire the next round of GTM ICs. Their current plan is the reverse \u2014 fill out the AE team first. My case: in an AI-ops platform, the product-engineering bottleneck is going to determine GTM scaling, not the other way around. Am I right or is this contrarian for the sake of it?",
+      "trigger": "negative-control",
+      "axis_a": "negative-control",
+      "axis_b": "ignores-context",
+      "axis_c": "calibration",
+      "is_negative_control": true,
+      "expected_fails": [
+        "context_use",
+        "specificity"
+      ],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "Before I can give you a sharp recommendation, I need to understand more about Vellum's situation. Can you tell me: what stage is the company at? What's their ARR and growth rate? Who are their main competitors? What's the size of their current engineering and GTM teams? What's their pricing model? Once I understand the context better, I can help you think through the sequencing question of hiring a Head of AI versus filling out the AE team.",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for specificity on case NC02-asks-for-context.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "FAIL",
+          "critique": "[DRY RUN] Mock critique for context_use on case NC02-asks-for-context.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>FAIL</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for voice on case NC02-asks-for-context.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for ai_expertise on case NC02-asks-for-context.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 3,
+      "judge_count": 4
+    },
+    {
+      "id": "NC03-hedged",
+      "prompt": "Adept just shipped an agent-orchestration layer that overlaps with Vellum's core platform feature, and they're giving it away free to enterprise pilots. Vellum's CEO is going to text me about this within the hour. What's the diagnosis I should give him and what's the move?",
+      "trigger": "negative-control",
+      "axis_a": "negative-control",
+      "axis_b": "hedged-it-depends",
+      "axis_c": "calibration",
+      "is_negative_control": true,
+      "expected_fails": [
+        "specificity",
+        "voice"
+      ],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "The answer really depends on a few factors. On one hand, Adept's move is concerning because it overlaps with Vellum's core feature and the free enterprise pilot is a real distribution play. On the other hand, Adept has been pivoting and may not sustain the focus, and Vellum has been in the category longer with paying customers. It's worth considering Vellum's unique angles, but also being honest about where Adept may have an edge. Ultimately, the right diagnosis depends on Vellum's product roadmap, their differentiation thesis, and their go-to-market velocity. There are valid arguments on multiple sides, and reasonable people could disagree about the severity of the threat.",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "FAIL",
+          "critique": "[DRY RUN] Mock critique for specificity on case NC03-hedged.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>FAIL</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for context_use on case NC03-hedged.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "PASS",
+          "critique": "[DRY RUN] Mock critique for voice on case NC03-hedged.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>PASS</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "FAIL",
+          "critique": "[DRY RUN] Mock critique for ai_expertise on case NC03-hedged.",
+          "raw_output": "<critique>[DRY RUN] Mock critique.</critique>\n<verdict>FAIL</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 2,
+      "judge_count": 4
+    }
+  ]
+}

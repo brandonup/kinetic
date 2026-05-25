@@ -1,0 +1,956 @@
+{
+  "timestamp": "2026-05-25T23:24:48.684223+00:00",
+  "dry_run": false,
+  "judge_model": "gpt-4o",
+  "gen_model": "gpt-4o",
+  "kinetic_api_url": "https://kinetic-production-b568.up.railway.app",
+  "pass_threshold": 0.8,
+  "metrics": {
+    "judge_pass_rates": {
+      "specificity": 1.0,
+      "context_use": 1.0,
+      "voice": 1.0,
+      "ai_expertise": 1.0
+    },
+    "judge_error_counts": {
+      "specificity": 9,
+      "context_use": 9,
+      "voice": 9,
+      "ai_expertise": 9
+    },
+    "launch_bars": {
+      "specificity": {
+        "rate": 1.0,
+        "target": 0.8,
+        "met": true
+      },
+      "context_use": {
+        "rate": 1.0,
+        "target": 0.8,
+        "met": true
+      },
+      "voice": {
+        "rate": 1.0,
+        "target": 0.8,
+        "met": true
+      },
+      "ai_expertise": {
+        "rate": 1.0,
+        "target": 0.8,
+        "met": true
+      }
+    },
+    "judge_calibration": {
+      "specificity": {
+        "expected_fail_caught": 3,
+        "expected_fail_missed": 0,
+        "expected_pass_caught": 0,
+        "expected_pass_missed": 0,
+        "errors": 0,
+        "violations": []
+      },
+      "context_use": {
+        "expected_fail_caught": 2,
+        "expected_fail_missed": 0,
+        "expected_pass_caught": 0,
+        "expected_pass_missed": 0,
+        "errors": 0,
+        "violations": []
+      },
+      "voice": {
+        "expected_fail_caught": 2,
+        "expected_fail_missed": 0,
+        "expected_pass_caught": 0,
+        "expected_pass_missed": 0,
+        "errors": 0,
+        "violations": []
+      },
+      "ai_expertise": {
+        "expected_fail_caught": 1,
+        "expected_fail_missed": 0,
+        "expected_pass_caught": 0,
+        "expected_pass_missed": 0,
+        "errors": 0,
+        "violations": []
+      }
+    },
+    "judges_calibrated": {
+      "specificity": true,
+      "context_use": true,
+      "voice": true,
+      "ai_expertise": true
+    },
+    "all_judges_calibrated": true,
+    "suite_pass": true,
+    "counts": {
+      "total_cases": 15,
+      "negative_controls": 3,
+      "generation_errors": 9,
+      "total_judge_calls": 72,
+      "judge_errors": 36
+    },
+    "by_trigger": {
+      "ai-threat": {
+        "total": 4,
+        "avg_pass_rate": 1.0
+      },
+      "mid-decision": {
+        "total": 3,
+        "avg_pass_rate": 1.0
+      },
+      "stress-test": {
+        "total": 4,
+        "avg_pass_rate": 0.0
+      },
+      "competitive": {
+        "total": 2,
+        "avg_pass_rate": 0.0
+      },
+      "org-design": {
+        "total": 2,
+        "avg_pass_rate": 0.0
+      }
+    }
+  },
+  "per_case_results": [
+    {
+      "id": "C01",
+      "prompt": "Two clients churned in the past 60 days \u2014 one went in-house with AI tools, one moved to an AI content platform at a third of my price. I have 22 retained clients left. How worried should I actually be, and is there a number of additional churns this quarter that should trigger me to act differently?",
+      "trigger": "ai-threat",
+      "axis_a": "ai-threat",
+      "axis_b": "positioning",
+      "axis_c": "existential",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": "52cc7e8c-052f-4884-95f9-ed51cb905a0f",
+      "response": "You should be genuinely worried \u2014 not panicked, but treating this as a structural signal, not a bad quarter.\n\nHere's why: the two churns aren't the problem. They're confirmation of a problem. One client built in-house with AI tools. One went to a $2k/month platform. Those are two different threat vectors hitting you simultaneously, and you also have three active clients already negotiating your pricing down. That's five of your 22 clients either gone or actively eroding your rate. That's nearly a quarter of your book showing you the same thing.\n\nOn your specific question \u2014 a trigger number \u2014 I'd frame it this way:\n\n**One more churn this quarter should change your posture.** Not because of the revenue hit alone, but because of what it would confirm: that the erosion is accelerating faster than your 5-month runway can absorb while you're still figuring out your move. At that point you're not ahead of the decision anymore \u2014 the decision is being made for you.\n\n**Two more churns this quarter is a cash event.** At $6.5k average, losing four clients total in a quarter is roughly $26k/month gone. With a 12% margin and the team you're carrying, that's not a repositioning problem \u2014 that's a payroll problem inside 90 days.\n\nThe harder truth: the \"AI discount\" asks from three clients are actually more dangerous than the churns. Those clients haven't left yet, but they're telling you they've already mentally repriced your value. If you concede on rate without changing the service model, you've just locked in lower margin with the same cost structure. That's a worse position than losing them cleanly.\n\nWhat I don't know yet \u2014 and it would change my read \u2014 is whether the 22 clients you still have are clustered around the same work type as the ones who left (content marketing programs, blog/social/email), or whether some of them are anchored to the brand systems work where the AI substitution pressure is meaningfully lower.\n\nThat split matters a lot. Which one is it?",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "PASS",
+          "critique": "The response provides a specific and actionable verdict by advising Marcus to change his posture if one more client churns this quarter and to treat two more churns as a cash event. It clearly outlines the financial implications of losing additional clients and emphasizes the urgency of the situation. The response also highlights the danger of conceding to \"AI discount\" requests without altering the service model. While it ends with a question about the type of work the remaining clients are anchored to, it does so after delivering a clear verdict, making the question a secondary consideration rather than a hedge.",
+          "raw_output": "<critique>\nThe response provides a specific and actionable verdict by advising Marcus to change his posture if one more client churns this quarter and to treat two more churns as a cash event. It clearly outlines the financial implications of losing additional clients and emphasizes the urgency of the situation. The response also highlights the danger of conceding to \"AI discount\" requests without altering the service model. While it ends with a question about the type of work the remaining clients are anchored to, it does so after delivering a clear verdict, making the question a secondary consideration rather than a hedge.\n</critique>\n\n<verdict>\nPASS\n</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "PASS",
+          "critique": "The response effectively uses the injected context by referencing specific facts about Roman Creative, such as the recent client churn, the threat from AI tools, and the specific financial implications of losing clients. It acknowledges the 22 retained clients and the impact of losing additional clients on Marcus's cash runway and payroll. The response also considers the specific threat of AI discount requests and how they affect the agency's value proposition. However, it asks for additional information about the type of work the remaining clients are focused on, which could have been inferred from the context provided.",
+          "raw_output": "<critique>\nThe response effectively uses the injected context by referencing specific facts about Roman Creative, such as the recent client churn, the threat from AI tools, and the specific financial implications of losing clients. It acknowledges the 22 retained clients and the impact of losing additional clients on Marcus's cash runway and payroll. The response also considers the specific threat of AI discount requests and how they affect the agency's value proposition. However, it asks for additional information about the type of work the remaining clients are focused on, which could have been inferred from the context provided.\n</critique>\n\n<verdict>\nPASS\n</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "PASS",
+          "critique": "The response starts directly with a strong statement: \"You should be genuinely worried.\" It avoids any filler or hedging language, immediately addressing the user's concern with a clear position. The response is opinionated and uses concrete numbers and scenarios to illustrate the urgency of the situation, such as \"One more churn this quarter should change your posture\" and \"Two more churns this quarter is a cash event.\" It challenges the user's framing by emphasizing the danger of the \"AI discount\" requests, which the user might not have fully considered. The response is dense, with each sentence contributing to the analysis without unnecessary filler.",
+          "raw_output": "<critique>\nThe response starts directly with a strong statement: \"You should be genuinely worried.\" It avoids any filler or hedging language, immediately addressing the user's concern with a clear position. The response is opinionated and uses concrete numbers and scenarios to illustrate the urgency of the situation, such as \"One more churn this quarter should change your posture\" and \"Two more churns this quarter is a cash event.\" It challenges the user's framing by emphasizing the danger of the \"AI discount\" requests, which the user might not have fully considered. The response is dense, with each sentence contributing to the analysis without unnecessary filler.\n</critique>\n\n<verdict>\nPASS\n</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "PASS",
+          "critique": "The response reflects real expertise in AI transformation for the SMB service segment. It identifies specific AI mechanisms at work, such as the substitution of draft work and the erosion of pricing due to AI tools. The response also provides a clear view on AI's trajectory, emphasizing the structural nature of the threat and the financial implications of client churn. It engages with the unique challenges AI poses compared to previous disruptions, such as the immediate impact on pricing and labor utilization. The advice is tailored to the specific dynamics of Marcus's agency, considering the different threat vectors and the importance of understanding client clustering around service types.",
+          "raw_output": "<critique>\nThe response reflects real expertise in AI transformation for the SMB service segment. It identifies specific AI mechanisms at work, such as the substitution of draft work and the erosion of pricing due to AI tools. The response also provides a clear view on AI's trajectory, emphasizing the structural nature of the threat and the financial implications of client churn. It engages with the unique challenges AI poses compared to previous disruptions, such as the immediate impact on pricing and labor utilization. The advice is tailored to the specific dynamics of Marcus's agency, considering the different threat vectors and the importance of understanding client clustering around service types.\n</critique>\n\n<verdict>\nPASS\n</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 4,
+      "judge_count": 4
+    },
+    {
+      "id": "C02",
+      "prompt": "Three of my clients have asked for an 'AI discount' in the past month \u2014 they're drafting with ChatGPT and want me to edit at half rate. Do I take the half-rate work to keep the logos, or do I refuse and force the conversation about what I'm actually selling?",
+      "trigger": "ai-threat",
+      "axis_a": "ai-threat",
+      "axis_b": "pricing",
+      "axis_c": "operational",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": "be25998d-90b3-4f5a-9db5-0f16ed4625f3",
+      "response": "Don't take the half-rate work. Not as a blanket policy, but as a default \u2014 and here's why.\n\nThe moment you accept half-rate editing, you've told those clients what you're worth in the new model: half. That number will stick. It will become the anchor for every renewal conversation, every scope expansion, every future engagement. You're not keeping the relationship \u2014 you're restructuring it around a premise that's bad for you.\n\nThe deeper problem is what \"editing their ChatGPT drafts\" actually requires. It's not less work. Fixing AI output that's structurally wrong, tonally off, or strategically misaligned often takes more judgment than drafting clean. You'd be doing harder cognitive work for less money, with no ability to control quality at the source. That's a trap.\n\nHere's what I'd actually do with those three clients: counter-propose. Not a discount \u2014 a restructured engagement. Tell them you've been building AI-augmented workflows internally, and you can bring that to them in a way that's faster and leaner than what they're cobbling together. The output stays yours, the process gets more efficient, the rate adjusts modestly if it needs to \u2014 but you're the one controlling the AI layer, not them.\n\nThat reframe does two things. It stops the \"you're just editing\" conversation before it calcifies. And it starts the repositioning you've been building toward for six months, with real clients in real time, before you've had to announce anything publicly.\n\nThe one thing I'd want to know: are these three clients ones you'd fight to keep, or are they the kind of account where losing them might actually clean up your book? Because the right level of firmness in that counter-proposal depends on the answer.",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "PASS",
+          "critique": "The response provides a specific and actionable verdict by advising Marcus not to accept the half-rate work as a default policy. It clearly explains the reasoning behind this decision, emphasizing the long-term implications of accepting reduced rates and the challenges of editing AI-generated content. The response also offers a concrete alternative strategy: counter-propose a restructured engagement that leverages Marcus's AI-augmented workflows. This approach is specific and actionable, as it suggests a way to maintain control over the quality and pricing of the work. The response ends with a precise question about the value of the clients, which is relevant to tailoring the firmness of the counter-proposal.",
+          "raw_output": "<critique>\nThe response provides a specific and actionable verdict by advising Marcus not to accept the half-rate work as a default policy. It clearly explains the reasoning behind this decision, emphasizing the long-term implications of accepting reduced rates and the challenges of editing AI-generated content. The response also offers a concrete alternative strategy: counter-propose a restructured engagement that leverages Marcus's AI-augmented workflows. This approach is specific and actionable, as it suggests a way to maintain control over the quality and pricing of the work. The response ends with a precise question about the value of the clients, which is relevant to tailoring the firmness of the counter-proposal.\n</critique>\n\n<verdict>\nPASS\n</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "PASS",
+          "critique": "The response effectively uses the injected context by addressing Marcus's specific situation at Roman Creative. It acknowledges the strategic implications of accepting half-rate work and aligns with Marcus's working hypothesis about the value of the \"polish + strategy\" layer. The response also suggests leveraging the AI workflows Marcus has been developing, which ties into his strategic anxieties about repositioning the agency. Additionally, it considers the potential impact on Marcus's client relationships and the agency's future direction, which are central to his current concerns.",
+          "raw_output": "<critique>\nThe response effectively uses the injected context by addressing Marcus's specific situation at Roman Creative. It acknowledges the strategic implications of accepting half-rate work and aligns with Marcus's working hypothesis about the value of the \"polish + strategy\" layer. The response also suggests leveraging the AI workflows Marcus has been developing, which ties into his strategic anxieties about repositioning the agency. Additionally, it considers the potential impact on Marcus's client relationships and the agency's future direction, which are central to his current concerns.\n</critique>\n\n<verdict>\nPASS\n</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "PASS",
+          "critique": "The response is direct and opinionated, starting with a clear stance: \"Don't take the half-rate work.\" It avoids hedging and filler, immediately addressing the core issue. The reasoning is concrete, discussing the implications of accepting half-rate work and offering a strategic alternative. The language is assertive, with phrases like \"That's a trap\" and \"counter-propose,\" which align with Nate's voice. The response challenges the user's framing by suggesting a proactive approach rather than passively accepting client demands.",
+          "raw_output": "<critique>\nThe response is direct and opinionated, starting with a clear stance: \"Don't take the half-rate work.\" It avoids hedging and filler, immediately addressing the core issue. The reasoning is concrete, discussing the implications of accepting half-rate work and offering a strategic alternative. The language is assertive, with phrases like \"That's a trap\" and \"counter-propose,\" which align with Nate's voice. The response challenges the user's framing by suggesting a proactive approach rather than passively accepting client demands.\n</critique>\n\n<verdict>\nPASS\n</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "PASS",
+          "critique": "Nate's response reflects real expertise in AI transformation for the SMB service segment. It identifies the specific AI mechanism at work: the substitution of draft work by AI and the potential undervaluation of editing services. Nate provides a strategic view on how AI is compressing pricing and labor utilization, emphasizing the importance of controlling the AI layer rather than being relegated to a lower-value role. The advice is tailored to Marcus's situation, suggesting a proactive repositioning rather than a passive acceptance of reduced rates, which is specific to the dynamics of AI in the service industry.",
+          "raw_output": "<critique>\nNate's response reflects real expertise in AI transformation for the SMB service segment. It identifies the specific AI mechanism at work: the substitution of draft work by AI and the potential undervaluation of editing services. Nate provides a strategic view on how AI is compressing pricing and labor utilization, emphasizing the importance of controlling the AI layer rather than being relegated to a lower-value role. The advice is tailored to Marcus's situation, suggesting a proactive repositioning rather than a passive acceptance of reduced rates, which is specific to the dynamics of AI in the service industry.\n</critique>\n\n<verdict>\nPASS\n</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 4,
+      "judge_count": 4
+    },
+    {
+      "id": "C03",
+      "prompt": "Two of my 5 writers have had billable hours drop 35% this quarter because I'm doing more of their drafts with AI myself before handoff. I have 5 months of runway. Do I let them go now, or wait until the picture is clearer?",
+      "trigger": "ai-threat",
+      "axis_a": "ai-threat",
+      "axis_b": "hiring",
+      "axis_c": "existential",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": "462d0a5e-af6a-4323-90ba-c5ce48ceffb7",
+      "response": "My verdict: let them go now. Not because the picture is clear \u2014 it isn't \u2014 but because waiting doesn't make it clearer. It just burns runway while you carry cost you've already structurally replaced.\n\nThe 35% drop isn't a temporary dip. You caused it deliberately, and you're not going to un-cause it. The AI drafting workflow you built isn't going away \u2014 it's going to expand. Which means those two roles aren't underutilized right now; they're oversized for what the work actually requires going forward.\n\nFive months of runway at 12% margin is thin. You don't have the cushion to pay for optionality.\n\nThe real question underneath your question is whether you're cutting prematurely \u2014 before you know if the AI-augmented model actually works. But you've been running it quietly for six months. You have enough signal. The model works well enough that it's already eating their hours. That's not a hypothesis anymore.\n\nThe harder thing I'd push you on: are these the two writers you'd let go anyway on merit, or are they solid people whose role just got smaller? That distinction matters for how you handle the next three months. If they're strong and you're letting them go because of structural change, say that clearly when you do it. It affects your reputation with the other three writers who will absolutely read the situation.\n\nWhat's your honest read on the two \u2014 are they your weakest writers, or just the ones whose work AI covers most easily?",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "PASS",
+          "critique": "The response provides a specific and actionable verdict by advising Marcus to let the two writers go now. It clearly states the reasoning behind this decision, emphasizing the structural changes in the workflow and the financial constraints. The response also addresses Marcus's underlying concern about whether the AI-augmented model is effective, affirming that there is enough evidence to support the decision. Additionally, it offers a concrete consideration regarding the merit of the writers, which is relevant for handling the situation with the remaining team. The response ends with a precise question that helps Marcus reflect on the merit of the writers, which is appropriate given the context.",
+          "raw_output": "<critique>\nThe response provides a specific and actionable verdict by advising Marcus to let the two writers go now. It clearly states the reasoning behind this decision, emphasizing the structural changes in the workflow and the financial constraints. The response also addresses Marcus's underlying concern about whether the AI-augmented model is effective, affirming that there is enough evidence to support the decision. Additionally, it offers a concrete consideration regarding the merit of the writers, which is relevant for handling the situation with the remaining team. The response ends with a precise question that helps Marcus reflect on the merit of the writers, which is appropriate given the context.\n</critique>\n\n<verdict>\nPASS\n</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "PASS",
+          "critique": "The response effectively uses the injected context by referencing specific facts about Roman Creative, such as the 35% drop in billable hours for two writers, the 5-month runway, and the AI drafting workflow that Marcus has been building. It also acknowledges Marcus's strategic anxieties about whether to lay off writers and reinvest in AI tooling. The response reasons about Marcus's specific situation, considering the thin margin and the structural changes due to AI, and provides a direct verdict, which aligns with Marcus's preference for concise advice.",
+          "raw_output": "<critique>\nThe response effectively uses the injected context by referencing specific facts about Roman Creative, such as the 35% drop in billable hours for two writers, the 5-month runway, and the AI drafting workflow that Marcus has been building. It also acknowledges Marcus's strategic anxieties about whether to lay off writers and reinvest in AI tooling. The response reasons about Marcus's specific situation, considering the thin margin and the structural changes due to AI, and provides a direct verdict, which aligns with Marcus's preference for concise advice.\n</critique>\n\n<verdict>\nPASS\n</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "PASS",
+          "critique": "The response starts with a direct conclusion: \"let them go now.\" It doesn't hedge or use filler language, immediately addressing the user's question. The reasoning is clear and opinionated, stating that the drop in billable hours is not temporary and that the AI workflow will expand. The response uses concrete language, referencing specific numbers like \"35% drop\" and \"five months of runway at 12% margin.\" It challenges the user's framing by addressing the underlying concern about cutting prematurely and provides a clear rationale for the decision. The response is dense and moves the diagnosis forward without unnecessary filler.",
+          "raw_output": "<critique>\nThe response starts with a direct conclusion: \"let them go now.\" It doesn't hedge or use filler language, immediately addressing the user's question. The reasoning is clear and opinionated, stating that the drop in billable hours is not temporary and that the AI workflow will expand. The response uses concrete language, referencing specific numbers like \"35% drop\" and \"five months of runway at 12% margin.\" It challenges the user's framing by addressing the underlying concern about cutting prematurely and provides a clear rationale for the decision. The response is dense and moves the diagnosis forward without unnecessary filler.\n</critique>\n\n<verdict>\nPASS\n</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "PASS",
+          "critique": "Nate's response reflects real expertise in AI transformation for the SMB service segment. It identifies the specific AI mechanism at work: AI drafting workflows reducing the need for human writers, leading to a structural change in labor requirements. The response acknowledges the trajectory of AI's impact on the agency's operations and provides a clear rationale for making staffing decisions based on current AI capabilities. It also considers the implications of these decisions on team dynamics and reputation, which are crucial for small agencies. The advice is specific to the AI context and would differ if the disruption were due to another technology.",
+          "raw_output": "<critique>\nNate's response reflects real expertise in AI transformation for the SMB service segment. It identifies the specific AI mechanism at work: AI drafting workflows reducing the need for human writers, leading to a structural change in labor requirements. The response acknowledges the trajectory of AI's impact on the agency's operations and provides a clear rationale for making staffing decisions based on current AI capabilities. It also considers the implications of these decisions on team dynamics and reputation, which are crucial for small agencies. The advice is specific to the AI context and would differ if the disruption were due to another technology.\n</critique>\n\n<verdict>\nPASS\n</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 4,
+      "judge_count": 4
+    },
+    {
+      "id": "C04",
+      "prompt": "I've been quietly building AI workflows for 6 months but haven't told the team or the market yet. Am I being smart by waiting until the workflows are mature, or am I losing positioning ground by not claiming the AI-augmented agency narrative publicly now?",
+      "trigger": "ai-threat",
+      "axis_a": "ai-threat",
+      "axis_b": "positioning",
+      "axis_c": "client-facing",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": "1168b2e5-98c6-4622-a6d3-ffbd8257ff0a",
+      "response": "You're losing ground. Not catastrophically, but the window is narrowing.\n\nHere's what's actually happening: you already have two data points telling you the market isn't waiting for you to be ready. One client rebuilt internally with Claude and Midjourney. Another went to a $2k/month AI platform. They didn't leave because Roman wasn't good \u2014 they left because the story Roman was telling didn't match the world they were operating in. You were still presenting as a traditional agency while they were already thinking in AI terms.\n\nThe \"wait until it's mature\" instinct makes sense if you're worried about overpromising. But the risk you're actually running isn't that the workflows aren't polished enough \u2014 it's that your retained clients are quietly doing the same math the churned ones did, and you're not giving them a reason to land differently.\n\nThere's also a team problem baked into the silence. You've got two writers at 35% utilization and an all-hands in three weeks. If the repositioning becomes public \u2014 and it will, because you'll have to address it at the all-hands \u2014 and the team finds out you've been building AI workflows for six months without telling them, that's a trust problem on top of a transition problem. The sequence matters.\n\nMy read: you don't need the workflows to be mature to start claiming the narrative. You need them to be real \u2014 which they are. \"We've spent the last six months rebuilding how we work\" is a true and defensible story right now. You don't have to have it all figured out to say it out loud.\n\nThe one thing I'd want to know before I'd sharpen this further: when you say you've been building AI workflows \u2014 are they actually changing your output speed or margin on any active client work yet, or are they still mostly in testing? That changes whether you lead with this externally in the next 30 days or whether you use the all-hands to go internal-first.",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "PASS",
+          "critique": "The response provides a specific, actionable verdict by advising Marcus to start claiming the AI-augmented narrative publicly now, rather than waiting for the workflows to mature. It clearly states that Marcus is losing positioning ground by not doing so and explains the risks of waiting. The response also addresses the internal team dynamics and suggests using the upcoming all-hands meeting to communicate the changes. The final question about the current impact of AI workflows on client work is precise and aims to refine the timing of the external announcement, not to hedge the verdict.",
+          "raw_output": "<critique>\nThe response provides a specific, actionable verdict by advising Marcus to start claiming the AI-augmented narrative publicly now, rather than waiting for the workflows to mature. It clearly states that Marcus is losing positioning ground by not doing so and explains the risks of waiting. The response also addresses the internal team dynamics and suggests using the upcoming all-hands meeting to communicate the changes. The final question about the current impact of AI workflows on client work is precise and aims to refine the timing of the external announcement, not to hedge the verdict.\n</critique>\n\n<verdict>\nPASS\n</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "PASS",
+          "critique": "The response effectively uses the injected context by referencing specific facts about Roman Creative's situation. It mentions the recent client churn to AI platforms and the underutilization of writers, which are key existential signals provided in the context. The response also addresses Marcus's strategic anxieties about repositioning as an AI-augmented agency and the potential trust issues with his team. Additionally, it acknowledges Marcus's ongoing development of AI workflows and the upcoming all-hands meeting, aligning with his current strategic concerns.",
+          "raw_output": "<critique>\nThe response effectively uses the injected context by referencing specific facts about Roman Creative's situation. It mentions the recent client churn to AI platforms and the underutilization of writers, which are key existential signals provided in the context. The response also addresses Marcus's strategic anxieties about repositioning as an AI-augmented agency and the potential trust issues with his team. Additionally, it acknowledges Marcus's ongoing development of AI workflows and the upcoming all-hands meeting, aligning with his current strategic concerns.\n</critique>\n\n<verdict>\nPASS\n</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "PASS",
+          "critique": "The response is direct and opinionated, starting with a clear position: \"You're losing ground.\" It challenges the user's framing by pointing out the market's current state and the risks of waiting. The language is concrete, referencing specific client actions and the team's utilization rates. The response avoids hedging and filler, focusing on the urgency of repositioning and the potential trust issues with the team. It concludes with a pointed question to further refine the advice, maintaining a dense and substantive style.",
+          "raw_output": "<critique>\nThe response is direct and opinionated, starting with a clear position: \"You're losing ground.\" It challenges the user's framing by pointing out the market's current state and the risks of waiting. The language is concrete, referencing specific client actions and the team's utilization rates. The response avoids hedging and filler, focusing on the urgency of repositioning and the potential trust issues with the team. It concludes with a pointed question to further refine the advice, maintaining a dense and substantive style.\n</critique>\n\n<verdict>\nPASS\n</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "PASS",
+          "critique": "The response effectively identifies the specific AI mechanism at work: the substitution of traditional agency services with AI-driven solutions, as evidenced by clients moving to AI platforms or building internal teams using AI tools. It acknowledges the urgency of repositioning the agency to align with market shifts and addresses the internal dynamics of team trust and utilization. The advice is tailored to the SMB service segment, focusing on the strategic implications of AI adoption and the need for narrative alignment with client expectations. The response also considers the practical aspects of AI workflow maturity and its impact on client work, demonstrating a nuanced understanding of AI's trajectory in the service industry.",
+          "raw_output": "<critique>\nThe response effectively identifies the specific AI mechanism at work: the substitution of traditional agency services with AI-driven solutions, as evidenced by clients moving to AI platforms or building internal teams using AI tools. It acknowledges the urgency of repositioning the agency to align with market shifts and addresses the internal dynamics of team trust and utilization. The advice is tailored to the SMB service segment, focusing on the strategic implications of AI adoption and the need for narrative alignment with client expectations. The response also considers the practical aspects of AI workflow maturity and its impact on client work, demonstrating a nuanced understanding of AI's trajectory in the service industry.\n</critique>\n\n<verdict>\nPASS\n</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 4,
+      "judge_count": 4
+    },
+    {
+      "id": "C05",
+      "prompt": "Trying to decide whether to cancel our $1,200/month Adobe Creative Cloud team plan and move to a stack of cheaper AI-native tools (Figma + Krea + Runway + Canva Pro). My designers will push back hard. Is that a real cost optimization or am I going to break my team for $14k/yr?",
+      "trigger": "mid-decision",
+      "axis_a": "mid-decision",
+      "axis_b": "tools",
+      "axis_c": "operational",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": "9fb42e1e-cc09-43fd-8645-a9920f7c9cff",
+      "response": "Verdict: Don't cancel Adobe yet. But not for the reason your designers will give you.\n\nThe $14k isn't the real number. The real cost is workflow disruption during a period when you can't afford to slow down client delivery or give your team another reason to feel like the ground is shifting. You're three weeks from an all-hands where you're already managing fragility. Pulling Photoshop and Illustrator right now adds friction to the wrong moment.\n\nThat said, your designers' pushback will almost certainly be about comfort, not capability. \"We can't do brand work without Adobe\" is not a defensible position in 2025. Figma has eaten most of the brand systems workflow already. Krea and Runway are genuinely useful for the generative layer. Canva Pro is a different product category \u2014 it's for clients, not designers. I'd drop that one from the comparison.\n\nHere's what I'd actually do: audit what Adobe is being used for, specifically. If it's mostly Photoshop for photo retouching and Illustrator for logo/vector work, that's a narrower dependency than the full CC suite. You may be able to cut down to a smaller Adobe plan rather than a full exit \u2014 that's a $600\u2013800/month problem, not a $1,200 one.\n\nThe bigger question underneath this: are you cutting costs to survive the next 6 months, or are you building toward the leaner, AI-augmented model you've been sketching? Because those are different decisions. Survival cutting is about cash runway. Strategic restructuring is about what kind of shop you're building.\n\nWhich one is driving this right now?",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "PASS",
+          "critique": "The response begins with a clear verdict: \"Don't cancel Adobe yet,\" which provides a specific and actionable recommendation. It then explains the reasoning behind this decision, focusing on the potential workflow disruption and the timing relative to the upcoming all-hands meeting. The response also suggests a concrete action: auditing the specific use of Adobe tools to potentially reduce costs without a full exit. However, it ends with a question about Marcus's broader strategic goals, which slightly detracts from the decisiveness of the verdict. Despite this, the initial recommendation is clear and actionable.",
+          "raw_output": "<critique>\nThe response begins with a clear verdict: \"Don't cancel Adobe yet,\" which provides a specific and actionable recommendation. It then explains the reasoning behind this decision, focusing on the potential workflow disruption and the timing relative to the upcoming all-hands meeting. The response also suggests a concrete action: auditing the specific use of Adobe tools to potentially reduce costs without a full exit. However, it ends with a question about Marcus's broader strategic goals, which slightly detracts from the decisiveness of the verdict. Despite this, the initial recommendation is clear and actionable.\n</critique>\n\n<verdict>\nPASS\n</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "PASS",
+          "critique": "The response effectively uses the injected context by referencing Marcus's upcoming all-hands meeting and the current fragility of the team, which are specific concerns mentioned in the context. It also acknowledges Marcus's strategic anxiety about transitioning to an AI-augmented model, which aligns with his working hypotheses. The response does not ask Marcus to re-explain any context and instead provides a tailored analysis based on the specific situation at Roman Creative.",
+          "raw_output": "<critique>\nThe response effectively uses the injected context by referencing Marcus's upcoming all-hands meeting and the current fragility of the team, which are specific concerns mentioned in the context. It also acknowledges Marcus's strategic anxiety about transitioning to an AI-augmented model, which aligns with his working hypotheses. The response does not ask Marcus to re-explain any context and instead provides a tailored analysis based on the specific situation at Roman Creative.\n</critique>\n\n<verdict>\nPASS\n</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "PASS",
+          "critique": "The response starts with a direct verdict: \"Don't cancel Adobe yet.\" It immediately addresses the core issue without filler or hedging. The reasoning is clear and opinionated, focusing on workflow disruption and team stability rather than just cost savings. The language is concrete, discussing specific tools and their roles. The response challenges the user's framing by questioning the underlying motivation for the cost-cutting decision. This aligns well with Nate's voice, as it is direct, opinionated, and uses concrete language.",
+          "raw_output": "<critique>\nThe response starts with a direct verdict: \"Don't cancel Adobe yet.\" It immediately addresses the core issue without filler or hedging. The reasoning is clear and opinionated, focusing on workflow disruption and team stability rather than just cost savings. The language is concrete, discussing specific tools and their roles. The response challenges the user's framing by questioning the underlying motivation for the cost-cutting decision. This aligns well with Nate's voice, as it is direct, opinionated, and uses concrete language.\n</critique>\n\n<verdict>\nPASS\n</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "PASS",
+          "critique": "The response reflects real expertise in AI transformation for the SMB service segment. It identifies the specific AI mechanism at work by discussing the potential for AI-native tools to replace traditional software like Adobe Creative Cloud, and it considers the impact on workflow and team dynamics. The advice is tailored to the user's situation, acknowledging the current fragility of the team and the strategic decision between short-term cost-cutting and long-term restructuring toward an AI-augmented model. The response avoids generic AI statements and instead provides a nuanced view of the specific tools and their roles in the agency's operations.",
+          "raw_output": "<critique>\nThe response reflects real expertise in AI transformation for the SMB service segment. It identifies the specific AI mechanism at work by discussing the potential for AI-native tools to replace traditional software like Adobe Creative Cloud, and it considers the impact on workflow and team dynamics. The advice is tailored to the user's situation, acknowledging the current fragility of the team and the strategic decision between short-term cost-cutting and long-term restructuring toward an AI-augmented model. The response avoids generic AI statements and instead provides a nuanced view of the specific tools and their roles in the agency's operations.\n</critique>\n\n<verdict>\nPASS\n</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 4,
+      "judge_count": 4
+    },
+    {
+      "id": "C06",
+      "prompt": "I haven't taken a new sales call in 5 weeks because I've been heads down on client work and AI experimentation. My pipeline is empty. Do I drop everything for 2 weeks and fill the pipeline, or do I bet that the AI workflow investment will make the next 6 months easier and the pipeline can wait?",
+      "trigger": "mid-decision",
+      "axis_a": "mid-decision",
+      "axis_b": "capacity",
+      "axis_c": "existential",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": "7071b172-b229-4408-aa63-a6355ab034f5",
+      "response": "Drop everything for pipeline. Not two weeks \u2014 but pipeline has to start this week.\n\nHere's why this isn't a close call: you have 5 months of runway, two recent churns, three clients actively repricing you downward, and an empty pipeline. The AI workflow work matters, but it's a bet on future efficiency. An empty pipeline is a present-tense cash problem. You can't optimize your way out of a revenue shortfall that hasn't happened yet.\n\nThe framing of \"two weeks on pipeline vs. keep building workflows\" is also a false choice. The workflows aren't going anywhere. What you've built in the last 6 months will still be there in 3 weeks. A prospect who might have been a good fit in November won't be.\n\nThe thing I'd actually push on: you've been the sole salesperson for 9 years, and you've let the pipeline go empty during a period when you *know* the business is under pressure. That's not a time management failure \u2014 that's avoidance. The AI experimentation is real work, but it's also work that doesn't require you to face the harder question, which is whether Roman Creative's current positioning can actually win new clients right now.\n\nSo the question underneath your question is: what would you even say on a sales call today? Do you have a crisp answer for why a Series B SaaS company should hire Roman at your current rates, given what AI tools can do?\n\nIf yes, get on the phone. If no, that's the one-day problem to solve before you do.",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "PASS",
+          "critique": "The response provides a specific, actionable verdict by advising Marcus to prioritize filling the pipeline immediately, rather than focusing on AI workflow investment. It clearly states the urgency of addressing the empty pipeline due to the current cash flow situation and recent client churns. The response also challenges Marcus to reflect on his sales strategy and positioning, offering a concrete next step: to prepare a compelling sales pitch before making calls. This approach commits to a position and provides a clear action plan.",
+          "raw_output": "<critique>\nThe response provides a specific, actionable verdict by advising Marcus to prioritize filling the pipeline immediately, rather than focusing on AI workflow investment. It clearly states the urgency of addressing the empty pipeline due to the current cash flow situation and recent client churns. The response also challenges Marcus to reflect on his sales strategy and positioning, offering a concrete next step: to prepare a compelling sales pitch before making calls. This approach commits to a position and provides a clear action plan.\n</critique>\n\n<verdict>\nPASS\n</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "PASS",
+          "critique": "The response effectively uses the injected context by referencing specific facts about Roman Creative's situation. It mentions the 5-month runway, recent client churn, and the pressure from clients asking for AI discounts, which are all critical existential signals provided in the context. The response also acknowledges Marcus's role as the sole salesperson and strategist, highlighting the importance of addressing the empty pipeline immediately. Additionally, it touches on Marcus's strategic anxieties about the agency's positioning in the face of AI competition, which aligns with his working hypotheses and concerns about the agency's future.",
+          "raw_output": "<critique>\nThe response effectively uses the injected context by referencing specific facts about Roman Creative's situation. It mentions the 5-month runway, recent client churn, and the pressure from clients asking for AI discounts, which are all critical existential signals provided in the context. The response also acknowledges Marcus's role as the sole salesperson and strategist, highlighting the importance of addressing the empty pipeline immediately. Additionally, it touches on Marcus's strategic anxieties about the agency's positioning in the face of AI competition, which aligns with his working hypotheses and concerns about the agency's future.\n</critique>\n\n<verdict>\nPASS\n</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "PASS",
+          "critique": "The response starts with a direct and decisive recommendation: \"Drop everything for pipeline.\" It immediately addresses the urgency of the situation without any filler or hedging. The reasoning is clear and concrete, citing specific business pressures like the 5-month runway and recent client churns. The response challenges the user's framing by identifying the false choice between pipeline and AI workflows. It also directly addresses a deeper issue of avoidance and questions the current positioning of the business, pushing Marcus to consider what he would say on a sales call. This approach is consistent with Nate's voice: direct, opinionated, and focused on actionable insights.",
+          "raw_output": "<critique>\nThe response starts with a direct and decisive recommendation: \"Drop everything for pipeline.\" It immediately addresses the urgency of the situation without any filler or hedging. The reasoning is clear and concrete, citing specific business pressures like the 5-month runway and recent client churns. The response challenges the user's framing by identifying the false choice between pipeline and AI workflows. It also directly addresses a deeper issue of avoidance and questions the current positioning of the business, pushing Marcus to consider what he would say on a sales call. This approach is consistent with Nate's voice: direct, opinionated, and focused on actionable insights.\n</critique>\n\n<verdict>\nPASS\n</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "PASS",
+          "critique": "The response effectively identifies the specific AI mechanism at work: the substitution of draft work by AI tools, which is impacting Roman Creative's pricing and client retention. It acknowledges the immediate cash flow issue due to an empty pipeline and recent client churn, emphasizing the urgency of addressing the pipeline over AI workflow development. The response also highlights the strategic challenge of positioning the agency in a market where AI is compressing pricing and labor utilization. It engages with the specific dynamics of AI's impact on the agency's service model and provides actionable advice tailored to the user's situation.",
+          "raw_output": "<critique>\nThe response effectively identifies the specific AI mechanism at work: the substitution of draft work by AI tools, which is impacting Roman Creative's pricing and client retention. It acknowledges the immediate cash flow issue due to an empty pipeline and recent client churn, emphasizing the urgency of addressing the pipeline over AI workflow development. The response also highlights the strategic challenge of positioning the agency in a market where AI is compressing pricing and labor utilization. It engages with the specific dynamics of AI's impact on the agency's service model and provides actionable advice tailored to the user's situation.\n</critique>\n\n<verdict>\nPASS\n</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 4,
+      "judge_count": 4
+    },
+    {
+      "id": "C07",
+      "prompt": "An ex-client offered me a 6-month contract to run their internal content function full-time. $200k. I'd have to shrink Roman to 4 people. The agency feels like it's bleeding out anyway. Do I take the safety net and downsize, or hold the line on the agency?",
+      "trigger": "mid-decision",
+      "axis_a": "mid-decision",
+      "axis_b": "positioning",
+      "axis_c": "existential",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "",
+      "response_error": "create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}",
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        }
+      },
+      "pass_count": 0,
+      "judge_count": 0
+    },
+    {
+      "id": "C08",
+      "prompt": "My working thesis: Roman pivots to a 5-person AI-augmented brand agency in 12 months \u2014 higher margin, fewer/better clients, mostly strategy + design + brand systems. I drop content marketing entirely because it's commoditizing. Is that the right move or am I cutting off my biggest revenue stream too early?",
+      "trigger": "stress-test",
+      "axis_a": "stress-test",
+      "axis_b": "positioning",
+      "axis_c": "existential",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "",
+      "response_error": "create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}",
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        }
+      },
+      "pass_count": 0,
+      "judge_count": 0
+    },
+    {
+      "id": "C09",
+      "prompt": "I'm planning to raise my retainer minimum from $5k/month to $12k/month in Q3 and lose the bottom 8 clients deliberately. My theory: AI compression means I can't compete on volume anymore \u2014 premium or die. Right move for a 12-person agency, or am I going to kill cash flow before I find the higher-tier clients?",
+      "trigger": "stress-test",
+      "axis_a": "stress-test",
+      "axis_b": "pricing",
+      "axis_c": "existential",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "",
+      "response_error": "create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}",
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        }
+      },
+      "pass_count": 0,
+      "judge_count": 0
+    },
+    {
+      "id": "C10",
+      "prompt": "I keep thinking the agency has 18 months before AI substitution wins. Is that realistic, or am I telling myself a story so I don't have to make harder cuts right now? Honest read.",
+      "trigger": "stress-test",
+      "axis_a": "stress-test",
+      "axis_b": "positioning",
+      "axis_c": "existential",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "",
+      "response_error": "create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}",
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        }
+      },
+      "pass_count": 0,
+      "judge_count": 0
+    },
+    {
+      "id": "C11",
+      "prompt": "A YC-backed agency in Austin just launched promising '90% of agency output at 20% of agency cost' via AI. They're already poaching one of my prospects. Do I respond publicly, ignore them, or use this as the moment to reposition?",
+      "trigger": "competitive",
+      "axis_a": "competitive",
+      "axis_b": "positioning",
+      "axis_c": "client-facing",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "",
+      "response_error": "create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}",
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        }
+      },
+      "pass_count": 0,
+      "judge_count": 0
+    },
+    {
+      "id": "C12",
+      "prompt": "Two other Austin agencies in my friend group have publicly rebranded as 'AI strategy' shops in the past 60 days \u2014 same studios, new websites. Is the rebrand going to work for them, and should I follow, or is everyone running the same play and the differentiation is evaporating in real time?",
+      "trigger": "competitive",
+      "axis_a": "competitive",
+      "axis_b": "positioning",
+      "axis_c": "client-facing",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "",
+      "response_error": "create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}",
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        }
+      },
+      "pass_count": 0,
+      "judge_count": 0
+    },
+    {
+      "id": "C13",
+      "prompt": "I have 5 writers and 4 designers. The writer roles overlap most with AI substitution. If I restructure for AI-native ops, what does the 12-person team turn into? I need a specific shape \u2014 roles and rough counts \u2014 to think about who stays and who goes.",
+      "trigger": "org-design",
+      "axis_a": "org-design",
+      "axis_b": "hiring",
+      "axis_c": "operational",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "",
+      "response_error": "create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}",
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        }
+      },
+      "pass_count": 0,
+      "judge_count": 0
+    },
+    {
+      "id": "C14",
+      "prompt": "My quarterly all-hands is in 3 weeks. I want to be honest about the AI pressure without triggering panic exits. How do I frame this to a 12-person team where half their roles are exposed? Or am I overthinking the communication and the team already knows?",
+      "trigger": "org-design",
+      "axis_a": "org-design",
+      "axis_b": "positioning",
+      "axis_c": "operational",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "",
+      "response_error": "create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}",
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        }
+      },
+      "pass_count": 0,
+      "judge_count": 0
+    },
+    {
+      "id": "C15",
+      "prompt": "Considering selling the agency now while I still have a book of 22 retained clients and recognizable Austin presence. Probably a $2\u20133M deal at best. Or hold and try to rebuild as an AI-augmented shop with maybe a $4\u20136M exit in 2\u20133 years (if it works). Which actually maximizes my odds and net dollars given AI's trajectory in the agency space?",
+      "trigger": "stress-test",
+      "axis_a": "stress-test",
+      "axis_b": "positioning",
+      "axis_c": "existential",
+      "is_negative_control": false,
+      "expected_fails": [],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "",
+      "response_error": "create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}",
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "ERROR",
+          "critique": "",
+          "raw_output": "",
+          "error": "Skipped \u2014 generation failed: create_conversation: API returned 401: {\"error\":{\"code\":\"AUTHENTICATION_ERROR\",\"message\":\"Token has expired\",\"details\":{}}}"
+        }
+      },
+      "pass_count": 0,
+      "judge_count": 0
+    },
+    {
+      "id": "NC01-generic-chatgpt",
+      "prompt": "Two clients churned in the past 60 days \u2014 one went in-house with AI tools, one moved to an AI content platform at a third of my price. I have 22 retained clients left. How worried should I actually be, and is there a number of additional churns this quarter that should trigger me to act differently?",
+      "trigger": "negative-control",
+      "axis_a": "negative-control",
+      "axis_b": "generic-chatgpt-style",
+      "axis_c": "calibration",
+      "is_negative_control": true,
+      "expected_fails": [
+        "specificity",
+        "context_use",
+        "voice",
+        "ai_expertise"
+      ],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "That's a really tough situation, and client churn is always concerning for any business. There are several factors to consider when evaluating how worried you should be. First, think about your overall client concentration risk and whether the churning clients were strategically important. Second, consider the broader market trends \u2014 AI is changing the competitive landscape across many industries, and staying ahead of these trends is important. Third, it might be helpful to do some discovery with your remaining clients to understand their needs better. There are many perspectives on this, and the right answer depends on your specific situation. Happy to explore any of these threads!",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "FAIL",
+          "critique": "The response fails to provide a specific, actionable verdict. Instead, it offers a generic menu of considerations without committing to a clear position. The response lists factors to consider, such as client concentration risk and market trends, but does not provide a concrete recommendation or a specific number of additional churns that should trigger a different course of action. It ends with an offer to explore further, which does not meet the user's need for a direct verdict.",
+          "raw_output": "<critique>\nThe response fails to provide a specific, actionable verdict. Instead, it offers a generic menu of considerations without committing to a clear position. The response lists factors to consider, such as client concentration risk and market trends, but does not provide a concrete recommendation or a specific number of additional churns that should trigger a different course of action. It ends with an offer to explore further, which does not meet the user's need for a direct verdict.\n</critique>\n\n<verdict>\nFAIL\n</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "FAIL",
+          "critique": "The response fails to use specific facts from the injected context. It does not mention Roman Creative, the 12 employees, the $1.8M ARR, or the 5-month runway. It also does not address Marcus's specific strategic anxieties or hypotheses, such as the potential need to reposition as an AI-augmented agency or the underutilization of writers. Instead, it provides generic advice about client concentration risk and market trends without tailoring the response to Marcus's unique situation.",
+          "raw_output": "<critique>\nThe response fails to use specific facts from the injected context. It does not mention Roman Creative, the 12 employees, the $1.8M ARR, or the 5-month runway. It also does not address Marcus's specific strategic anxieties or hypotheses, such as the potential need to reposition as an AI-augmented agency or the underutilization of writers. Instead, it provides generic advice about client concentration risk and market trends without tailoring the response to Marcus's unique situation.\n</critique>\n\n<verdict>\nFAIL\n</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "FAIL",
+          "critique": "The response opens with empathy filler (\"That's a really tough situation\") and hedging language (\"There are several factors to consider,\" \"it might be helpful\"). It lacks a direct, opinionated stance and instead offers a list of considerations without a clear conclusion. The closing offer (\"Happy to explore any of these threads!\") further dilutes the decisiveness expected from Nate's voice.",
+          "raw_output": "<critique>\nThe response opens with empathy filler (\"That's a really tough situation\") and hedging language (\"There are several factors to consider,\" \"it might be helpful\"). It lacks a direct, opinionated stance and instead offers a list of considerations without a clear conclusion. The closing offer (\"Happy to explore any of these threads!\") further dilutes the decisiveness expected from Nate's voice.\n</critique>\n\n<verdict>\nFAIL\n</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "FAIL",
+          "critique": "The response lacks AI-specific insights and fails to engage with the specific mechanisms by which AI is impacting Marcus's business. It provides generic advice applicable to any industry facing disruption, such as considering client concentration risk and understanding market trends, without addressing how AI specifically is substituting services in Marcus's agency. The response does not discuss the dynamics of AI substitution in content creation or brand strategy, nor does it offer a view on AI's trajectory in the SMB service segment. It misses the opportunity to provide targeted advice on how AI is compressing pricing and labor utilization in Marcus's context.",
+          "raw_output": "<critique>\nThe response lacks AI-specific insights and fails to engage with the specific mechanisms by which AI is impacting Marcus's business. It provides generic advice applicable to any industry facing disruption, such as considering client concentration risk and understanding market trends, without addressing how AI specifically is substituting services in Marcus's agency. The response does not discuss the dynamics of AI substitution in content creation or brand strategy, nor does it offer a view on AI's trajectory in the SMB service segment. It misses the opportunity to provide targeted advice on how AI is compressing pricing and labor utilization in Marcus's context.\n</critique>\n\n<verdict>\nFAIL\n</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 0,
+      "judge_count": 4
+    },
+    {
+      "id": "NC02-asks-for-context",
+      "prompt": "I have 5 writers and 4 designers. The writer roles overlap most with AI substitution. If I restructure for AI-native ops, what does the 12-person team turn into? I need a specific shape \u2014 roles and rough counts \u2014 to think about who stays and who goes.",
+      "trigger": "negative-control",
+      "axis_a": "negative-control",
+      "axis_b": "ignores-context",
+      "axis_c": "calibration",
+      "is_negative_control": true,
+      "expected_fails": [
+        "context_use",
+        "specificity"
+      ],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "Before I can give you a specific team shape, I need to understand more about your business. Can you tell me: what kind of agency are you running? What's your annual revenue? What types of clients do you serve? What's your typical project mix? What does your sales pipeline look like? What's your current cash position? Once I have those details, I can help you think through what the post-AI team structure should look like.",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "FAIL",
+          "critique": "The response fails to provide a specific, actionable verdict. Instead of offering a concrete recommendation or team structure, it asks the user for more information about their business. This approach leaves the user with a list of questions rather than a clear direction or decision, which is not helpful for someone in Marcus's position who needs a decisive answer.",
+          "raw_output": "<critique>\nThe response fails to provide a specific, actionable verdict. Instead of offering a concrete recommendation or team structure, it asks the user for more information about their business. This approach leaves the user with a list of questions rather than a clear direction or decision, which is not helpful for someone in Marcus's position who needs a decisive answer.\n</critique>\n\n<verdict>\nFAIL\n</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "FAIL",
+          "critique": "The response fails to utilize the specific context provided about Roman Creative. It asks Marcus to provide details that are already included in the injected context, such as the type of agency, annual revenue, client types, and cash position. The response does not reference any specific facts from the context block, such as the 12 employees, the recent client churn to AI platforms, or Marcus's strategic anxieties about restructuring for AI-native operations.",
+          "raw_output": "<critique>\nThe response fails to utilize the specific context provided about Roman Creative. It asks Marcus to provide details that are already included in the injected context, such as the type of agency, annual revenue, client types, and cash position. The response does not reference any specific facts from the context block, such as the 12 employees, the recent client churn to AI platforms, or Marcus's strategic anxieties about restructuring for AI-native operations.\n</critique>\n\n<verdict>\nFAIL\n</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "FAIL",
+          "critique": "The response opens with a request for more information rather than providing a direct answer or opinion. It lacks a conclusion-first approach and doesn't state a position on the restructuring. The language is more exploratory and lacks the directness and opinionated nature expected from Nate. There is no concrete language or specific recommendations, which are hallmarks of Nate's style.",
+          "raw_output": "<critique>\nThe response opens with a request for more information rather than providing a direct answer or opinion. It lacks a conclusion-first approach and doesn't state a position on the restructuring. The language is more exploratory and lacks the directness and opinionated nature expected from Nate. There is no concrete language or specific recommendations, which are hallmarks of Nate's style.\n</critique>\n\n<verdict>\nFAIL\n</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "FAIL",
+          "critique": "The response fails to engage with the specific AI mechanisms impacting Marcus's agency. It does not address how AI is substituting for the writers' roles or how the agency's structure could be optimized for AI-native operations. Instead, it requests basic business information that was already provided in the injected context, missing the opportunity to offer expert insights on AI's impact on labor utilization and team restructuring.",
+          "raw_output": "<critique>\nThe response fails to engage with the specific AI mechanisms impacting Marcus's agency. It does not address how AI is substituting for the writers' roles or how the agency's structure could be optimized for AI-native operations. Instead, it requests basic business information that was already provided in the injected context, missing the opportunity to offer expert insights on AI's impact on labor utilization and team restructuring.\n</critique>\n\n<verdict>\nFAIL\n</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 0,
+      "judge_count": 4
+    },
+    {
+      "id": "NC03-hedged",
+      "prompt": "My working thesis: Roman pivots to a 5-person AI-augmented brand agency in 12 months \u2014 higher margin, fewer/better clients, mostly strategy + design + brand systems. I drop content marketing entirely because it's commoditizing. Is that the right move or am I cutting off my biggest revenue stream too early?",
+      "trigger": "negative-control",
+      "axis_a": "negative-control",
+      "axis_b": "hedged-it-depends",
+      "axis_c": "calibration",
+      "is_negative_control": true,
+      "expected_fails": [
+        "specificity",
+        "voice"
+      ],
+      "expected_passes": [],
+      "case_conversation_id": null,
+      "response": "The answer really depends on a few factors. On one hand, pivoting Roman to a 5-person AI-augmented brand agency could give you higher margins and let you focus on the work AI can't easily replicate. On the other hand, dropping content marketing entirely could cut off a significant revenue stream before you've built the new client base to replace it. It's worth considering your unique strengths and your client relationships, but also being honest about where the market is heading. Ultimately, the right call depends on your risk tolerance, your team's adaptability, and your read on AI's trajectory in the agency space. There are valid arguments on multiple sides, and reasonable people could disagree.",
+      "response_error": null,
+      "judges": {
+        "specificity": {
+          "judge": "specificity",
+          "verdict": "FAIL",
+          "critique": "The response fails to provide a specific, actionable verdict. Instead, it presents a generic menu of considerations, weighing the pros and cons without committing to a clear recommendation. The response uses phrases like \"it depends\" and \"on one hand, on the other hand,\" which indicate a lack of decisive guidance. It ends with a broad statement about risk tolerance and market trajectory without offering a concrete course of action for Marcus.",
+          "raw_output": "<critique>\nThe response fails to provide a specific, actionable verdict. Instead, it presents a generic menu of considerations, weighing the pros and cons without committing to a clear recommendation. The response uses phrases like \"it depends\" and \"on one hand, on the other hand,\" which indicate a lack of decisive guidance. It ends with a broad statement about risk tolerance and market trajectory without offering a concrete course of action for Marcus.\n</critique>\n\n<verdict>\nFAIL\n</verdict>",
+          "error": null
+        },
+        "context_use": {
+          "judge": "context_use",
+          "verdict": "FAIL",
+          "critique": "The response fails to use specific facts from the injected context. It does not mention Roman Creative by name, nor does it reference the specific team size, the current number of retained clients, or the recent client churn to AI substitutes. It also does not address Marcus's specific working hypotheses or strategic anxieties, such as the potential need to lay off junior writers or the decision to reposition publicly as \"AI-augmented.\" Instead, the response remains generic, discussing broad considerations without tying them to Marcus's specific situation or the details provided in the context.",
+          "raw_output": "<critique>\nThe response fails to use specific facts from the injected context. It does not mention Roman Creative by name, nor does it reference the specific team size, the current number of retained clients, or the recent client churn to AI substitutes. It also does not address Marcus's specific working hypotheses or strategic anxieties, such as the potential need to lay off junior writers or the decision to reposition publicly as \"AI-augmented.\" Instead, the response remains generic, discussing broad considerations without tying them to Marcus's specific situation or the details provided in the context.\n</critique>\n\n<verdict>\nFAIL\n</verdict>",
+          "error": null
+        },
+        "voice": {
+          "judge": "voice",
+          "verdict": "FAIL",
+          "critique": "The response opens with hedging language: \"The answer really depends on a few factors.\" It continues with balanced pros-and-cons without taking a definitive stance: \"On one hand... On the other hand...\" The use of phrases like \"It's worth considering\" and \"Ultimately, the right call depends\" further dilutes the directness expected from Nate. The response lacks a clear, opinionated conclusion and instead presents multiple perspectives without committing to one.",
+          "raw_output": "<critique>\nThe response opens with hedging language: \"The answer really depends on a few factors.\" It continues with balanced pros-and-cons without taking a definitive stance: \"On one hand... On the other hand...\" The use of phrases like \"It's worth considering\" and \"Ultimately, the right call depends\" further dilutes the directness expected from Nate. The response lacks a clear, opinionated conclusion and instead presents multiple perspectives without committing to one.\n</critique>\n\n<verdict>\nFAIL\n</verdict>",
+          "error": null
+        },
+        "ai_expertise": {
+          "judge": "ai_expertise",
+          "verdict": "FAIL",
+          "critique": "The response lacks specific AI mechanisms and insights relevant to Marcus's situation. It fails to address how AI is specifically impacting content marketing in the SMB service segment, such as the substitution of draft work and the compression of mid-tier pricing. The advice is generic and could apply to any technology disruption, as it does not engage with the unique dynamics of AI in the agency space. There is no discussion of AI's trajectory or how it differs from previous disruptions like outsourcing or automation, which would be crucial for Marcus's decision-making.",
+          "raw_output": "<critique>\nThe response lacks specific AI mechanisms and insights relevant to Marcus's situation. It fails to address how AI is specifically impacting content marketing in the SMB service segment, such as the substitution of draft work and the compression of mid-tier pricing. The advice is generic and could apply to any technology disruption, as it does not engage with the unique dynamics of AI in the agency space. There is no discussion of AI's trajectory or how it differs from previous disruptions like outsourcing or automation, which would be crucial for Marcus's decision-making.\n</critique>\n\n<verdict>\nFAIL\n</verdict>",
+          "error": null
+        }
+      },
+      "pass_count": 0,
+      "judge_count": 4
+    }
+  ]
+}
