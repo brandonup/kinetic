@@ -98,6 +98,13 @@ class Settings(BaseSettings):
     RAG_MAX_TOKENS_PERCENT: float = 0.15  # token budget as fraction of model context window
     RAG_MAX_TOKENS_FLOOR: int = 2048    # minimum token budget regardless of context window
 
+    # Recency-aware retrieval (KIN-484 / ADR-009).
+    # OFF by default — RECENCY_ENABLED=False must produce byte-identical retrieval
+    # output vs. pre-feature `main`. RECENCY_WEIGHT is the tunable multiplier on
+    # the [-1, +1] recency_term; ADR-009 expected tuning band is 0.10–0.25.
+    RECENCY_ENABLED: bool = False
+    RECENCY_WEIGHT: float = 0.15
+
     # MCP rate limiting (per-user daily cap, admin-configurable)
     MCP_RATE_LIMIT_DEFAULT: int = 1000  # requests per day
 
