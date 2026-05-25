@@ -124,9 +124,10 @@ async def upload_document(
         raise HTTPException(status_code=404, detail="Knowledge base not found.")
 
     kb = kb_result.data
-    # RLS: only the KB owner can upload to it
+    # RLS: only the KB owner can upload to it. Per policies/authorization.md rule 2,
+    # cross-tenant access returns 404 (not 403) to avoid leaking resource existence.
     if kb.get("user_id") != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Access denied.")
+        raise HTTPException(status_code=404, detail="Knowledge base not found.")
 
     project_id = UUID(kb["project_id"]) if kb.get("project_id") else None
     agent_definition_id = UUID(kb["agent_definition_id"]) if kb.get("agent_definition_id") else None
@@ -259,7 +260,7 @@ async def get_document_status(
         .execute(),
     )
     if not kb_check.data or kb_check.data.get("user_id") != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Access denied.")
+        raise HTTPException(status_code=404, detail="Document not found.")
 
     error_message = doc.get("error_message")
     # Coupled to pipeline error wording: TokenLimitExceeded raises "Document exceeds token limit: ..."
@@ -321,7 +322,7 @@ async def retry_document(
         .execute(),
     )
     if not kb_check.data or kb_check.data.get("user_id") != current_user.user_id:
-        raise HTTPException(status_code=403, detail="Access denied.")
+        raise HTTPException(status_code=404, detail="Document not found.")
 
     # Only failed documents can be retried
     if doc["status"] != "failed":

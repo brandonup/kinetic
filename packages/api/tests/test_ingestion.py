@@ -741,8 +741,8 @@ class TestRetryEndpoint:
 
         assert response.status_code == 404
 
-    def test_retry_access_denied_returns_403(self, client):
-        """POST /retry by a non-owner returns 403."""
+    def test_retry_access_denied_returns_404(self, client):
+        """POST /retry by a non-owner returns 404 (anti-enumeration per policy)."""
         doc_id = str(uuid4())
         with patch("app.api.routes.documents.get_supabase") as mock_get_sb:
             mock_sb = self._mock_supabase_for_retry(user_id="different-user-id")
@@ -750,7 +750,7 @@ class TestRetryEndpoint:
 
             response = client.post(f"/api/v1/documents/{doc_id}/retry")
 
-        assert response.status_code == 403
+        assert response.status_code == 404
 
     def test_retry_fallback_to_full_extraction_when_text_unavailable(self, client):
         """When extracted text download fails, retry falls back to file download."""
