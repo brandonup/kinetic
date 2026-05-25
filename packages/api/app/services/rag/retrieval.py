@@ -126,6 +126,79 @@ def _cosine_similarity(a: List[float], b: List[float]) -> float:
 
 
 # ---------------------------------------------------------------------------
+# Recency scoring (KIN-484 / ADR-009)
+#
+# Curve constants are owned by ADR-009. Changing them is a deliberate code
+# change with new boundary unit tests; the `RECENCY_WEIGHT` magnitude is the
+# tunable knob and lives in `settings`.
+# ---------------------------------------------------------------------------
+
+RECENCY_ZERO_CROSSING_DAYS: int = 274   # ADR-009: ~9 months, recency_term = 0
+RECENCY_FLOOR_DAYS: int = 730           # ADR-009: ~24 months, recency_term = -1 (clamped beyond)
+
+
+def recency_term(effective_date: Optional[date], now: date) -> float:
+    """Piecewise-linear age decay per ADR-009.
+
+    * `+1.0` at age 0.
+    * Linear to `0.0` at `RECENCY_ZERO_CROSSING_DAYS` (274 days, ~9 months).
+    * Linear to `-1.0` at `RECENCY_FLOOR_DAYS` (730 days, ~24 months).
+    * Clamped at `-1.0` beyond the floor.
+
+    `effective_date = None` (fallback search path / unknown date) → `0.0` —
+    no recency signal, no adjustment. A defensive `age = max(0, age_days)`
+    clamps future dates so a clock-skewed or upstream-corrupted date can never
+    produce a recency_term > 1.0.
+    """
+    if effective_date is None:
+        return 0.0
+
+    age_days = max(0, (now - effective_date).days)
+
+    if age_days <= RECENCY_ZERO_CROSSING_DAYS:
+        return 1.0 - (age_days / RECENCY_ZERO_CROSSING_DAYS)
+    if age_days <= RECENCY_FLOOR_DAYS:
+        return -1.0 * (
+            (age_days - RECENCY_ZERO_CROSSING_DAYS)
+            / (RECENCY_FLOOR_DAYS - RECENCY_ZERO_CROSSING_DAYS)
+        )
+    return -1.0
+
+
+def compute_recency_adjusted_score(
+    similarity_score: float,
+    effective_date: Optional[date],
+    now: date,
+    weight: float,
+) -> float:
+    """`recency_adjusted_score = similarity_score + weight * recency_term(...)`.
+
+    `similarity_score` is the raw cosine and must never be mutated by callers.
+    """
+    return similarity_score + weight * recency_term(effective_date, now)
+
+
+def apply_recency_scoring(
+    candidates: List[dict],
+    *,
+    now: date,
+    weight: float,
+) -> None:
+    """In-place: stamp each candidate with `recency_adjusted_score`.
+
+    Empty list is a no-op (no crash). `similarity_score` is read but never
+    mutated — the immutability of the raw cosine is part of the contract.
+    """
+    for candidate in candidates:
+        candidate["recency_adjusted_score"] = compute_recency_adjusted_score(
+            similarity_score=candidate["similarity_score"],
+            effective_date=candidate.get("effective_date"),
+            now=now,
+            weight=weight,
+        )
+
+
+# ---------------------------------------------------------------------------
 # MMR selection
 # ---------------------------------------------------------------------------
 
@@ -135,6 +208,7 @@ def mmr_select(
     candidates: List[dict],
     top_k: int = MMR_TOP_K,
     lambda_: float = MMR_LAMBDA,
+    score_key: str = "similarity_score",
 ) -> List[dict]:
     """
     Maximal Marginal Relevance selection over candidate chunks.
@@ -145,9 +219,15 @@ def mmr_select(
     Args:
         query_embedding: The embedded user query (3072 dims).
         candidates: List of candidate dicts, each with key 'embedding' (List[float])
-                    and 'similarity_score' (float). Must be non-empty.
+                    and `score_key` (float). Must be non-empty.
         top_k: Maximum number of chunks to select.
         lambda_: Tradeoff — 1.0 = pure relevance, 0.0 = pure diversity.
+        score_key: Which field on each candidate carries the relevance score.
+            Default `"similarity_score"` (raw cosine) — pre-feature behaviour.
+            `"recency_adjusted_score"` when `RECENCY_ENABLED` per the design
+            § Component C score-usage table. The MMR diversity term still uses
+            chunk-to-chunk cosine on the embeddings — recency is irrelevant to
+            diversity.
 
     Returns:
         Ordered list of selected candidate dicts (subset of candidates).
@@ -161,16 +241,16 @@ def mmr_select(
 
     while len(selected) < top_k and remaining:
         if not selected:
-            # First pick: highest similarity to query
-            best = max(remaining, key=lambda c: c["similarity_score"])
+            # First pick: highest relevance per `score_key`
+            best = max(remaining, key=lambda c: c[score_key])
         else:
-            # MMR score = λ * sim(query, c) - (1-λ) * max(sim(c, s) for s in selected)
+            # MMR score = λ * relevance(c) - (1-λ) * max(sim(c, s) for s in selected)
             best = None
             best_score = float("-inf")
             selected_embeddings = [s["embedding"] for s in selected]
 
             for candidate in remaining:
-                relevance = candidate["similarity_score"]
+                relevance = candidate[score_key]
                 redundancy = max(
                     _cosine_similarity(candidate["embedding"], sel_emb)
                     for sel_emb in selected_embeddings
@@ -399,6 +479,10 @@ def _apply_token_budget(
     Chunks are already sorted by MMR score (insertion order). We fill greedily
     from the top, stopping when the budget would be exceeded.
 
+    Eviction is order-based — when `RECENCY_ENABLED`, MMR ordered chunks by
+    `recency_adjusted_score`, so the chunks dropped at the tail are the lowest
+    adjusted-score among the MMR picks (design § Component C, score-usage table).
+
     Args:
         chunks: MMR-selected, threshold-filtered candidates (highest priority first).
         model_context_window: Context window of the selected generation model (tokens).
@@ -534,26 +618,61 @@ async def retrieve(
     # Normalise rows to uniform shape
     candidates = [_normalise_search_row(row) for row in raw_rows]
 
+    # --- Recency scoring (KIN-484, ADR-009) ---
+    # OFF state: no `recency_adjusted_score` field is computed; MMR + budget
+    # use raw similarity exactly as before. ON state: stamp every candidate
+    # with `recency_adjusted_score = similarity_score + RECENCY_WEIGHT * recency_term`
+    # and tell MMR to read it. The threshold gate still reads raw similarity
+    # (design § Component C — quality floor invariant).
+    recency_enabled = settings.RECENCY_ENABLED
+    if recency_enabled:
+        from datetime import datetime as _datetime, timezone as _timezone
+        apply_recency_scoring(
+            candidates,
+            now=_datetime.now(_timezone.utc).date(),
+            weight=settings.RECENCY_WEIGHT,
+        )
+
     if debug_ctx:
         debug_ctx.vector_candidates = [
-            {"chunk_id": c["chunk_id"], "score": c["similarity_score"]}
+            {
+                "chunk_id": c["chunk_id"],
+                "score": c["similarity_score"],
+                **(
+                    {"adjusted_score": c["recency_adjusted_score"]}
+                    if recency_enabled
+                    else {}
+                ),
+            }
             for c in candidates
         ]
 
     # --- Step 3: MMR selection ---
+    # Score-field discipline (design § Component C table): MMR relevance + first
+    # pick read the adjusted score when RECENCY_ENABLED; otherwise raw similarity
+    # so the byte-identical regression holds.
     _t = debug_ctx.start_step("mmr") if debug_ctx else None
     mmr_results = mmr_select(
         query_embedding=query_embedding,
         candidates=candidates,
         top_k=mmr_top_k,
         lambda_=mmr_lambda,
+        score_key="recency_adjusted_score" if recency_enabled else "similarity_score",
     )
     if _t:
         _t.stop()
 
     if debug_ctx:
         debug_ctx.mmr_selections = [
-            {"chunk_id": c["chunk_id"], "score": c["similarity_score"]}
+            {
+                "chunk_id": c["chunk_id"],
+                "score": c["similarity_score"],
+                **(
+                    {"adjusted_score": c["recency_adjusted_score"]}
+                    if recency_enabled
+                    else {}
+                ),
+            }
             for c in mmr_results
         ]
 
