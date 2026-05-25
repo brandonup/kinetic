@@ -152,4 +152,51 @@ describe("DocumentRow", () => {
 
     expect(screen.getByText("PLAIN")).toBeInTheDocument();
   });
+
+  it("renders title attribute for hover tooltip (KIN-500)", () => {
+    mockApiFetch.mockReturnValue(mockFetchOk(makeStatusResponse()));
+
+    const longTitle = "A Very Long Document Title That Would Overflow Without Truncation.pdf";
+    render(
+      <DocumentRow
+        documentId={DOC_ID}
+        title={longTitle}
+        initialStatus="completed"
+      />,
+    );
+
+    const titleEl = screen.getByText(longTitle);
+    expect(titleEl).toHaveAttribute("title", longTitle);
+  });
+
+  it("renders formatted date when createdAt is provided (KIN-501)", () => {
+    mockApiFetch.mockReturnValue(mockFetchOk(makeStatusResponse()));
+
+    render(
+      <DocumentRow
+        documentId={DOC_ID}
+        title="report.pdf"
+        initialStatus="completed"
+        createdAt="2026-05-24T12:00:00Z"
+      />,
+    );
+
+    // Formatted as "May 24, 2026"
+    expect(screen.getByText(/may 24, 2026/i)).toBeInTheDocument();
+  });
+
+  it("renders without date when createdAt is omitted (KIN-501)", () => {
+    mockApiFetch.mockReturnValue(mockFetchOk(makeStatusResponse()));
+
+    render(
+      <DocumentRow
+        documentId={DOC_ID}
+        title="report.pdf"
+        initialStatus="completed"
+      />,
+    );
+
+    // No date text should be present
+    expect(screen.queryByText(/\d{4}/)).not.toBeInTheDocument();
+  });
 });

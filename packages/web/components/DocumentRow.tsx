@@ -20,10 +20,19 @@ import type { DocumentStatus } from "@/lib/types/models";
 
 const ACTIVE_INGESTION_STATUSES = new Set(["extracting", "chunking", "embedding"]);
 
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 interface DocumentRowProps {
   documentId: string;
   title: string;
   fileType?: string;
+  createdAt?: string;
   initialStatus?: DocumentStatus;
   initialTags?: string[];
   onDeleted?: (documentId: string) => void;
@@ -33,6 +42,7 @@ export function DocumentRow({
   documentId,
   title,
   fileType,
+  createdAt,
   initialStatus,
   initialTags = [],
   onDeleted,
@@ -155,6 +165,12 @@ export function DocumentRow({
             {title}
           </span>
         </div>
+
+        {createdAt && (
+          <span className="shrink-0 whitespace-nowrap text-xs text-muted-foreground">
+            {formatDate(createdAt)}
+          </span>
+        )}
 
         <div className="flex items-center gap-2 shrink-0">
           <DocumentStatusBadge

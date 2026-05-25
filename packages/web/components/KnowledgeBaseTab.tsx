@@ -512,7 +512,7 @@ export function KnowledgeBaseTab({ knowledgeBaseId }: KnowledgeBaseTabProps) {
       </div>
 
       {/* Main content */}
-      <div className="flex-1 space-y-3">
+      <div className="flex-1 min-w-0 space-y-3">
         {/* Upload button */}
         <div className="flex items-center gap-2">
           <input
@@ -598,6 +598,7 @@ export function KnowledgeBaseTab({ knowledgeBaseId }: KnowledgeBaseTabProps) {
                 documentId={doc.id}
                 title={doc.title}
                 fileType={doc.file_type}
+                createdAt={doc.created_at}
                 initialStatus={doc.status}
                 initialTags={doc.tags}
                 onDeleted={handleDocumentDeleted}
