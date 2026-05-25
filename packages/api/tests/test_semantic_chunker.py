@@ -6,6 +6,7 @@ from typing import List
 
 import pytest
 
+from app.core.config import settings
 from app.services.ingestion.chunker import Chunk, _split_sentences, count_words
 from app.services.ingestion.semantic_chunker import (
     _cosine_similarity,
@@ -44,7 +45,7 @@ def _mock_embeddings_with_topic_shift(n_windows: int, break_at: int) -> List[Lis
     Create mock embeddings where windows before break_at are similar
     (topic A) and windows after are similar (topic B).
     """
-    dim = 1024
+    dim = settings.EMBEDDING_DIMS
     vec_a = [0.0] * dim
     vec_a[0] = 1.0
     vec_b = [0.0] * dim
@@ -201,7 +202,7 @@ class TestChunkDocumentSemantic:
         text = _make_topic_text("blockchain", 10)
         n_windows = self._get_window_count(text)
 
-        dim = 1024
+        dim = settings.EMBEDDING_DIMS
         base_vec = [0.0] * dim
         base_vec[0] = 1.0
         mock_embeddings = [base_vec[:] for _ in range(n_windows)]
