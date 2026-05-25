@@ -78,6 +78,7 @@ export default function ProfilePage() {
 
   // API keys state
   const [apiKeys, setApiKeys] = useState<Partial<Record<ApiKeyProvider, ApiKeyEntry>>>({});
+  const [apiKeysLoaded, setApiKeysLoaded] = useState(false);
   const [editingProvider, setEditingProvider] = useState<ApiKeyProvider | null>(null);
   const [editingValue, setEditingValue] = useState("");
   const [savingKey, setSavingKey] = useState<ApiKeyProvider | null>(null);
@@ -85,6 +86,7 @@ export default function ProfilePage() {
   // Models state
   const [models, setModels] = useState<ModelConfiguration[]>([]);
   const [modelsError, setModelsError] = useState(false);
+  const [modelsLoaded, setModelsLoaded] = useState(false);
 
   // MCP tokens state — KIN-325
   const [mcpTokens, setMcpTokens] = useState<McpToken[]>([]);
@@ -153,6 +155,12 @@ export default function ProfilePage() {
       }
     } catch {
       // Silent fail on load — user sees empty state
+    } finally {
+      // KIN-499: mark sections as loaded so the UI stops showing skeleton
+      // placeholders. Set even on network failure to avoid an infinite spinner;
+      // empty-state messages will appear (correct after we've actually tried).
+      setApiKeysLoaded(true);
+      setModelsLoaded(true);
     }
   }
 
@@ -506,12 +514,15 @@ export default function ProfilePage() {
             </p>
           </div>
 
-          {!hasOpenAiKey && (
+          {apiKeysLoaded && !hasOpenAiKey && (
             <div className="rounded-md border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
               An OpenAI API key is required for agent features like framework selection and knowledge base search. Add one to get started.
             </div>
           )}
 
+          {!apiKeysLoaded ? (
+            <p className="text-sm text-muted-foreground">Loading API keys…</p>
+          ) : (
           <div className="space-y-3">
             {PROVIDERS.map((provider) => {
               const entry = apiKeys[provider];
@@ -603,6 +614,7 @@ export default function ProfilePage() {
               );
             })}
           </div>
+          )}
         </section>
 
         <Separator />
@@ -617,7 +629,9 @@ export default function ProfilePage() {
             </p>
           </div>
 
-          {modelsError ? (
+          {!modelsLoaded ? (
+            <p className="text-sm text-muted-foreground">Loading models…</p>
+          ) : modelsError ? (
             <p className="text-sm text-destructive">
               Failed to load models. Try refreshing the page.
             </p>
