@@ -26,8 +26,13 @@ logger = logging.getLogger(__name__)
 
 FRAMEWORK_TRIGGER_TOP_K = 20      # candidates from vector search
 FRAMEWORK_TOP_K = 5               # after grouping, before reranker
-FRAMEWORK_MIN_SIMILARITY = 0.62   # confidence gate (below = no match)
-HIGH_CONFIDENCE_THRESHOLD = 0.75  # above = inject normally; between MIN and this = caveat
+FRAMEWORK_MIN_SIMILARITY = 0.85   # confidence gate (below = no match) — KIN-497 (Gemini regime)
+HIGH_CONFIDENCE_THRESHOLD = 0.95  # above = inject normally; between MIN and this = caveat
+# Prior values (0.62 / 0.75) were tuned for OpenAI text-embedding-3-large. Gemini
+# gemini-embedding-001 produces higher-range outputs (on-topic median ~1.10 with
+# multi-trigger boost; adjacent max ~0.92). 0.85 cleanly separates on-topic from
+# adjacent on the Nate eval — adjacent_fp 20.0%, no_match_accuracy 91.4%,
+# false_negative_rate 3.7%. See KIN-497 framework-selection baseline doc.
 MULTI_TRIGGER_BOOST = 0.05        # boost per additional trigger match
 
 # Context enrichment (KIN-447)

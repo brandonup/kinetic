@@ -116,10 +116,12 @@ class TestFrameworkSelectionNoMatch:
 
 
 class TestFrameworkSelectionMatch:
+    # KIN-497: Mock scores retuned to the Gemini regime — FRAMEWORK_MIN_SIMILARITY
+    # is now 0.85 (was 0.62 for OpenAI), HIGH_CONFIDENCE_THRESHOLD is 0.95 (was 0.75).
     def test_above_threshold_returns_match(self):
         """Trigger above FRAMEWORK_MIN_SIMILARITY → framework matched."""
         triggers = [
-            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.7, "trigger_text": "strategic planning"},
+            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.90, "trigger_text": "strategic planning"},
         ]
         mock_db = _mock_supabase(triggers=triggers)
         with patch(EMBED_PATCH, return_value=_mock_embedder()):
@@ -130,23 +132,23 @@ class TestFrameworkSelectionMatch:
 
     def test_multi_trigger_boost_pushes_over_threshold(self):
         """Two triggers just below threshold → boost pushes above."""
-        # Single trigger at 0.59 is below 0.62. Two triggers add 0.05 boost → 0.64.
+        # Single trigger at 0.82 is below 0.85. Two triggers add 0.05 boost → 0.87.
         triggers = [
-            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.59, "trigger_text": "trigger a"},
-            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.55, "trigger_text": "trigger b"},
+            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.82, "trigger_text": "trigger a"},
+            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.80, "trigger_text": "trigger b"},
         ]
         mock_db = _mock_supabase(triggers=triggers)
         with patch(EMBED_PATCH, return_value=_mock_embedder()):
             result = _run(select_framework("test query", AGENT_ID, mock_db))
-        # max_sim=0.59 + 1 extra trigger * 0.05 = 0.64 > 0.62
+        # max_sim=0.82 + 1 extra trigger * 0.05 boost = 0.87 > 0.85
         assert result.matched_framework_id == FRAMEWORK_ID
 
     def test_highest_score_framework_wins(self):
         """Multiple frameworks → highest boosted score wins."""
         other_id = str(uuid4())
         triggers = [
-            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.6, "trigger_text": "trigger a"},
-            {"framework_db_id": other_id, "similarity": 0.8, "trigger_text": "trigger b"},
+            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.87, "trigger_text": "trigger a"},
+            {"framework_db_id": other_id, "similarity": 0.95, "trigger_text": "trigger b"},
         ]
         mock_db = _mock_supabase(triggers=triggers)
         with patch(EMBED_PATCH, return_value=_mock_embedder()):
@@ -160,9 +162,9 @@ class TestConfidenceBands:
     """KIN-445: confidence_score and high_confidence fields."""
 
     def test_high_confidence_above_threshold(self):
-        """Score >= 0.75 → high_confidence=True."""
+        """Score >= HIGH_CONFIDENCE_THRESHOLD (0.95) → high_confidence=True."""
         triggers = [
-            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.8, "trigger_text": "strong match"},
+            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.98, "trigger_text": "strong match"},
         ]
         mock_db = _mock_supabase(triggers=triggers)
         with patch(EMBED_PATCH, return_value=_mock_embedder()):
@@ -172,9 +174,9 @@ class TestConfidenceBands:
         assert result.confidence_score >= HIGH_CONFIDENCE_THRESHOLD
 
     def test_moderate_confidence_in_maybe_band(self):
-        """Score 0.62–0.75 → high_confidence=False."""
+        """Score in [FRAMEWORK_MIN_SIMILARITY, HIGH_CONFIDENCE_THRESHOLD) → high_confidence=False."""
         triggers = [
-            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.68, "trigger_text": "moderate match"},
+            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.90, "trigger_text": "moderate match"},
         ]
         mock_db = _mock_supabase(triggers=triggers)
         with patch(EMBED_PATCH, return_value=_mock_embedder()):
@@ -184,9 +186,9 @@ class TestConfidenceBands:
         assert FRAMEWORK_MIN_SIMILARITY <= result.confidence_score < HIGH_CONFIDENCE_THRESHOLD
 
     def test_no_match_below_gate(self):
-        """Score < 0.62 → no match, defaults."""
+        """Score < FRAMEWORK_MIN_SIMILARITY (0.85) → no match, defaults."""
         triggers = [
-            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.5, "trigger_text": "weak match"},
+            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.70, "trigger_text": "weak match"},
         ]
         mock_db = _mock_supabase(triggers=triggers)
         with patch(EMBED_PATCH, return_value=_mock_embedder()):
@@ -199,7 +201,7 @@ class TestConfidenceBands:
 class TestFrameworkSelectionTextAssembly:
     def test_framework_text_contains_name(self):
         triggers = [
-            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.7, "trigger_text": "match"},
+            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.90, "trigger_text": "match"},
         ]
         mock_db = _mock_supabase(triggers=triggers)
         with patch(EMBED_PATCH, return_value=_mock_embedder()):
@@ -208,7 +210,7 @@ class TestFrameworkSelectionTextAssembly:
 
     def test_framework_text_contains_principles(self):
         triggers = [
-            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.7, "trigger_text": "match"},
+            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.90, "trigger_text": "match"},
         ]
         mock_db = _mock_supabase(triggers=triggers)
         with patch(EMBED_PATCH, return_value=_mock_embedder()):
@@ -217,7 +219,7 @@ class TestFrameworkSelectionTextAssembly:
 
     def test_framework_text_contains_steps(self):
         triggers = [
-            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.7, "trigger_text": "match"},
+            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.90, "trigger_text": "match"},
         ]
         mock_db = _mock_supabase(triggers=triggers)
         with patch(EMBED_PATCH, return_value=_mock_embedder()):
@@ -266,9 +268,10 @@ class TestExcludedIdsFiltering:
 
     def test_excluded_framework_not_selected(self):
         """When the top match is excluded, it should be skipped."""
+        # Both above FRAMEWORK_MIN_SIMILARITY=0.85 so either could win without the exclusion.
         triggers = [
-            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.8, "trigger_text": "strategic planning"},
-            {"framework_db_id": FRAMEWORK_ID_2, "similarity": 0.6, "trigger_text": "competitive"},
+            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.95, "trigger_text": "strategic planning"},
+            {"framework_db_id": FRAMEWORK_ID_2, "similarity": 0.87, "trigger_text": "competitive"},
         ]
         mock_db = _mock_supabase(triggers=triggers, framework_row=FRAMEWORK_ROW_2)
         with patch(EMBED_PATCH, return_value=_mock_embedder()):
@@ -276,13 +279,13 @@ class TestExcludedIdsFiltering:
                 "test query", AGENT_ID, mock_db,
                 excluded_ids={FRAMEWORK_ID},
             ))
-        # FRAMEWORK_ID (0.8) excluded → FRAMEWORK_ID_2 (0.6) wins
+        # FRAMEWORK_ID (0.95) excluded → FRAMEWORK_ID_2 (0.87) wins
         assert result.matched_framework_id is not None
 
     def test_all_excluded_returns_no_match(self):
         """When all candidates are excluded, returns no match."""
         triggers = [
-            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.8, "trigger_text": "match"},
+            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.95, "trigger_text": "match"},
         ]
         mock_db = _mock_supabase(triggers=triggers)
         with patch(EMBED_PATCH, return_value=_mock_embedder()):
@@ -295,7 +298,7 @@ class TestExcludedIdsFiltering:
     def test_empty_excluded_ids_no_effect(self):
         """Empty excluded set does not affect selection."""
         triggers = [
-            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.7, "trigger_text": "match"},
+            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.90, "trigger_text": "match"},
         ]
         mock_db = _mock_supabase(triggers=triggers)
         with patch(EMBED_PATCH, return_value=_mock_embedder()):
@@ -472,7 +475,7 @@ class TestSelectFrameworkWithContext:
     def test_context_enriches_embedding_input(self):
         """When context is provided, the enriched query is passed to embedder."""
         triggers = [
-            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.7, "trigger_text": "match"},
+            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.90, "trigger_text": "match"},
         ]
         mock_db = _mock_supabase(triggers=triggers)
         mock_embedder = _mock_embedder()
@@ -493,7 +496,7 @@ class TestSelectFrameworkWithContext:
     def test_no_context_uses_raw_query(self):
         """Without context, raw query is embedded (backward compatible)."""
         triggers = [
-            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.7, "trigger_text": "match"},
+            {"framework_db_id": FRAMEWORK_ID, "similarity": 0.90, "trigger_text": "match"},
         ]
         mock_db = _mock_supabase(triggers=triggers)
         mock_embedder = _mock_embedder()

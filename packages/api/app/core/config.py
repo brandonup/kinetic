@@ -94,7 +94,12 @@ class Settings(BaseSettings):
     VECTOR_TOP_K: int = 20              # candidates from vector search
     MMR_TOP_K: int = 8                  # candidates after MMR selection
     MMR_LAMBDA: float = 0.6             # relevance/diversity tradeoff (higher = favour relevance)
-    SIMILARITY_THRESHOLD: float = 0.3   # minimum cosine similarity for chunk injection
+    # Minimum cosine similarity for chunk injection. Retuned for Gemini in KIN-497:
+    # was 0.3 (OpenAI text-embedding-3-large regime); raised to 0.65 because Gemini
+    # gemini-embedding-001 produces compressed-range outputs (on-topic ~0.72, off-topic
+    # ~0.55), so 0.3 admitted all 20 candidates → 91% false-injection rate. 0.65
+    # cleanly separates on-topic from off-topic on the Nate corpus eval.
+    SIMILARITY_THRESHOLD: float = 0.65
     RAG_MAX_TOKENS_PERCENT: float = 0.15  # token budget as fraction of model context window
     RAG_MAX_TOKENS_FLOOR: int = 2048    # minimum token budget regardless of context window
 
