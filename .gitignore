@@ -38,6 +38,9 @@ dist/
 # Eval outputs (generated per-run)
 packages/api/evals/**/dataset.jsonl
 packages/api/evals/**/results_*/
+packages/api/evals/**/recency_results_*/
+packages/api/evals/**/results/[0-9]*/
+packages/api/evals/kb_retrieval/results/
 
 # Local IDE / tooling config
 .claude/settings.local.json
@@ -48,6 +51,7 @@ supabase/.temp/
 # Derived data (nbj_extractor — generated from JSONL)
 nbj_extractor/articles/
 nbj_extractor/bulk_upload_progress.jsonl
+nbj_extractor/new_scrape.jsonl
 
 # Trigger-rewrite script outputs (generated per-run)
 packages/api/scripts/trigger_rewrite_*.json
