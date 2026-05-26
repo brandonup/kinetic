@@ -10,7 +10,8 @@ recency, contradiction, and over-flagging cases per
 |---|---|
 | `dataset_recency.jsonl` | The 13 case templates. Each line is one case in extended JSONL format. |
 | `populate_recency_dataset.py` | Resolves `*_title_pattern` placeholders to real `document_id`s from a live agent KB. Run after [KIN-489](https://linear.app/brandonup/issue/KIN-489) backfill populates real `document_date`s. |
-| `eval_runner.py` | Existing KIN-449 runner. Reads `should_retrieve` / `should_not_retrieve` / `label` and ignores the new fields. Generation-layer assertions (`expected_answer_pattern`, `expected_no_staleness_flag`, `expected_prefers_recent`) require a future runner extension shipped with T6. |
+| `eval_runner.py` | KIN-449 runner. Pure retrieval (`should_retrieve` / `should_not_retrieve` / `label`); ignores the recency extension fields. |
+| `recency_eval_runner.py` | KIN-492 runner — recency-aware. Dispatches per `case_type` (`recency` / `contradiction` / `over_flagging` / `control`). Generation-side assertions are scaffolded but skipped as `PENDING-KIN-485` until Component D ships. Has `--write-baseline` / `--regression-check` modes for off-state byte-identical regression. |
 
 ## Field contract (extends KIN-449 format)
 
@@ -88,10 +89,45 @@ recency-case precision without regressing the broader KIN-449 baseline
 
 `contradiction` and `over_flagging` cases require the generation pipeline to
 run end-to-end (the agent must produce an answer, and the eval reads the
-answer text). The current `eval_runner.py` does NOT run generation — it stops
-at chunk retrieval. T6 (not yet ticketed) ships a generation-aware runner
-that reads `expected_answer_pattern`, `expected_prefers_recent`, and
-`expected_no_staleness_flag`. Until then, those fields are inert metadata.
+answer text). `recency_eval_runner.py` (KIN-492) reads
+`expected_answer_pattern`, `expected_prefers_recent`, and
+`expected_no_staleness_flag` and dispatches per `case_type`, but the
+generation invocation itself depends on Component D (KIN-485) shipping.
+Until KIN-485 lands, contradiction + over_flagging cases are reported as
+`SKIP-PENDING-KIN-485` rather than passing or failing — retrieval-side
+prerequisites (e.g. evergreen doc is in the candidate set) are still
+checked, so the report still tells you when the retrieval layer breaks.
+
+## Recency-runner usage (KIN-492)
+
+```bash
+cd packages/api
+
+# Standard recency-on pass — scores every case in the populated dataset
+RECENCY_ENABLED=true RECENCY_WEIGHT=0.15 \
+  .venv/bin/python -m evals.kb_retrieval.recency_eval_runner \
+  --dataset evals/kb_retrieval/dataset_recency.populated.jsonl \
+  --agent-slug nate
+
+# Off-state byte-identical regression — one-time baseline capture
+.venv/bin/python -m evals.kb_retrieval.recency_eval_runner \
+  --dataset evals/kb_retrieval/dataset_recency.populated.jsonl \
+  --agent-slug nate \
+  --write-baseline evals/kb_retrieval/off_state_baseline.json
+
+# Off-state byte-identical regression — repeated check (fold this into the
+# KIN-471-style smoke pass; exits non-zero on any byte diff, so a CI/cron
+# wrapper can treat it as a release gate)
+.venv/bin/python -m evals.kb_retrieval.recency_eval_runner \
+  --dataset evals/kb_retrieval/dataset_recency.populated.jsonl \
+  --agent-slug nate \
+  --regression-check evals/kb_retrieval/off_state_baseline.json
+```
+
+The two control cases in the dataset are the substrate for the regression
+mode. They are the queries whose `RECENCY_ENABLED=False` output must stay
+byte-identical to the committed baseline across every change to the
+retrieval pipeline.
 
 ## Why placeholders, not embedded doc IDs?
 
