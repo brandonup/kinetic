@@ -23,7 +23,9 @@ Usage:
         -H "Authorization: Bearer <token>"
 
 Environment variables:
-    SUPABASE_URL, SUPABASE_KEY, OPENAI_API_KEY
+    SUPABASE_URL, SUPABASE_KEY, GEMINI_API_KEY (always — for re-embedding);
+    OPENAI_API_KEY (only for the gpt-4o-mini trigger-rewrite step — required
+    by this script because rewriting is its whole purpose).
 """
 
 import argparse
@@ -358,7 +360,11 @@ def main():
         print("Error: SUPABASE_URL and SUPABASE_KEY required", file=sys.stderr)
         sys.exit(1)
     if not args.openai_key:
-        print("Error: OPENAI_API_KEY required", file=sys.stderr)
+        print(
+            "Error: OPENAI_API_KEY required — used by this script for the "
+            "gpt-4o-mini trigger-rewrite step (not a platform requirement).",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     from supabase import create_client

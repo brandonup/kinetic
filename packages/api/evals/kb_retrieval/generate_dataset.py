@@ -16,7 +16,8 @@ Usage:
         --output evals/kb_retrieval/dataset.jsonl
 
 Environment variables (or CLI overrides):
-    SUPABASE_URL, SUPABASE_KEY, OPENAI_API_KEY
+    SUPABASE_URL, SUPABASE_KEY, GEMINI_API_KEY. Synthetic-query generation uses
+    `gemini-2.5-flash` — no OpenAI key required (KIN-497).
 """
 
 import argparse
@@ -170,13 +171,16 @@ def fetch_documents_with_first_chunk(supabase, scope: str, scope_id: str) -> lis
 # Synthetic generation (Method 1 + 2)
 # ---------------------------------------------------------------------------
 
-def generate_synthetic_cases(
-    documents: list[dict], openai_key: str
-) -> list[dict]:
-    """Generate on-topic and adjacent cases using GPT-4o-mini."""
-    import openai
+def generate_synthetic_cases(documents: list[dict]) -> list[dict]:
+    """Generate on-topic and adjacent cases using `gemini-2.5-flash` (KIN-497).
 
-    client = openai.OpenAI(api_key=openai_key)
+    Was originally `gpt-4o-mini` (KIN-449). Ported to Gemini so the eval suite
+    runs on the same key as the prod embedding path — one fewer external dep.
+    """
+    from google import genai
+    from app.core.config import settings as _settings
+
+    client = genai.Client(api_key=_settings.GEMINI_API_KEY)
     cases: list[dict] = []
     fail_count = 0
 
@@ -190,13 +194,11 @@ def generate_synthetic_cases(
         )
 
         try:
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": prompt}],
-                max_tokens=400,
-                temperature=0.8,
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
             )
-            raw = response.choices[0].message.content.strip()
+            raw = (response.text or "").strip()
             if raw.startswith("```"):
                 raw = raw.split("\n", 1)[1].rsplit("```", 1)[0].strip()
             data = json.loads(raw)
@@ -279,7 +281,6 @@ def main():
     )
     parser.add_argument("--supabase-url", default=os.environ.get("SUPABASE_URL"))
     parser.add_argument("--supabase-key", default=os.environ.get("SUPABASE_KEY"))
-    parser.add_argument("--openai-key", default=os.environ.get("OPENAI_API_KEY"))
     parser.add_argument(
         "--skip-synthetic",
         action="store_true",
@@ -289,12 +290,6 @@ def main():
 
     if not args.supabase_url or not args.supabase_key:
         print("Error: SUPABASE_URL and SUPABASE_KEY required", file=sys.stderr)
-        sys.exit(1)
-    if not args.openai_key and not args.skip_synthetic:
-        print(
-            "Error: OPENAI_API_KEY required (or use --skip-synthetic)",
-            file=sys.stderr,
-        )
         sys.exit(1)
 
     from supabase import create_client
@@ -342,7 +337,7 @@ def main():
             f"\nGenerating synthetic cases for {len(sample)} documents...",
             file=sys.stderr,
         )
-        synthetic = generate_synthetic_cases(sample, args.openai_key)
+        synthetic = generate_synthetic_cases(sample)
         all_cases.extend(synthetic)
         print(f"Generated {len(synthetic)} synthetic cases", file=sys.stderr)
 

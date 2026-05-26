@@ -13,7 +13,9 @@ Usage:
         --output-dir evals/framework_selection/results
 
 Environment variables (or CLI overrides):
-    SUPABASE_URL, SUPABASE_KEY, OPENAI_API_KEY
+    SUPABASE_URL, SUPABASE_KEY, GEMINI_API_KEY
+
+Embedding uses the platform-owned Gemini key via `EmbeddingService()` (KIN-467).
 """
 
 import argparse
@@ -413,6 +415,7 @@ def save_markdown_report(
     metrics: dict, failures: dict, distribution: dict, agent_id: str, dataset_path: str
 ) -> str:
     """Generate markdown report for docs/evals/."""
+    from app.core.config import settings as _settings
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     c = metrics["counts"]
 
@@ -420,6 +423,7 @@ def save_markdown_report(
         "---",
         f"Date: {now}",
         "Ticket: KIN-448",
+        f"Embedding model: {_settings.EMBEDDING_MODEL}",
         f"Agent: {agent_id}",
         f"Dataset: {dataset_path} ({c['total']} cases)",
         "---",
@@ -557,11 +561,15 @@ async def async_main():
     os.makedirs(output_dir, exist_ok=True)
 
     # JSON results (full detail)
+    # `embedding_model` is recorded so cross-regime comparison is explicit
+    # (KIN-467 migrated from OpenAI → Gemini; see KIN-497).
+    from app.core.config import settings as _settings
     results_path = os.path.join(output_dir, "results.json")
     with open(results_path, "w") as f:
         json.dump(
             {
                 "timestamp": datetime.now(timezone.utc).isoformat(),
+                "embedding_model": _settings.EMBEDDING_MODEL,
                 "agent_id": agent_id,
                 "dataset": args.dataset,
                 "metrics": metrics,

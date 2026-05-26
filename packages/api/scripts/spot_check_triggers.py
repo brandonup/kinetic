@@ -14,7 +14,9 @@ Usage:
         --preview scripts/trigger_rewrite_preview.json
 
 Environment variables:
-    SUPABASE_URL, SUPABASE_KEY, OPENAI_API_KEY
+    SUPABASE_URL, SUPABASE_KEY, GEMINI_API_KEY
+
+Embedding uses the platform-owned Gemini key (KIN-467).
 """
 
 import argparse
@@ -176,21 +178,17 @@ def main():
     )
     parser.add_argument("--supabase-url", default=os.environ.get("SUPABASE_URL"))
     parser.add_argument("--supabase-key", default=os.environ.get("SUPABASE_KEY"))
-    parser.add_argument("--openai-key", default=os.environ.get("OPENAI_API_KEY"))
     args = parser.parse_args()
 
     if not args.supabase_url or not args.supabase_key:
         print("Error: SUPABASE_URL and SUPABASE_KEY required", file=sys.stderr)
-        sys.exit(1)
-    if not args.openai_key:
-        print("Error: OPENAI_API_KEY required", file=sys.stderr)
         sys.exit(1)
 
     from supabase import create_client
 
     supabase = create_client(args.supabase_url, args.supabase_key)
     agent_id = args.agent_id or resolve_agent_id(supabase, args.agent_slug)
-    results = run_spot_check(supabase, agent_id, args.openai_key, args.preview)
+    results = run_spot_check(supabase, agent_id, args.preview)
 
     # Write results
     output_path = args.preview.replace("_preview.json", "_spot_check.json")

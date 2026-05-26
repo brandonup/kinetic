@@ -1,13 +1,16 @@
 """
 Split JSONL article files into individual JSON files for KB upload.
 
-Reads both nate_b_jones_content_sample.jsonl and nate_b_jones_content_remaining.jsonl,
-creates one JSON file per article in articles/ with metadata preserved for future
-recency scoring.
+By default reads nate_b_jones_content_sample.jsonl and nate_b_jones_content_remaining.jsonl.
+Pass one or more JSONL paths as arguments to split a different scrape (e.g. an
+incremental run). Creates one JSON file per article in articles/, deduplicated by
+slug, with metadata preserved for recency scoring. Re-running overwrites existing
+article files with the same slug — safe, since the content is identical.
 
 Usage:
     cd /Users/brandonupchuch/son_of_anton/projects/kinetic/nbj_extractor
-    python split_articles.py
+    python split_articles.py                     # default full corpus
+    python split_articles.py new_scrape.jsonl    # incremental: split a fresh scrape
 """
 
 import json
@@ -39,11 +42,13 @@ def main():
     output_dir = os.path.join(script_dir, OUTPUT_DIR)
     os.makedirs(output_dir, exist_ok=True)
 
+    input_files = sys.argv[1:] if len(sys.argv) > 1 else INPUT_FILES
+
     total = 0
     skipped = 0
     seen_slugs: set[str] = set()
 
-    for input_file in INPUT_FILES:
+    for input_file in input_files:
         input_path = os.path.join(script_dir, input_file)
         if not os.path.exists(input_path):
             print(f"WARNING: {input_file} not found, skipping", file=sys.stderr)

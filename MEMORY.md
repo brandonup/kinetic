@@ -16,7 +16,7 @@ _Updated at the end of each working session._
 
 **URL:** https://github.com/brandonup/kinetic
 
-**Full decision log:** See `decisions-archive.md`
+**Full decision log:** See `decisions-archive.md`.
 
 ---
 
@@ -34,23 +34,23 @@ Context-rich AI workspace SaaS for knowledge workers. Persistent, layered contex
 
 ---
 
-## Implementation Status (as of 2026-04-08)
+## Implementation Status (as of 2026-05-24)
 
-Codebase at `projects/kinetic/packages/`. 565 API tests passing, 6 skipped, TypeScript clean.
+Codebase at `projects/kinetic/packages/`. 565+ API tests passing, TypeScript clean. Full historical detail of shipped work lives in Linear tickets.
 
-**Shipped:** Auth, profiles, companies, projects, admin (models/users + `is_admin()` RPC + request-trace page KIN-418), active memory, conversations (CRUD + end + store_message), generation engine (9-layer context + SSE streaming + citations + agent activation + periodic memory + title auto-gen + framework overrides), MCP server (78 tests, 7 E2E journeys), agents list + create flow + agent chat with streaming conversation view (KIN-420), KB UI (folders, tags, upload, status), chat UI polish, trigger embeddings (KIN-412 background job + KIN-413 admin backfill, ADR-007), ingestion reliability fixes (KIN-408), llm_models seed migration (KIN-416, 54 rows across 5 providers), ModelSelector auto-selects first available model, `debug_prompt` written on assistant messages + admin endpoint (KIN-419, KIN-411).
+**Core platform shipped:** Auth/profiles/companies/projects/admin, active memory, conversations (CRUD + streaming), generation engine (9-layer context + SSE streaming + citations + agent activation + periodic memory + framework overrides), agents (list/create/chat), KB UI, trigger embeddings (KIN-412/413, ADR-007), llm_models seed (54 rows × 5 providers, KIN-416), debug_prompt + admin endpoint (KIN-419/411).
 
-**Kinetic Brain (MCP):** Shipped 2026-03-29. Local MCP server (`packages/mcp/`) connects Cowork to Kinetic's Supabase. 5 tools live: persona, memory, framework selection, KB search, assemble_context. Configured via `claude_desktop_config.json`, not Cowork plugin system. Created `match_chunks` RPC and fixed `match_framework_triggers` vector schema (`extensions.vector`). See `packages/mcp/docs/deployment-guide.md`.
+**MCP servers live:** Local "Kinetic Brain" plugin (5 tools, Cowork, `claude_desktop_config.json`) and Remote MCP at Supabase Edge Function (6 tools + dynamic prompts via native Connectors, ported to official SDK in KIN-464, 2026-04-06). Rate-limit RPC applied prod + dev. BYOK crypto validated.
 
-**Remote MCP Server:** Live 2026-03-30, ported to official MCP SDK 2026-04-06 (KIN-464). Supabase Edge Function at `supabase/functions/kinetic-mcp/`. 6 tools + dynamic prompts via **native Connectors**. Uses `@modelcontextprotocol/sdk` + `@hono/mcp` (StreamableHTTPTransport) + Hono. Rate limit RPC (`mcp_check_and_increment_rate_limit`) applied to prod and dev. BYOK crypto validated.
+**Deployment:** Railway prod ([kinetic-production-b568.up.railway.app](https://kinetic-production-b568.up.railway.app), KIN-434), Vercel prod ([kinetic-ashy-beta.vercel.app](https://kinetic-ashy-beta.vercel.app), KIN-436), dev environment with separate Supabase instance (KIN-455). `git push` auto-deploys to prod — dev verification is mandatory before push. Dev MCP connector removed 2026-04-04 (single prod connector only). See `docs/setup/environment-architecture.md`.
 
-**Railway Deployment:** Live 2026-03-30 (KIN-434). URL: `https://kinetic-production-b568.up.railway.app`. Health check passing. Dockerfile handles `unstructured[all-docs]` native deps. Guide at `docs/setup/deploy-railway.md`.
+**Ingestion (2026-04-08):** Chunk overlap 38→75 (KIN-469), contextual chunk headers (KIN-468), semantic chunker behind `SEMANTIC_CHUNKING_ENABLED` (KIN-470). All depend on KIN-467 (Gemini embeddings).
 
-**Vercel Deployment:** Live 2026-03-30 (KIN-436). URL: `https://kinetic-ashy-beta.vercel.app`. Login page renders, Google OAuth working. Root directory: `packages/web`, Framework Preset: Next.js. Remaining: update Railway CORS_ORIGINS + ADMIN_PORTAL_URL to Vercel URL (Step 6 of KIN-436), then KIN-437 smoke test.
+**Recency-aware retrieval (2026-05-23/24):** Components A/B/C/D + eval runner shipped behind `RECENCY_ENABLED` flag (byte-identical off-state). KIN-481/482/483/484/485/489/492/495 done. Remaining: KIN-487 (tuning run, blocked on KIN-496). Baseline eval at RECENCY_WEIGHT=0.15: recency 4/6 PASS (66.7%); 2 fresh docs not retrieved (signal for KIN-487 weight tuning). Generation cases (contradiction/over_flagging) require `EVAL_GENERATION_API_KEY` env var to score.
 
-**Dev Environment:** Live 2026-03-30 (KIN-455). Separate dev Supabase instance, Docker API (`kinetic-api-dev`), local frontend. `git push` auto-deploys to prod (Railway + Vercel) — dev verification is mandatory before push. Dev MCP connector removed 2026-04-04 (tool-name conflicts with prod). Single prod connector only. See `docs/setup/environment-architecture.md`.
+**Eval suites passing (2026-05-24):** Both `kb_retrieval` and `framework_selection` pass all 4 launch bars on prod Nate corpus under Gemini regime. Thresholds raised for Gemini's compressed-range outputs (`SIMILARITY_THRESHOLD: 0.3→0.65`, `FRAMEWORK_MIN_SIMILARITY: 0.62→0.85`, `HIGH_CONFIDENCE_THRESHOLD: 0.75→0.95`). KIN-494/497. Datasets regenerated via `gemini-2.5-flash`. Baselines: `docs/evals/2026-05-24-kin497-*-gemini.md`.
 
-**Ingestion Pipeline Improvements (2026-04-08):** Chunk overlap increased 38→75 words (KIN-469). Contextual chunk headers prepend `Source: {title}\n(Part X of Y)` to each chunk before embedding for improved retrieval precision (KIN-468). Semantic chunker added behind `SEMANTIC_CHUNKING_ENABLED` flag — uses sliding-window embedding similarity for topic-boundary detection instead of fixed-size splits (KIN-470). All three depend on KIN-467 (Gemini embeddings, Done).
+**Substack sync — Nate KB (2026-05-23, KIN-479):** Daily scrape of `natesnewsletter.substack.com` active, 569 pre-seeded posts deduped. Latent missing-deps bug fixed via KIN-480.
 
 ---
 
@@ -72,4 +72,3 @@ Codebase at `projects/kinetic/packages/`. 565 API tests passing, 6 skipped, Type
 | Nate B. Jones system prompt — who authors it and when? | Brandon |
 | Cluster-aware trigger refinement — before or after launch? | Monica → Brandon |
 | Token profiling of framework injection payloads | Monica |
-| ~~MCP conversation logging — reuse `messages` table or new table?~~ | **Decided 2026-03-30:** New `messages_mcp` table (Gilfoyle identified 7 schema friction issues with reusing `messages`). One row per `assemble_context` call, fire-and-forget write. Implementation: KIN-452 (blocked by KIN-454). Future Option C revisit: KIN-453. |

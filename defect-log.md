@@ -3,6 +3,7 @@
 _Append-only. One row per Critical or Important finding from code review._
 
 | Date | Ticket | Reviewer | Category | Severity | Description |
+| 2026-05-24 | KIN-437 | Jìan | other | Minor | Profile /profile API Keys section renders "Not configured" + "No generation models available" on initial load before API response arrives (loading race) |
 | 2026-05-21 | KIN-478 | Dinesh | untested-infra | Critical | `match_chunks` RPC bound `scope_value` as `text` but scope columns are `uuid` — `operator does not exist: uuid = text` on every call; MCP/API KB search returned zero results since KIN-476. Shipped because the RPC was created but never invoked. Fixed in `20260521000001` (`$2::uuid`); `database-migrations.md` rule 2a added. |
 | 2026-04-03 | KIN-454 | Gilfoyle | other | Important | Debug console.log in `index.ts:183-184` logs userId and prompt list to Edge Function logs on every `prompts/list` call — minor info leak, remove before deploy |
 | 2026-03-28 | KIN-407 | Bachman | untested-infra | High | KB ingestion jobs stalling at pending/extracting/embedding stages; stale job timeout monitor catching silent failures. storage_uri NULL on all documents. Complex-tier — routed to Gilfoyle for diagnosis, Dinesh for fix (KIN-408). |
@@ -129,3 +130,4 @@ _Append-only. One row per Critical or Important finding from code review._
 | 2026-03-27 | KIN-405 | Gilfoyle | other | Important | Stale `.is_("deleted_at", "null")` fetch filter in `delete_document` — misleading artifact of prior soft-delete model; should be removed or commented |
 | 2026-03-27 | KIN-405 | Gilfoyle | test-missing | Important | `test_delete_folder_without_reassign_deletes_documents` does not assert delete mock was called — test would pass even if code took reassignment path |
 | 2026-03-28 | KIN-408 | Gilfoyle | test-missing | Important | No test for the orphaned row cleanup path in upload route — `except Exception` branch (post-insert, pre-dispatch) deletes the DB row but no test verifies the delete is called or that the route still returns a non-200 |
+| 2026-05-23 | KIN-490 | Jìan | other | Important | `preseed_dedup.py` (KIN-479) marks every Substack post as "seen" without checking the KB — any post not manually pre-uploaded becomes permanently invisible to the scraper (silent, no error). 1 real article + 1 template orphaned out of 569 today |
