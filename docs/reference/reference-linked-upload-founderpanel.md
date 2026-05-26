@@ -329,8 +329,8 @@ async def generate_user_name(
             status_code=500, detail="Failed to extract text from LinkedIn profile PDF"
         ) from e
 
-    if not settings.LLM_ENABLED or not settings.OPENAI_API_KEY:
-        raise ValidationError("LLM service is not enabled or OpenAI API key is missing")
+    if not settings.LLM_ENABLED or not settings.GEMINI_API_KEY:
+        raise ValidationError("LLM service is not enabled or Gemini API key is missing")
 
     try:
         from app.core.config import get_model_for_use_case, is_reasoning_model

@@ -1,6 +1,8 @@
 ---
-Status: Plan only — pending live run
-Ticket: KIN-340
+Status: Stale plan — pending re-run on the Gemini-embedded corpus (see KIN-497).
+        KIN-467 migrated the platform embedding to Gemini `gemini-embedding-001`
+        in March 2026; eval embedding must match prod to be meaningful.
+Ticket: KIN-340 (superseded for execution by KIN-497)
 Date: 2026-03-24
 Run type: Pending (requires seeded agent + live embedding service)
 ---

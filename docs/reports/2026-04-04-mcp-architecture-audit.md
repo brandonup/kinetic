@@ -19,10 +19,10 @@
 | **Auth model** | None. Uses Supabase service role key directly from env vars |
 | **Agent model** | Single-agent. Hardcoded to Nate via `NATE_AGENT_ID`, `NATE_INSTANCE_ID` env vars |
 | **Database** | Configurable via `SUPABASE_URL` env var (can point to dev or prod) |
-| **Embedding key** | Platform-owned OpenAI key from `OPENAI_API_KEY` env var |
+| **Embedding key** | Platform-owned Gemini key from `GEMINI_API_KEY` env var (KIN-467) |
 | **Users** | Dev only (Brandon's local Cowork) |
 | **Deployment** | Local process launched by `claude_desktop_config.json`. Plugin metadata in `.claude-plugin/plugin.json` and `.mcp.json` |
-| **Config required** | 6 env vars: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, `NATE_AGENT_ID`, `NATE_INSTANCE_ID`, `KINETIC_USER_ID` |
+| **Config required** | 6 env vars: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `GEMINI_API_KEY`, `NATE_AGENT_ID`, `NATE_INSTANCE_ID`, `KINETIC_USER_ID` |
 | **Status** | Live in Brandon's local Cowork |
 
 ### Server B: Remote MCP Server (Supabase Edge Function)
@@ -104,7 +104,7 @@ Regardless of cause, **duplicate tool registrations create ambiguity** for Claud
 | Install Python venv + deps | ~2 min |
 | Look up `SUPABASE_URL` | Dashboard > Project Settings > API |
 | Look up `SUPABASE_SERVICE_ROLE_KEY` | Dashboard > Project Settings > API (secret) |
-| Look up `OPENAI_API_KEY` | OpenAI dashboard |
+| Look up `GEMINI_API_KEY` | Google AI Studio dashboard |
 | Look up `NATE_AGENT_ID` | Table Editor > `agent_definitions` > find row > copy UUID |
 | Look up `NATE_INSTANCE_ID` | Table Editor > `agent_instances` > find matching row > copy UUID |
 | Look up `KINETIC_USER_ID` | Table Editor > `profiles` > find row > copy UUID |

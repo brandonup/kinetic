@@ -1,6 +1,8 @@
 ---
-Status: Plan only — pending live run
-Ticket: KIN-348
+Status: Stale plan — pending re-run on the Gemini-embedded corpus (see KIN-497).
+        Original plan referenced OpenAI `text-embedding-3-large`; KIN-467 migrated
+        the platform embedding to Gemini `gemini-embedding-001` in March 2026.
+Ticket: KIN-348 (superseded for execution by KIN-497)
 Date: 2026-03-24
 Run type: Pending (requires seeded KB with indexed chunks + live embedding service)
 ---
@@ -15,7 +17,7 @@ Retrieval pipeline returns relevant, non-redundant chunks with correct citations
 
 `app/services/rag/retrieval.py::retrieve()` — 5-step pipeline:
 
-1. **Embed query** → `text-embedding-3-large` (platform key)
+1. **Embed query** → `gemini-embedding-001` (platform Gemini key — KIN-467)
 2. **Vector search** → pgvector `match_chunks` RPC, returns `VECTOR_TOP_K=20` candidates
 3. **MMR selection** → reduce to `MMR_TOP_K=8`, `MMR_LAMBDA=0.6` (relevance/diversity tradeoff)
 4. **Similarity threshold** → exclude chunks below `SIMILARITY_THRESHOLD=0.3`, return `[]` if none qualify

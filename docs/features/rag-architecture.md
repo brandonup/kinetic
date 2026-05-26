@@ -129,7 +129,7 @@ Raw results often include near-duplicate chunks (adjacent paragraphs, repeated c
 
 Chunks below a minimum cosine similarity score are excluded. This prevents low-quality, misleading chunks from entering the context. When no chunks exceed the threshold, the LLM responds based on its other context layers rather than hallucinating relevance.
 
-**Parameter:** `SIMILARITY_THRESHOLD` (default 0.3) — minimum cosine similarity for a chunk to be injected. Tune based on retrieval quality observations.
+**Parameter:** `SIMILARITY_THRESHOLD` (default 0.65 — retuned for Gemini in KIN-497; was 0.3 under OpenAI `text-embedding-3-large`) — minimum cosine similarity for a chunk to be injected. Tune based on retrieval quality observations.
 
 ### Citation Assembly
 
@@ -392,7 +392,7 @@ Logs auto-purge after 30 days. Admin can inspect traces per message via the Admi
 | `VECTOR_TOP_K` | `20` | Candidates returned from vector search |
 | `MMR_TOP_K` | `8` | Candidates after MMR selection |
 | `MMR_LAMBDA` | `0.6` | Relevance/diversity tradeoff (higher = more relevant) |
-| `SIMILARITY_THRESHOLD` | `0.3` | Minimum cosine similarity for chunk injection |
+| `SIMILARITY_THRESHOLD` | `0.65` | Minimum cosine similarity for chunk injection (Gemini regime, KIN-497) |
 | `RAG_MAX_TOKENS` | TBD | Token budget for all RAG chunks combined |
 | `ENRICHMENT_ENABLED` | `true` | Enable/disable document-level summary generation at ingestion |
 
