@@ -513,6 +513,7 @@ async def run_ingestion_from_stage(
             total_tokens = await loop.run_in_executor(
                 None, lambda: embedder.count_tokens(extracted_text)
             )
+            await _update_document(supabase, document_id, token_count=total_tokens)
             # Re-run enrichment (tags/summary may have failed on first run too)
             await _run_enrichment(
                 supabase, document_id, extracted_text, anthropic_key=anthropic_key,

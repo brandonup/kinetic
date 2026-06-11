@@ -151,6 +151,11 @@ async def _process_source(supabase, source_row: dict) -> None:
         project_id = kb_data.get("project_id")
         agent_definition_id = kb_data.get("agent_definition_id")
 
+        # Fetch user's Anthropic BYOK key once per source for enrichment (summary/tags).
+        # Returns None gracefully if the user has no key — enrichment skips silently.
+        from app.services.user_keys import fetch_user_key_async
+        anthropic_key = await fetch_user_key_async(supabase, user_id, "anthropic")
+
         # Ingest each new post
         for post in new_posts:
             await _ingest_post(
@@ -161,6 +166,7 @@ async def _process_source(supabase, source_row: dict) -> None:
                 project_id=project_id,
                 agent_definition_id=agent_definition_id,
                 post=post,
+                anthropic_key=anthropic_key,
             )
 
         # Success: update source state
@@ -197,6 +203,7 @@ async def _ingest_post(
     project_id: str | None,
     agent_definition_id: str | None,
     post,
+    anthropic_key: Optional[str] = None,
 ) -> None:
     """Create KB document, upload text, insert dedup row, dispatch chunking."""
     from app.core.config import settings
@@ -208,11 +215,13 @@ async def _ingest_post(
     # Implausible/parse-failure dates (e.g. datetime.min) coerce to None.
     document_date = datetime_to_document_date(post.published_at)
 
+    content_bytes = post.content.encode("utf-8")
     insert_row: dict = {
         "id": str(document_id),
         "knowledge_base_id": kb_id,
         "title": post.title or post.external_id,
         "file_type": "text/plain",
+        "file_size_bytes": len(content_bytes),
         "status": "pending",
         "retry_count": 0,
     }
@@ -227,16 +236,30 @@ async def _ingest_post(
         .execute(),
     )
 
-    # Upload extracted text to Storage
+    # Upload extracted text to Storage; write storage_uri only on success.
     storage_path = f"{document_id}/extracted.txt"
+    storage_ok = False
     try:
         await loop.run_in_executor(
             None,
             lambda: supabase.storage.from_(settings.SUPABASE_STORAGE_BUCKET)
-            .upload(storage_path, post.content.encode("utf-8"), {"content-type": "text/plain"}),
+            .upload(storage_path, content_bytes, {"content-type": "text/plain"}),
         )
+        storage_ok = True
     except Exception as exc:
         logger.warning("Storage upload failed for doc %s: %s (non-fatal)", document_id, exc)
+
+    if storage_ok:
+        try:
+            await loop.run_in_executor(
+                None,
+                lambda: supabase.table("knowledge_base_documents")
+                .update({"storage_uri": storage_path})
+                .eq("id", str(document_id))
+                .execute(),
+            )
+        except Exception as exc:
+            logger.warning("Failed to set storage_uri for doc %s: %s (non-fatal)", document_id, exc)
 
     # Insert dedup row
     await loop.run_in_executor(
@@ -265,6 +288,7 @@ async def _ingest_post(
             extracted_text=post.content,
             filename=f"{post.title or post.external_id}.txt",
             content_type="text/plain",
+            anthropic_key=anthropic_key,
         )
     except Exception as exc:
         logger.error("Ingestion failed for doc %s (source %s): %s", document_id, source_id, exc)

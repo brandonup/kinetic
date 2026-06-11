@@ -653,6 +653,32 @@ class TestStageResumption:
                 )
             )
 
+    def test_resume_from_chunking_persists_token_count(self, db_session, mock_embedding_service):
+        """run_ingestion_from_stage chunking path writes token_count to the document row."""
+        from app.services.ingestion.pipeline import run_ingestion_from_stage
+
+        document_id = uuid4()
+        kb_id = uuid4()
+        extracted_text = "Hello world. " * 100
+
+        with (
+            patch("app.services.ingestion.pipeline.generate_summary", return_value=None),
+            patch("app.services.ingestion.pipeline.suggest_tags", return_value=[]),
+            patch("asyncio.sleep", new_callable=AsyncMock),
+        ):
+            _run(
+                run_ingestion_from_stage(
+                    db_session, document_id, kb_id, None, None,
+                    start_stage="chunking",
+                    extracted_text=extracted_text,
+                )
+            )
+
+        update_calls = db_session.table.return_value.update.call_args_list
+        token_updates = [c.args[0].get("token_count") for c in update_calls if "token_count" in c.args[0]]
+        assert len(token_updates) == 1
+        assert isinstance(token_updates[0], int)
+
 
 # ---------------------------------------------------------------------------
 # Retry endpoint — KIN-336

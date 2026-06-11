@@ -338,6 +338,114 @@ class TestPollScrapeSources:
 
 
 # ---------------------------------------------------------------------------
+# _ingest_post unit tests
+# ---------------------------------------------------------------------------
+
+
+DISPATCH_PATCH = "app.services.scraping.poller._dispatch_ingestion"
+FETCH_KEY_PATCH = "app.services.scraping.poller.fetch_user_key_async"
+
+
+class TestIngestPost:
+    """Unit tests for _ingest_post — verifies document row contents and dispatch args."""
+
+    def _build_ingest_supabase(self):
+        """Minimal mock covering knowledge_base_documents insert/update and storage."""
+        mock = MagicMock()
+        mock.table.return_value.insert.return_value.execute.return_value = MagicMock(data=[])
+        mock.table.return_value.update.return_value.eq.return_value.execute.return_value = MagicMock(data=[])
+        mock.storage.from_.return_value.upload.return_value = None
+        return mock
+
+    def test_file_size_bytes_included_in_insert(self):
+        """_ingest_post sets file_size_bytes on the document row at insert time."""
+        from app.services.scraping.poller import _ingest_post
+
+        loop = asyncio.get_event_loop()
+        mock_sb = self._build_ingest_supabase()
+        post = _scraped_post()
+
+        expected_bytes = len(post.content.encode("utf-8"))
+
+        with patch(DISPATCH_PATCH, new_callable=AsyncMock):
+            _run(_ingest_post(
+                mock_sb, loop,
+                source_id=SOURCE_ID, user_id=USER_ID, kb_id=KB_ID,
+                project_id=PROJECT_ID, agent_definition_id=AGENT_DEF_ID,
+                post=post,
+            ))
+
+        insert_calls = mock_sb.table.return_value.insert.call_args_list
+        kb_doc_inserts = [c.args[0] for c in insert_calls if c.args[0].get("file_type") == "text/plain"]
+        assert len(kb_doc_inserts) == 1
+        assert kb_doc_inserts[0]["file_size_bytes"] == expected_bytes
+
+    def test_storage_uri_written_after_successful_upload(self):
+        """_ingest_post writes storage_uri to the document row when upload succeeds."""
+        from app.services.scraping.poller import _ingest_post
+
+        loop = asyncio.get_event_loop()
+        mock_sb = self._build_ingest_supabase()
+        post = _scraped_post()
+
+        with patch(DISPATCH_PATCH, new_callable=AsyncMock):
+            _run(_ingest_post(
+                mock_sb, loop,
+                source_id=SOURCE_ID, user_id=USER_ID, kb_id=KB_ID,
+                project_id=PROJECT_ID, agent_definition_id=AGENT_DEF_ID,
+                post=post,
+            ))
+
+        update_calls = mock_sb.table.return_value.update.call_args_list
+        uri_updates = [c.args[0] for c in update_calls if "storage_uri" in c.args[0]]
+        assert len(uri_updates) == 1
+        assert uri_updates[0]["storage_uri"].endswith("/extracted.txt")
+
+    def test_storage_uri_not_written_when_upload_fails(self):
+        """_ingest_post skips storage_uri update when storage upload raises."""
+        from app.services.scraping.poller import _ingest_post
+
+        loop = asyncio.get_event_loop()
+        mock_sb = self._build_ingest_supabase()
+        mock_sb.storage.from_.return_value.upload.side_effect = RuntimeError("bucket error")
+        post = _scraped_post()
+
+        with patch(DISPATCH_PATCH, new_callable=AsyncMock):
+            _run(_ingest_post(
+                mock_sb, loop,
+                source_id=SOURCE_ID, user_id=USER_ID, kb_id=KB_ID,
+                project_id=PROJECT_ID, agent_definition_id=AGENT_DEF_ID,
+                post=post,
+            ))
+
+        update_calls = mock_sb.table.return_value.update.call_args_list
+        uri_updates = [c.args[0] for c in update_calls if "storage_uri" in c.args[0]]
+        assert len(uri_updates) == 0
+
+    def test_anthropic_key_forwarded_to_dispatch(self):
+        """_ingest_post passes anthropic_key to _dispatch_ingestion."""
+        from app.services.scraping.poller import _ingest_post
+
+        loop = asyncio.get_event_loop()
+        mock_sb = self._build_ingest_supabase()
+        post = _scraped_post()
+        test_key = "sk-ant-test-key"
+
+        with patch(DISPATCH_PATCH, new_callable=AsyncMock) as mock_dispatch:
+            _run(_ingest_post(
+                mock_sb, loop,
+                source_id=SOURCE_ID, user_id=USER_ID, kb_id=KB_ID,
+                project_id=PROJECT_ID, agent_definition_id=AGENT_DEF_ID,
+                post=post,
+                anthropic_key=test_key,
+            ))
+
+        mock_dispatch.assert_called_once()
+        _, kwargs = mock_dispatch.call_args
+        assert kwargs.get("anthropic_key") == test_key
+
+
+# ---------------------------------------------------------------------------
 # Constants sanity checks
 # ---------------------------------------------------------------------------
 
