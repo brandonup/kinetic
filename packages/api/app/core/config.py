@@ -62,8 +62,8 @@ class Settings(BaseSettings):
     EMBEDDING_DIMS: int = 3072
 
     # Pipeline models (not user-facing — users pick generation model per query)
-    FRAMEWORK_RERANKER_MODEL: str = "claude-haiku-3-5"
-    CONVERSATION_COMPRESSION_MODEL: str = "claude-haiku-3-5"
+    FRAMEWORK_RERANKER_MODEL: str = "claude-haiku-4-5"
+    CONVERSATION_COMPRESSION_MODEL: str = "claude-haiku-4-5"
 
     # Feature flags
     LLM_ENABLED: bool = True

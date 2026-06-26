@@ -39,7 +39,7 @@ class TestGetProviderModel:
     def test_get_provider_model_claude(self) -> None:
         from app.services.llm_client import get_provider_model
 
-        assert get_provider_model("claude-haiku-3-5") == "anthropic/claude-haiku-3-5"
+        assert get_provider_model("claude-haiku-4-5") == "anthropic/claude-haiku-4-5"
 
     def test_get_provider_model_gemini(self) -> None:
         from app.services.llm_client import get_provider_model
@@ -126,7 +126,7 @@ class TestCallLlm:
             mock_litellm.completion.return_value = mock_resp
             call_llm(
                 messages=[{"role": "user", "content": "hi"}],
-                model="claude-haiku-3-5",
+                model="claude-haiku-4-5",
                 api_key="sk-ant-user-byok-key",
             )
             call_kwargs = mock_litellm.completion.call_args[1]
@@ -235,7 +235,7 @@ class TestStreamLlm:
             )
             async for _ in stream_llm(
                 messages=[{"role": "user", "content": "hi"}],
-                model="claude-haiku-3-5",
+                model="claude-haiku-4-5",
                 api_key="sk-ant-user-byok-key",
             ):
                 pass

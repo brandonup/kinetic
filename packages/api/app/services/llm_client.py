@@ -55,14 +55,14 @@ def get_provider_model(model_name: str) -> str:
     OpenAI models don't need a prefix.
 
     Args:
-        model_name: Model name (e.g., "gpt-4o", "claude-haiku-3-5", "gemini-2.5-flash")
+        model_name: Model name (e.g., "gpt-4o", "claude-haiku-4-5", "gemini-2.5-flash")
 
     Returns:
         Model string with provider prefix for LiteLLM routing.
 
     Examples:
         "gpt-4o"                 -> "gpt-4o"
-        "claude-haiku-3-5"       -> "anthropic/claude-haiku-3-5"
+        "claude-haiku-4-5"       -> "anthropic/claude-haiku-4-5"
         "gemini-2.5-flash"       -> "gemini/gemini-2.5-flash"
         "llama-3.3-70b-instruct" -> "groq/llama-3.3-70b-instruct"
     """

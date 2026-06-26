@@ -439,7 +439,7 @@ class TestTagSuggestion:
             "app.services.ingestion.tag_suggester.settings"
         ) as mock_settings:
             mock_settings.ENRICHMENT_ENABLED = True
-            mock_settings.CONVERSATION_COMPRESSION_MODEL = "claude-haiku-3-5"
+            mock_settings.CONVERSATION_COMPRESSION_MODEL = "claude-haiku-4-5"
             self._mock_settings = mock_settings
             yield
 
